@@ -5,6 +5,7 @@ import com.deliveryapp.enums.OrderStatus;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.*;
+import com.deliveryapp.util.DistanceUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,22 +22,35 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final CartService cartService;
     private final OrderStatusHistoryRepository historyRepository;
+    private final DistanceUtil distanceUtil; // Inject Utility
+
 
     @Transactional
-    public Order placeOrder(Long userId, String address, String paymentMethod) {
+    public Order placeOrder(Long userId, String address, Double lat, Double lng, String notes) {
         Cart cart = cartService.getCartByUser(userId);
 
         if (cart.getItems() == null || cart.getItems().isEmpty()) {
             throw new InvalidDataException("Cannot place order. Cart is empty.");
         }
 
+        // Validate Location presence
+        if(lat == null || lng == null) {
+            throw new InvalidDataException("Delivery location (latitude/longitude) is required.");
+        }
+
+        Store store = cart.getStore();
+
         Order order = new Order();
         order.setUser(cart.getUser());
-        order.setStore(cart.getStore());
+        order.setStore(store);
         order.setOrderNumber(UUID.randomUUID().toString().substring(0, 8).toUpperCase());
         order.setStatus(OrderStatus.PENDING);
         order.setDeliveryAddress(address);
+        order.setDeliveryLatitude(lat);
+        order.setDeliveryLongitude(lng);
+        order.setNotes(notes);
         order.setCreatedAt(LocalDateTime.now());
+        order.setUpdatedAt(LocalDateTime.now());
 
         double subtotal = 0.0;
         List<OrderItem> orderItems = new ArrayList<>();
@@ -66,8 +80,24 @@ public class OrderService {
         order.setOrderItems(orderItems);
         order.setSubtotal(subtotal);
 
-        // Ensure your Store entity has getDeliveryFee() or update to getDeliveryFeeKM()
-        double deliveryFee = cart.getStore().getDeliveryFeeKM();
+        // --- NEW: Calculate Delivery Fee based on Distance ---
+        double deliveryFee = 0.0;
+
+        if (store.getLatitude() != null && store.getLongitude() != null) {
+            double distanceInKm = distanceUtil.calculateDistance(
+                    lat, lng,
+                    store.getLatitude(), store.getLongitude()
+            );
+
+            Double feePerKm = store.getDeliveryFeeKM();
+            if(feePerKm == null) feePerKm = 0.0;
+
+            deliveryFee = distanceInKm * feePerKm;
+
+            // Round to 2 decimal places
+            deliveryFee = Math.round(deliveryFee * 100.0) / 100.0;
+        }
+
         order.setDeliveryFee(deliveryFee);
         order.setTotalAmount(subtotal + deliveryFee);
 
@@ -77,7 +107,6 @@ public class OrderService {
 
         return savedOrder;
     }
-
     @Transactional
     public Order updateOrderStatus(Long orderId, OrderStatus newStatus, Long userId) {
         Order order = orderRepository.findById(orderId)
@@ -85,10 +114,10 @@ public class OrderService {
 
         OrderStatus oldStatus = order.getStatus();
         order.setStatus(newStatus);
+        order.setUpdatedAt(LocalDateTime.now());
 
         if(newStatus == OrderStatus.DELIVERED) {
             order.setDeliveredAt(LocalDateTime.now());
-
         }
 
         Order savedOrder = orderRepository.save(order);
