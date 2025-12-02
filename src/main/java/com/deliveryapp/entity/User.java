@@ -19,6 +19,8 @@ public class User {
     private String phoneNumber;
     private String name;
     private String email;
+    private String password;
+
     private String profileImage;
 
     @Enumerated(EnumType.STRING)
@@ -26,11 +28,6 @@ public class User {
 
     // Address fields
     private String address;
-//    private String city;
-//    private String area;
-//    private String buildingNumber;
-//    private String floor;
-//    private String apartment;
     private Double latitude;
     private Double longitude;
 
