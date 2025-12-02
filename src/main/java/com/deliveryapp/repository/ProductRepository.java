@@ -32,4 +32,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     // 5. Find by Store AND Category (Useful for filtering a specific restaurant's menu)
     List<Product> findByStoreStoreIdAndCategoryCategoryId(Long storeId, Long categoryId);
+
+    // Get products belonging to a specific Store AND specific Category
+    List<Product> findByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(Long storeId, Long categoryId);
+
+    // Get products belonging to a specific Store AND specific SubCategory
+    List<Product> findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(Long storeId, Long subCategoryId);
 }

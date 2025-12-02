@@ -1,0 +1,88 @@
+package com.deliveryapp.controller;
+
+import com.deliveryapp.dto.catalog.ProductRequest;
+import com.deliveryapp.dto.catalog.StoreRequest;
+import com.deliveryapp.entity.Category;
+import com.deliveryapp.entity.Product;
+import com.deliveryapp.entity.Store;
+import com.deliveryapp.entity.SubCategory;
+import com.deliveryapp.service.AdminService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+@RestController
+@RequestMapping("/api/admin")
+@RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')") // Secures the entire controller
+public class AdminController {
+
+    private final AdminService adminService;
+
+    // ==================== CATEGORIES ====================
+
+    @PostMapping(value = "/categories", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Category> createCategory(
+            @RequestParam("name") String name,
+            @RequestParam(value = "image", required = false) MultipartFile image) {
+        return ResponseEntity.ok(adminService.createCategory(name, image));
+    }
+
+    @DeleteMapping("/categories/{id}")
+    public ResponseEntity<String> deleteCategory(@PathVariable Long id) {
+        adminService.deleteCategory(id);
+        return ResponseEntity.ok("Category deleted");
+    }
+
+    // ==================== SUBCATEGORIES ====================
+
+    @PostMapping(value = "/subcategories", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<SubCategory> createSubCategory(
+            @RequestParam("name") String name,
+            @RequestParam("categoryId") Long categoryId,
+            @RequestParam(value = "image", required = false) MultipartFile image) {
+        return ResponseEntity.ok(adminService.createSubCategory(name, categoryId, image));
+    }
+
+    // ==================== STORES ====================
+
+    @PostMapping(value = "/stores", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Store> createStore(
+            @ModelAttribute StoreRequest request, // Binds form fields to DTO
+            @RequestParam(value = "logo", required = false) MultipartFile logo,
+            @RequestParam(value = "cover", required = false) MultipartFile cover) {
+        return ResponseEntity.ok(adminService.createStore(request, logo, cover));
+    }
+
+    @DeleteMapping("/stores/{id}")
+    public ResponseEntity<String> deleteStore(@PathVariable Long id) {
+        adminService.deleteStore(id);
+        return ResponseEntity.ok("Store deleted");
+    }
+
+    // ==================== PRODUCTS ====================
+
+    @PostMapping(value = "/products", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Product> createProduct(
+            @ModelAttribute ProductRequest request, // Binds form fields to DTO
+            @RequestParam(value = "image", required = false) MultipartFile image) {
+        return ResponseEntity.ok(adminService.createProduct(request, image));
+    }
+
+    @PostMapping("/products/{productId}/variants")
+    public ResponseEntity<?> addVariant(
+            @PathVariable Long productId,
+            @RequestParam("name") String name,
+            @RequestParam("price") Double priceAdjustment) {
+        return ResponseEntity.ok(adminService.addProductVariant(productId, name, priceAdjustment));
+    }
+
+    @DeleteMapping("/products/{id}")
+    public ResponseEntity<String> deleteProduct(@PathVariable Long id) {
+        adminService.deleteProduct(id);
+        return ResponseEntity.ok("Product deleted");
+    }
+}

@@ -89,4 +89,13 @@ public class CatalogService {
     public List<Product> searchProducts(String keyword) {
         return productRepository.findByNameContainingIgnoreCase(keyword);
     }
+    // NEW: Filter by Store + Category
+    public List<Product> getProductsByStoreAndCategory(Long storeId, Long categoryId) {
+        return productRepository.findByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(storeId, categoryId);
+    }
+
+    // NEW: Filter by Store + SubCategory
+    public List<Product> getProductsByStoreAndSubCategory(Long storeId, Long subCategoryId) {
+        return productRepository.findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(storeId, subCategoryId);
+    }
 }

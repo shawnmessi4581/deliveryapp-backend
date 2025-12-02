@@ -113,6 +113,23 @@ public class CatalogController {
         List<Product> products = catalogService.getProductsByStore(storeId);
         return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
     }
+    // GET Products by Category (All stores)
+    @GetMapping("/products/category/{categoryId}")
+    public ResponseEntity<List<ProductResponse>> getProductsByCategory(@PathVariable Long categoryId) {
+        List<Product> products = catalogService.getProductsByCategory(categoryId);
+        return ResponseEntity.ok(products.stream()
+                .map(this::mapToProductResponse)
+                .collect(Collectors.toList()));
+    }
+
+    // GET Products by SubCategory (All stores)
+    @GetMapping("/products/subcategory/{subCategoryId}")
+    public ResponseEntity<List<ProductResponse>> getProductsBySubCategory(@PathVariable Long subCategoryId) {
+        List<Product> products = catalogService.getProductsBySubCategory(subCategoryId);
+        return ResponseEntity.ok(products.stream()
+                .map(this::mapToProductResponse)
+                .collect(Collectors.toList()));
+    }
 
     @GetMapping("/products/search")
     public ResponseEntity<List<ProductResponse>> searchProducts(@RequestParam("q") String keyword) {
@@ -120,6 +137,21 @@ public class CatalogController {
         return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
     }
 
+    @GetMapping("/products/store/{storeId}/category/{categoryId}")
+    public ResponseEntity<List<ProductResponse>> getProductsByStoreAndCategory(
+            @PathVariable Long storeId,
+            @PathVariable Long categoryId) {
+        List<Product> products = catalogService.getProductsByStoreAndCategory(storeId, categoryId);
+        return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
+    }
+
+    @GetMapping("/products/store/{storeId}/subcategory/{subCategoryId}")
+    public ResponseEntity<List<ProductResponse>> getProductsByStoreAndSubCategory(
+            @PathVariable Long storeId,
+            @PathVariable Long subCategoryId) {
+        List<Product> products = catalogService.getProductsByStoreAndSubCategory(storeId, subCategoryId);
+        return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
+    }
     // ==================== MANUAL MAPPERS ====================
 
     private CategoryResponse mapToCategoryResponse(Category category) {
