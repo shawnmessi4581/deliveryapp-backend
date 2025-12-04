@@ -38,15 +38,28 @@ public class CartService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
 
-        // Exception: Mixing stores
+        // --- UPDATED LOGIC FOR STORE MIXING ---
+        // Check if the cart already has a store assigned and it's different from the new product's store
         if (cart.getStore() != null && !cart.getStore().getStoreId().equals(product.getStore().getStoreId())) {
-            throw new InvalidDataException("You can only order from one store at a time. Please clear your cart first.");
+
+            // Logic: Only strict "No Mixing" if the product is Category 1 (Food)
+            Long categoryId = product.getCategory().getCategoryId();
+
+            // If Category is 1 (Food), we BLOCK mixing.
+            if (categoryId == 1L) {
+                throw new InvalidDataException("You cannot mix stores when ordering Food (Category 1). Please clear your cart first.");
+            }
+
+            // If Category is NOT 1 (e.g., Electronics), we ALLOW mixing.
+            // Note: The cart.store field will remain set to the FIRST store added.
         }
 
+        // If the cart was empty/had no store, set the store
         if (cart.getStore() == null) {
             cart.setStore(product.getStore());
         }
 
+        // Add or Update Item in Cart
         Optional<CartItem> existingItem = cart.getItems().stream()
                 .filter(item -> item.getProduct().getProductId().equals(productId) &&
                         (variantId == null || (item.getVariant() != null && item.getVariant().getVariantId().equals(variantId))))
@@ -88,6 +101,8 @@ public class CartService {
     public void clearCart(Long userId) {
         Cart cart = getCartByUser(userId);
         cartItemRepository.deleteByCartCartId(cart.getCartId());
+
+        // Reset the store association when clearing
         cart.setStore(null);
         cartRepository.save(cart);
     }

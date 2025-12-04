@@ -5,8 +5,7 @@ import lombok.Data;
 @Data
 public class PlaceOrderRequest {
     private Long userId;
-    private String deliveryAddress;
-    private Double deliveryLatitude;
-    private Double deliveryLongitude;
-    private String notes;
+    private Long addressId;      // CHANGED: Use ID instead of raw text
+    private String instruction;  // NEW: Selected instruction text or ID
+    private String couponCode;   // NEW: Optional coupon
 }

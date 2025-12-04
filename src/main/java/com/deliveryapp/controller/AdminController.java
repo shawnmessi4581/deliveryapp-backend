@@ -2,17 +2,19 @@ package com.deliveryapp.controller;
 
 import com.deliveryapp.dto.catalog.ProductRequest;
 import com.deliveryapp.dto.catalog.StoreRequest;
-import com.deliveryapp.entity.Category;
-import com.deliveryapp.entity.Product;
-import com.deliveryapp.entity.Store;
-import com.deliveryapp.entity.SubCategory;
+import com.deliveryapp.dto.coupon.CouponRequest;
+import com.deliveryapp.entity.*;
+import com.deliveryapp.repository.DeliveryInstructionRepository;
 import com.deliveryapp.service.AdminService;
+import com.deliveryapp.service.CouponService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -21,6 +23,8 @@ import org.springframework.web.multipart.MultipartFile;
 public class AdminController {
 
     private final AdminService adminService;
+    private final CouponService couponService;
+    private final DeliveryInstructionRepository instructionRepository;
 
     // ==================== CATEGORIES ====================
 
@@ -84,5 +88,30 @@ public class AdminController {
     public ResponseEntity<String> deleteProduct(@PathVariable Long id) {
         adminService.deleteProduct(id);
         return ResponseEntity.ok("Product deleted");
+    }
+    // --- COUPONS ---
+    @PostMapping("/coupons")
+    public ResponseEntity<Coupon> createCoupon(@RequestBody CouponRequest request) {
+        return ResponseEntity.ok(couponService.createCoupon(request));
+    }
+
+    // --- DELIVERY INSTRUCTIONS ---
+    @PostMapping("/instructions")
+    public ResponseEntity<DeliveryInstruction> createInstruction(@RequestParam String text) {
+        DeliveryInstruction instruction = new DeliveryInstruction();
+        instruction.setInstruction(text);
+        instruction.setIsActive(true);
+        return ResponseEntity.ok(instructionRepository.save(instruction));
+    }
+
+    @DeleteMapping("/instructions/{id}")
+    public ResponseEntity<String> deleteInstruction(@PathVariable Long id) {
+        instructionRepository.deleteById(id);
+        return ResponseEntity.ok("Instruction deleted");
+    }
+
+    @GetMapping("/instructions")
+    public ResponseEntity<List<DeliveryInstruction>> getAllInstructions() {
+        return ResponseEntity.ok(instructionRepository.findAll());
     }
 }

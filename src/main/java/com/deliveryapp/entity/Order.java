@@ -43,6 +43,15 @@ public class Order {
     private Double deliveryFee;
     private Double totalAmount;
 
+
+    private String selectedInstruction; // Text copy of the instruction
+
+
+    // Coupon Info
+    private Long couponId;
+    private Double discountAmount; // Stored as Double to match your existing financial fields
+
+
     private String notes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

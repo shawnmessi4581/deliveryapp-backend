@@ -24,17 +24,14 @@ public class OrderController {
 
     @PostMapping("/place")
     public ResponseEntity<OrderResponse> placeOrder(@RequestBody PlaceOrderRequest request) {
-        // Updated to pass lat, lng, and notes directly to the service
         Order order = orderService.placeOrder(
                 request.getUserId(),
-                request.getDeliveryAddress(),
-                request.getDeliveryLatitude(),
-                request.getDeliveryLongitude(),
-                request.getNotes()
+                request.getAddressId(),
+                request.getInstruction(),
+                request.getCouponCode()
         );
-        return ResponseEntity.ok(mapToOrderResponse(order));
+        return ResponseEntity.ok(mapToOrderResponse(order)); // Make sure mapper handles discount field
     }
-
     // Get User History
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<OrderResponse>> getUserOrders(@PathVariable Long userId) {
