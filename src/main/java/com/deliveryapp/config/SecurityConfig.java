@@ -104,7 +104,11 @@ public class SecurityConfig {
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
-        grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
+
+        // FIXED: Set prefix to empty "" because our DB already has "ROLE_"
+        grantedAuthoritiesConverter.setAuthorityPrefix("");
+
+        // This tells Spring to look for the "scope" claim in the JWT
         grantedAuthoritiesConverter.setAuthoritiesClaimName("scope");
 
         JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();

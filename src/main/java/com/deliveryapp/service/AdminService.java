@@ -25,18 +25,39 @@ public class AdminService {
 
     // ==================== CATEGORY CRUD ====================
 
+    // ... imports
+
     public Category createCategory(String name, MultipartFile image) {
-        Category category = new Category();
-        category.setName(name);
-        category.setIsActive(true);
-        category.setDisplayOrder(0); // Default
+        System.out.println("Attempting to create category: " + name);
 
-        if (image != null && !image.isEmpty()) {
-            String imageUrl = fileStorageService.storeFile(image, "categories");
-            category.setIcon(imageUrl);
+        try {
+            Category category = new Category();
+            category.setName(name);
+            category.setIsActive(true);
+            category.setDisplayOrder(0);
+
+            // Debug: Check if image is received
+            if (image != null && !image.isEmpty()) {
+                System.out.println("Image received. Name: " + image.getOriginalFilename());
+
+                // This is likely where it fails (File System)
+                String imageUrl = fileStorageService.storeFile(image, "categories");
+                System.out.println("Image saved at: " + imageUrl);
+
+                category.setIcon(imageUrl);
+            } else {
+                System.out.println("No image provided. If DB column is NOT NULL, this will crash.");
+            }
+
+            // This is the other place it might fail (Database)
+            return categoryRepository.save(category);
+
+        } catch (Exception e) {
+            // THIS WILL PRINT THE ERROR TO YOUR CONSOLE
+            System.err.println("CRASHED IN CREATE CATEGORY:");
+            e.printStackTrace();
+            throw new RuntimeException("Error creating category: " + e.getMessage());
         }
-
-        return categoryRepository.save(category);
     }
 
     public void deleteCategory(Long id) {
