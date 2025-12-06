@@ -171,7 +171,6 @@ public class AdminService {
         variant.setVariantValue(name);
         variant.setPriceAdjustment(priceAdjustment);
         variant.setIsAvailable(true);
-
         return variantRepository.save(variant);
     }
 

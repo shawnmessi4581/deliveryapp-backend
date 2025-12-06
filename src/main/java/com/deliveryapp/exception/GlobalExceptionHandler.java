@@ -4,6 +4,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.access.AccessDeniedException;
@@ -34,6 +36,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
     public ResponseEntity<Map<String, Object>> handleAccessDeniedException(Exception ex,WebRequest request) {
         return buildResponse(HttpStatus.FORBIDDEN, "forbidden", ex.getMessage(), request);
+    }
+    // ADD THIS METHOD
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<Map<String, Object>> handleMultipartException(MultipartException ex,WebRequest request) {
+
+        // This will print the REAL error to your IntelliJ console
+        System.err.println("❌ FILE UPLOAD ERROR DETAILS:");
+        if (ex.getCause() != null) {
+            ex.getCause().printStackTrace();
+        } else {
+            ex.printStackTrace();
+        }
+        return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage(), request);
+
     }
 
     @ExceptionHandler(Exception.class)
