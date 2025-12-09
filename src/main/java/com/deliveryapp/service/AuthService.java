@@ -4,10 +4,15 @@ import com.deliveryapp.dto.auth.AuthResponse;
 import com.deliveryapp.dto.auth.LoginRequest;
 import com.deliveryapp.dto.auth.SignupRequest;
 import com.deliveryapp.dto.user.UserResponse;
+import com.deliveryapp.entity.OtpVerification;
 import com.deliveryapp.entity.User;
 import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.DuplicateResourceException;
+import com.deliveryapp.exception.InvalidDataException;
+import com.deliveryapp.exception.ResourceNotFoundException;
+import com.deliveryapp.repository.OtpVerificationRepository;
 import com.deliveryapp.repository.UserRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,7 +30,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final TokenService tokenService;
-
+    private  final OtpVerificationRepository  otpVerificationRepository;
     public AuthResponse register(SignupRequest request) {
         if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
             throw new DuplicateResourceException("Phone number already exists");
@@ -70,6 +75,61 @@ public class AuthService {
 
         // 6. Return combined response
         return new AuthResponse(token, userResponse);
+    }
+
+    @Transactional
+    public String initiatePasswordReset (String phoneNumber) {
+        User user = userRepository.findByPhoneNumber(phoneNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with this phone number"));
+        String otpCode = String.valueOf((int) (Math.random() * 9000) + 1000);
+        // Clear existing OTPs for this number to prevent clutter
+        otpVerificationRepository.deleteByPhoneNumber(phoneNumber);
+        // Save new OTP
+       OtpVerification otp = new OtpVerification();
+        otp.setPhoneNumber(phoneNumber);
+        otp.setOtpCode(otpCode);
+        otp.setExpiresAt(LocalDateTime.now().plusMinutes(10)); // Valid for 10 mins
+        otp.setUser(user);
+        otpVerificationRepository.save(otp);
+
+        // MOCK SMS SENDING
+        System.out.println("========================================");
+        System.out.println("🔐 OTP FOR PASSWORD RESET (" + phoneNumber + "): " + otpCode);
+        System.out.println("========================================");
+        // In real life: smsService.send(phoneNumber, "Your code is " + otpCode);
+
+        return "OTP sent successfully";
+    }
+
+    // 2. Verify OTP & Reset Password
+    @Transactional
+    public String resetPassword(String phoneNumber, String otpCode, String newPassword) {
+        // Find the OTP
+     OtpVerification dbOtp = otpVerificationRepository.findFirstByPhoneNumberOrderByCreatedAtDesc(phoneNumber)
+                .orElseThrow(() -> new InvalidDataException("Invalid or expired OTP"));
+
+        // Check Expiry
+        if (dbOtp.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new InvalidDataException("OTP has expired. Please request a new one.");
+        }
+
+        // Check Code Match
+        if (!dbOtp.getOtpCode().equals(otpCode)) {
+            throw new InvalidDataException("Incorrect OTP code");
+        }
+
+        // Retrieve User
+        User user = userRepository.findByPhoneNumber(phoneNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        // Update Password
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        // Clean up used OTP
+        otpVerificationRepository.delete(dbOtp);
+
+        return "Password changed successfully. You can now login.";
     }
 
     // Helper Method to Map Entity -> DTO

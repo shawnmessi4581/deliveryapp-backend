@@ -14,4 +14,7 @@ public interface OtpVerificationRepository extends JpaRepository<OtpVerification
 
     // Verify specific OTP
     Optional<OtpVerification> findByPhoneNumberAndOtpCode(String phoneNumber, String otpCode);
+    // Clean up old OTPs
+    void deleteByPhoneNumber(String phoneNumber);
+
 }
