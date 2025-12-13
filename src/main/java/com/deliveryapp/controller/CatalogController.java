@@ -132,8 +132,13 @@ public class CatalogController {
     }
 
     @GetMapping("/products/search")
-    public ResponseEntity<List<ProductResponse>> searchProducts(@RequestParam("q") String keyword) {
-        List<Product> products = catalogService.searchProducts(keyword);
+    public ResponseEntity<List<ProductResponse>> searchProducts(@RequestParam("q") String keyword,@RequestParam("categoryId") long categoryId) {
+        List<Product> products = catalogService.searchProducts(keyword,categoryId);
+        return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
+    }
+    @GetMapping("/products/store/search")
+    public ResponseEntity<List<ProductResponse>> searchProductsInStore(@RequestParam("q") String keyword,@RequestParam("storeId") long storeId) {
+        List<Product> products = catalogService.searchProductsInStore(keyword,storeId);
         return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
     }
 
@@ -152,6 +157,7 @@ public class CatalogController {
         List<Product> products = catalogService.getProductsByStoreAndSubCategory(storeId, subCategoryId);
         return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
     }
+
     // ==================== MANUAL MAPPERS ====================
 
     private CategoryResponse mapToCategoryResponse(Category category) {
