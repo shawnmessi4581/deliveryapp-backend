@@ -3,6 +3,7 @@ package com.deliveryapp.controller;
 import com.deliveryapp.dto.catalog.ProductRequest;
 import com.deliveryapp.dto.catalog.StoreRequest;
 import com.deliveryapp.dto.coupon.CouponRequest;
+import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.repository.DeliveryInstructionRepository;
 import com.deliveryapp.service.AdminService;
@@ -26,6 +27,28 @@ public class AdminController {
     private final CouponService couponService;
     private final DeliveryInstructionRepository instructionRepository;
 
+    @GetMapping("/users")
+    public ResponseEntity<List<UserResponse>> getAllUsers() {
+        return ResponseEntity.ok(adminService.getAllUsers());
+    }
+    // DELETE User
+    @DeleteMapping("/users/{userId}")
+    public ResponseEntity<String> deleteUser(@PathVariable Long userId) {
+        adminService.deleteUser(userId);
+        return ResponseEntity.ok("User deleted successfully");
+    }
+
+    // TOGGLE Status (Ban/Activate)
+    // Usage: PATCH /api/admin/users/123/status?active=false
+    @PatchMapping("/users/{userId}/status")
+    public ResponseEntity<String> updateUserStatus(
+            @PathVariable Long userId,
+            @RequestParam Boolean active) {
+
+        adminService.updateUserStatus(userId, active);
+        String status = active ? "activated" : "deactivated";
+        return ResponseEntity.ok("User has been " + status);
+    }
     // ==================== CATEGORIES ====================
 
     @PostMapping(value = "/categories", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

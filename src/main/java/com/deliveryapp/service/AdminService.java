@@ -2,6 +2,7 @@ package com.deliveryapp.service;
 
 import com.deliveryapp.dto.catalog.ProductRequest;
 import com.deliveryapp.dto.catalog.StoreRequest;
+import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.*;
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -22,10 +24,33 @@ public class AdminService {
     private final ProductRepository productRepository;
     private final ProductVariantRepository variantRepository;
     private final FileStorageService fileStorageService;
+    private final UserRepository userRepository;
 
     // ==================== CATEGORY CRUD ====================
 
     // ... imports
+    public List<UserResponse> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(this::mapToUserResponse)
+                .collect(java.util.stream.Collectors.toList());
+    }
+    // 1. Permanently Delete User
+    public void deleteUser(Long userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new ResourceNotFoundException("User not found with id: " + userId);
+        }
+        userRepository.deleteById(userId);
+    }
+
+    // 2. Toggle Active Status (Ban/Unban)
+    @Transactional
+    public void updateUserStatus(Long userId, Boolean isActive) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        user.setIsActive(isActive);
+        userRepository.save(user);
+    }
 
     public Category createCategory(String name, MultipartFile image) {
         System.out.println("Attempting to create category: " + name);
@@ -176,5 +201,31 @@ public class AdminService {
 
     public void deleteProduct(Long id) {
         productRepository.deleteById(id);
+    }
+    private UserResponse mapToUserResponse(User user) {
+       UserResponse dto = new UserResponse();
+        dto.setUserId(user.getUserId());
+        dto.setName(user.getName());
+        dto.setEmail(user.getEmail());
+        dto.setPhoneNumber(user.getPhoneNumber());
+        dto.setUserType(user.getUserType());
+        dto.setProfileImage(user.getProfileImage()); // Ensure User entity has getProfileImage() or getImageUrl()
+        dto.setIsActive(user.getIsActive());
+
+        dto.setAddress(user.getAddress());
+        dto.setLatitude(user.getLatitude());
+        dto.setLongitude(user.getLongitude());
+
+        // Driver details
+        dto.setVehicleType(user.getVehicleType());
+        dto.setVehicleNumber(user.getVehicleNumber());
+        dto.setIsAvailable(user.getIsAvailable());
+        dto.setRating(user.getRating());
+        dto.setTotalDeliveries(user.getTotalDeliveries());
+
+        dto.setCreatedAt(user.getCreatedAt());
+        dto.setLastLogin(user.getLastLogin());
+
+        return dto;
     }
 }

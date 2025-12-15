@@ -3,6 +3,8 @@ package com.deliveryapp.dto.user;
 import com.deliveryapp.enums.UserType;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 @Data
 public class UserResponse {
     private Long userId;
@@ -26,4 +28,7 @@ public class UserResponse {
 
     // Status
     private Boolean isActive;
+
+    private LocalDateTime createdAt;
+    private LocalDateTime lastLogin;
 }
