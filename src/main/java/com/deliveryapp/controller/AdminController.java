@@ -1,7 +1,9 @@
 package com.deliveryapp.controller;
 
+import com.deliveryapp.dto.catalog.CategoryResponse;
 import com.deliveryapp.dto.catalog.ProductRequest;
 import com.deliveryapp.dto.catalog.StoreRequest;
+import com.deliveryapp.dto.catalog.SubCategoryResponse;
 import com.deliveryapp.dto.coupon.CouponRequest;
 import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -50,7 +53,15 @@ public class AdminController {
         return ResponseEntity.ok("User has been " + status);
     }
     // ==================== CATEGORIES ====================
+    @GetMapping("/categories")
+    public ResponseEntity<List<CategoryResponse>> getAllCategories() {
+        List<Category> categories = adminService.getAllCategories();
 
+        List<CategoryResponse> response = categories.stream()
+                .map(this::mapToCategoryResponse)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(response);
+    }
     @PostMapping(value = "/categories", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Category> createCategory(
             @RequestParam("name") String name,
@@ -75,12 +86,53 @@ public class AdminController {
 
     // ==================== SUBCATEGORIES ====================
 
+     // 1. CREATE (Returns DTO)
     @PostMapping(value = "/subcategories", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<SubCategory> createSubCategory(
+    public ResponseEntity<SubCategoryResponse> createSubCategory(
             @RequestParam("name") String name,
             @RequestParam("categoryId") Long categoryId,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        return ResponseEntity.ok(adminService.createSubCategory(name, categoryId, image));
+
+        // 1. Call Service to save
+        SubCategory savedSubCategory = adminService.createSubCategory(name, categoryId, image);
+
+        // 2. Map Entity -> DTO
+        return ResponseEntity.ok(mapToSubCategoryResponse(savedSubCategory));
+    }
+    @GetMapping("/subcategories")
+    public ResponseEntity<List<SubCategoryResponse>> getAllSubCategories() {
+        List<SubCategory> subCategories = adminService.getAllSubCategories();
+
+        // Convert to DTOs
+        List<SubCategoryResponse> response = subCategories.stream()
+                .map(this::mapToSubCategoryResponse)
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(response);
+    }
+
+
+    // 2. UPDATE (Returns DTO)
+    @PutMapping(value = "/subcategories/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<SubCategoryResponse> updateSubCategory(
+            @PathVariable Long id,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(value = "image", required = false) MultipartFile image) {
+
+        // 1. Call Service to update
+        SubCategory updatedSubCategory = adminService.updateSubCategory(id, name, categoryId, isActive, image);
+
+        // 2. Map Entity -> DTO
+        return ResponseEntity.ok(mapToSubCategoryResponse(updatedSubCategory));
+    }
+
+    // DELETE
+    @DeleteMapping("/subcategories/{id}")
+    public ResponseEntity<String> deleteSubCategory(@PathVariable Long id) {
+        adminService.deleteSubCategory(id);
+        return ResponseEntity.ok("SubCategory deleted successfully");
     }
 
     // ==================== STORES ====================
@@ -145,5 +197,28 @@ public class AdminController {
     @GetMapping("/instructions")
     public ResponseEntity<List<DeliveryInstruction>> getAllInstructions() {
         return ResponseEntity.ok(instructionRepository.findAll());
+    }
+    // ==================== MANUAL MAPPERS ====================
+
+    private CategoryResponse mapToCategoryResponse(Category category) {
+        CategoryResponse dto = new CategoryResponse();
+        dto.setCategoryId(category.getCategoryId());
+        dto.setName(category.getName());
+        dto.setImageUrl(category.getIcon());
+        dto.setActive(category.getIsActive());
+        return dto;
+    }
+    private SubCategoryResponse mapToSubCategoryResponse(SubCategory subCategory) {
+        SubCategoryResponse dto = new SubCategoryResponse();
+        dto.setSubCategoryId(subCategory.getSubcategoryId());
+        dto.setName(subCategory.getName());
+        dto.setImageUrl(subCategory.getIcon());
+        dto.setIsActive(subCategory.getIsActive());
+
+        if (subCategory.getCategory() != null) {
+            dto.setParentCategoryId(subCategory.getCategory().getCategoryId());
+            dto.setParentCategoryName(subCategory.getCategory().getName());
+        }
+        return dto;
     }
 }

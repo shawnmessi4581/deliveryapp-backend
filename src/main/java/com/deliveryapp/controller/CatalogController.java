@@ -173,8 +173,8 @@ public class CatalogController {
         SubCategoryResponse dto = new SubCategoryResponse();
         dto.setSubCategoryId(subCategory.getSubcategoryId());
         dto.setName(subCategory.getName());
-        dto.setIcon(subCategory.getIcon());
-        dto.setDisplayOrder(subCategory.getDisplayOrder());
+        dto.setImageUrl(subCategory.getIcon());
+//        dto.setDisplayOrder(subCategory.getDisplayOrder());
         if (subCategory.getCategory() != null) {
             dto.setParentCategoryId(subCategory.getCategory().getCategoryId());
         }

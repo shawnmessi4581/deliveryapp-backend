@@ -51,7 +51,11 @@ public class AdminService {
         user.setIsActive(isActive);
         userRepository.save(user);
     }
+//categories
+public List<Category> getAllCategories() {
+    return categoryRepository.findAll();
 
+}
     public Category createCategory(String name, MultipartFile image) {
         System.out.println("Attempting to create category: " + name);
 
@@ -134,6 +138,51 @@ public class AdminService {
         }
 
         return subCategoryRepository.save(sub);
+    }
+    public List<SubCategory> getAllSubCategories() {
+        return subCategoryRepository.findAll();
+    }
+
+    // 2. Update SubCategory (Name, Parent Category, Active Status, Image)
+    @Transactional
+    public SubCategory updateSubCategory(Long id, String name, Long categoryId, Boolean isActive, MultipartFile image) {
+        SubCategory subCategory = subCategoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("SubCategory not found with id: " + id));
+
+        // Update Name
+        if (name != null && !name.trim().isEmpty()) {
+            subCategory.setName(name);
+        }
+
+        // Update Parent Category
+        if (categoryId != null) {
+            Category newParent = categoryRepository.findById(categoryId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + categoryId));
+            subCategory.setCategory(newParent);
+        }
+
+        // Update Status (Toggle Active)
+        if (isActive != null) {
+            subCategory.setIsActive(isActive);
+        }
+
+        // Update Image
+        if (image != null && !image.isEmpty()) {
+            String imageUrl = fileStorageService.storeFile(image, "subcategories");
+            subCategory.setIcon(imageUrl);
+        }
+
+        return subCategoryRepository.save(subCategory);
+    }
+
+    // 3. Delete SubCategory
+    public void deleteSubCategory(Long id) {
+        if (!subCategoryRepository.existsById(id)) {
+            throw new ResourceNotFoundException("SubCategory not found with id: " + id);
+        }
+        // Note: If products are linked to this subcategory, database might throw an error
+        // unless Cascade Delete is configured in SQL.
+        subCategoryRepository.deleteById(id);
     }
 
     // ==================== STORE CRUD ====================
