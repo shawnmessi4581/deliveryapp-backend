@@ -2,6 +2,7 @@ package com.deliveryapp.service;
 
 import com.deliveryapp.dto.coupon.CouponRequest;
 import com.deliveryapp.entity.*;
+import com.deliveryapp.exception.DuplicateResourceException;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.CouponRepository;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -23,31 +25,91 @@ public class CouponService {
     // --- Admin: Create Coupon ---
     public Coupon createCoupon(CouponRequest request) {
         if (couponRepository.existsByCode(request.getCode())) {
-            throw new InvalidDataException("Coupon code already exists");
+            throw new DuplicateResourceException("Coupon code already exists");
         }
         Coupon coupon = new Coupon();
-        // Manual mapping from DTO to Entity
-        coupon.setCode(request.getCode().toUpperCase());
-        coupon.setTitle(request.getTitle());
-        coupon.setDescription(request.getDescription());
-        coupon.setDiscountType(request.getDiscountType());
-        coupon.setDiscountValue(request.getDiscountValue());
-        coupon.setMinOrderAmount(request.getMinOrderAmount());
-        coupon.setMaxDiscountAmount(request.getMaxDiscountAmount());
-        coupon.setApplicableTo(request.getApplicableTo());
-        coupon.setApplicableId(request.getApplicableId());
-        coupon.setIsFirstOrderOnly(request.getIsFirstOrderOnly());
-        coupon.setMaxUsagePerUser(request.getMaxUsagePerUser());
-        coupon.setTotalUsageLimit(request.getTotalUsageLimit());
-        coupon.setStartDate(request.getStartDate());
-        coupon.setEndDate(request.getEndDate());
+        mapRequestToEntity(coupon, request); // Helper method used here
+        coupon.setCurrentUsageCount(0); // Initialize
+        coupon.setCurrentUsageCount(0);
         coupon.setIsActive(true);
         coupon.setCreatedAt(LocalDateTime.now());
 
         return couponRepository.save(coupon);
     }
 
-    // --- Validation Logic ---
+    // =================================================================================
+    // NEW CRUD METHODS (ADDED)
+    // =================================================================================
+
+    // 1. Get All Coupons
+    public List<Coupon> getAllCoupons() {
+        return couponRepository.findAll();
+    }
+
+    // 2. Get Coupon By ID
+    public Coupon getCouponById(Long id) {
+        return couponRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found with id: " + id));
+    }
+
+    // 3. Update Coupon
+    @Transactional
+    public Coupon updateCoupon(Long id, CouponRequest request) {
+        Coupon coupon = getCouponById(id);
+
+        // Check if code is being changed and if new code already exists
+        if (!coupon.getCode().equalsIgnoreCase(request.getCode()) &&
+                couponRepository.existsByCode(request.getCode())) {
+            throw new DuplicateResourceException("Coupon code " + request.getCode() + " already exists");
+        }
+
+        // Update fields
+        mapRequestToEntity(coupon, request);
+
+        coupon.setUpdatedAt(LocalDateTime.now());
+        return couponRepository.save(coupon);
+    }
+
+    // 4. Delete Coupon
+    public void deleteCoupon(Long id) {
+        if (!couponRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Coupon not found with id: " + id);
+        }
+        // Note: You might want to prevent deletion if the coupon has usage history
+        // or just use soft delete (isActive = false). For now, standard delete:
+        couponRepository.deleteById(id);
+    }
+
+    // 5. Toggle Status (Active/Inactive)
+    @Transactional
+    public Coupon toggleCouponStatus(Long id) {
+        Coupon coupon = getCouponById(id);
+        coupon.setIsActive(!coupon.getIsActive());
+        return couponRepository.save(coupon);
+    }
+
+    // Helper to map DTO to Entity (Used by Create and Update)
+    private void mapRequestToEntity(Coupon coupon, CouponRequest request) {
+        if (request.getCode() != null) coupon.setCode(request.getCode().toUpperCase());
+        if (request.getTitle() != null) coupon.setTitle(request.getTitle());
+        if (request.getDescription() != null) coupon.setDescription(request.getDescription());
+        if (request.getDiscountType() != null) coupon.setDiscountType(request.getDiscountType());
+        if (request.getDiscountValue() != null) coupon.setDiscountValue(request.getDiscountValue());
+        if (request.getMinOrderAmount() != null) coupon.setMinOrderAmount(request.getMinOrderAmount());
+        if (request.getMaxDiscountAmount() != null) coupon.setMaxDiscountAmount(request.getMaxDiscountAmount());
+        if (request.getApplicableTo() != null) coupon.setApplicableTo(request.getApplicableTo());
+        if (request.getApplicableId() != null) coupon.setApplicableId(request.getApplicableId());
+        if (request.getIsFirstOrderOnly() != null) coupon.setIsFirstOrderOnly(request.getIsFirstOrderOnly());
+        if (request.getMaxUsagePerUser() != null) coupon.setMaxUsagePerUser(request.getMaxUsagePerUser());
+        if (request.getTotalUsageLimit() != null) coupon.setTotalUsageLimit(request.getTotalUsageLimit());
+        if (request.getStartDate() != null) coupon.setStartDate(request.getStartDate());
+        if (request.getEndDate() != null) coupon.setEndDate(request.getEndDate());
+    }
+
+    // =================================================================================
+    // EXISTING LOGIC (Unchanged)
+    // =================================================================================
+
     public Coupon validateCoupon(String code, Long userId, Cart cart) {
         Coupon coupon = couponRepository.findByCode(code)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid coupon code"));
@@ -72,15 +134,12 @@ public class CouponService {
 
         // 4. First Order Check
         if (coupon.getIsFirstOrderOnly()) {
-            // Check if user has ANY previous coupon usage or orders (simplified logic: check usage repo)
-            // A better check would be looking at OrderRepository, but let's assume usageRepo for now
             if (usageRepository.existsByUserId(userId)) {
                 throw new InvalidDataException("This coupon is for first orders only");
             }
         }
 
-        // 5. Min Order Amount (using Cart items sum)
-        // We calculate basic subtotal from cart items
+        // 5. Min Order Amount
         double cartSubtotal = cart.getItems().stream()
                 .mapToDouble(item -> {
                     double price = item.getProduct().getBasePrice();
@@ -98,9 +157,6 @@ public class CouponService {
                 throw new InvalidDataException("Coupon not valid for this store");
             }
         }
-        // Note: Implementing Category/Product specific logic requires iterating cart items.
-        // For simplicity, we assume if type is CATEGORY, at least one item must match, or strict mode.
-        // Keeping it simple: Allow application if scope is ALL or STORE matches.
 
         return coupon;
     }
@@ -114,7 +170,7 @@ public class CouponService {
         } else if (coupon.getDiscountType() == Coupon.DiscountType.PERCENTAGE) {
             discount = bdSubtotal.multiply(coupon.getDiscountValue().divide(BigDecimal.valueOf(100)));
         } else if (coupon.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY) {
-            return deliveryFee; // Discount equals delivery fee
+            return deliveryFee;
         }
 
         // Cap at Max Discount
@@ -141,7 +197,6 @@ public class CouponService {
 
         usageRepository.save(usage);
 
-        // Update total usage count on coupon
         coupon.setCurrentUsageCount(coupon.getCurrentUsageCount() + 1);
         couponRepository.save(coupon);
     }

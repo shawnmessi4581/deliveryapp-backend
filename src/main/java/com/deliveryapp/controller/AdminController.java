@@ -1,9 +1,6 @@
 package com.deliveryapp.controller;
 
-import com.deliveryapp.dto.catalog.CategoryResponse;
-import com.deliveryapp.dto.catalog.ProductRequest;
-import com.deliveryapp.dto.catalog.StoreRequest;
-import com.deliveryapp.dto.catalog.SubCategoryResponse;
+import com.deliveryapp.dto.catalog.*;
 import com.deliveryapp.dto.coupon.CouponRequest;
 import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
@@ -17,6 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -137,12 +135,37 @@ public class AdminController {
 
     // ==================== STORES ====================
 
+    // 1. GET ALL STORES
+    @GetMapping("/stores")
+    public ResponseEntity<List<StoreResponse>> getAllStores() {
+        List<Store> stores = adminService.getAllStores();
+        return ResponseEntity.ok(stores.stream()
+                .map(this::mapToStoreResponse) // Use the mapper below
+                .collect(Collectors.toList()));
+    }
+
+    // 2. CREATE STORE (Updated to return DTO)
     @PostMapping(value = "/stores", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Store> createStore(
-            @ModelAttribute StoreRequest request, // Binds form fields to DTO
+    public ResponseEntity<StoreResponse> createStore(
+            @ModelAttribute StoreRequest request,
             @RequestParam(value = "logo", required = false) MultipartFile logo,
             @RequestParam(value = "cover", required = false) MultipartFile cover) {
-        return ResponseEntity.ok(adminService.createStore(request, logo, cover));
+
+        Store store = adminService.createStore(request, logo, cover);
+        return ResponseEntity.ok(mapToStoreResponse(store));
+    }
+
+    // 3. UPDATE STORE
+    @PutMapping(value = "/stores/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<StoreResponse> updateStore(
+            @PathVariable Long id,
+            @ModelAttribute StoreRequest request,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(value = "logo", required = false) MultipartFile logo,
+            @RequestParam(value = "cover", required = false) MultipartFile cover) {
+
+        Store updatedStore = adminService.updateStore(id, request, isActive, logo, cover);
+        return ResponseEntity.ok(mapToStoreResponse(updatedStore));
     }
 
     @DeleteMapping("/stores/{id}")
@@ -152,12 +175,32 @@ public class AdminController {
     }
 
     // ==================== PRODUCTS ====================
-
+    // 1. GET ALL PRODUCTS
+    @GetMapping("/products")
+    public ResponseEntity<List<ProductResponse>> getAllProducts() {
+        List<Product> products = adminService.getAllProducts();
+        return ResponseEntity.ok(products.stream()
+                .map(this::mapToProductResponse)
+                .collect(Collectors.toList()));
+    }
+    // 2. CREATE PRODUCT (Updated to return DTO)
     @PostMapping(value = "/products", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Product> createProduct(
-            @ModelAttribute ProductRequest request, // Binds form fields to DTO
+    public ResponseEntity<ProductResponse> createProduct(
+            @ModelAttribute ProductRequest request,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        return ResponseEntity.ok(adminService.createProduct(request, image));
+
+        Product product = adminService.createProduct(request, image);
+        return ResponseEntity.ok(mapToProductResponse(product));
+    }
+    // 3. UPDATE PRODUCT
+    @PutMapping(value = "/products/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ProductResponse> updateProduct(
+            @PathVariable Long id,
+            @ModelAttribute ProductRequest request,
+            @RequestParam(value = "image", required = false) MultipartFile image) {
+
+        Product updatedProduct = adminService.updateProduct(id, request, image);
+        return ResponseEntity.ok(mapToProductResponse(updatedProduct));
     }
 
     @PostMapping("/products/{productId}/variants")
@@ -167,16 +210,16 @@ public class AdminController {
             @RequestParam("price") Double priceAdjustment) {
         return ResponseEntity.ok(adminService.addProductVariant(productId, name, priceAdjustment));
     }
+    @DeleteMapping("/variants/{variantId}")
+    public ResponseEntity<String> deleteProductVariant(@PathVariable Long variantId) {
+        adminService.deleteProductVariant(variantId);
+        return ResponseEntity.ok("Variant deleted successfully");
+    }
 
     @DeleteMapping("/products/{id}")
     public ResponseEntity<String> deleteProduct(@PathVariable Long id) {
         adminService.deleteProduct(id);
         return ResponseEntity.ok("Product deleted");
-    }
-    // --- COUPONS ---
-    @PostMapping("/coupons")
-    public ResponseEntity<Coupon> createCoupon(@RequestBody CouponRequest request) {
-        return ResponseEntity.ok(couponService.createCoupon(request));
     }
 
     // --- DELIVERY INSTRUCTIONS ---
@@ -219,6 +262,74 @@ public class AdminController {
             dto.setParentCategoryId(subCategory.getCategory().getCategoryId());
             dto.setParentCategoryName(subCategory.getCategory().getName());
         }
+        return dto;
+    }
+    // ==================== MAPPER ====================
+    private StoreResponse mapToStoreResponse(Store store) {
+        StoreResponse dto = new StoreResponse();
+        dto.setStoreId(store.getStoreId());
+        dto.setName(store.getName());
+        dto.setDescription(store.getDescription());
+        dto.setPhone(store.getPhone()); // Added
+        dto.setLogo(store.getLogo());
+        dto.setCoverImage(store.getCoverImage());
+        dto.setAddress(store.getAddress());
+        dto.setLatitude(store.getLatitude());
+        dto.setLongitude(store.getLongitude());
+        dto.setIsActive(store.getIsActive()); // Added
+        dto.setRating(store.getRating());
+        dto.setTotalOrders(store.getTotalOrders());
+        dto.setEstimatedDeliveryTime(store.getEstimatedDeliveryTime());
+        dto.setDeliveryFeeKM(store.getDeliveryFeeKM());
+        dto.setMinimumOrder(store.getMinimumOrder());
+
+        if (store.getCategory() != null) {
+            dto.setCategoryId(store.getCategory().getCategoryId());
+            dto.setCategoryName(store.getCategory().getName());
+        }
+        if (store.getSubCategory() != null) {
+            dto.setSubCategoryId(store.getSubCategory().getSubcategoryId());
+            dto.setSubCategoryName(store.getSubCategory().getName());
+        }
+        return dto;
+    }
+    // ==================== MAPPER ====================
+    private ProductResponse mapToProductResponse(Product product) {
+        ProductResponse dto = new ProductResponse();
+        dto.setProductId(product.getProductId());
+        dto.setName(product.getName());
+        dto.setDescription(product.getDescription());
+        dto.setBasePrice(product.getBasePrice());
+        dto.setImageUrl(product.getImage());
+        dto.setAvailable(product.getIsAvailable());
+
+        if (product.getStore() != null) {
+            dto.setStoreId(product.getStore().getStoreId());
+            dto.setStoreName(product.getStore().getName()); // Added
+        }
+        if (product.getCategory() != null) {
+            dto.setCategoryId(product.getCategory().getCategoryId());
+            dto.setCategoryName(product.getCategory().getName()); // Added
+        }
+        if (product.getSubCategory() != null) {
+            dto.setSubCategoryId(product.getSubCategory().getSubcategoryId());
+            dto.setSubCategoryName(product.getSubCategory().getName()); // Added
+        }
+
+        // Map Variants
+        if (product.getVariants() != null && !product.getVariants().isEmpty()) {
+            List<ProductVariantResponse> variantDtos = product.getVariants().stream().map(v -> {
+                ProductVariantResponse vDto = new ProductVariantResponse();
+                vDto.setVariantId(v.getVariantId());
+                vDto.setVariantName(v.getVariantValue());
+                vDto.setPriceAdjustment(v.getPriceAdjustment());
+                return vDto;
+            }).collect(Collectors.toList());
+            dto.setVariants(variantDtos);
+        } else {
+            dto.setVariants(Collections.emptyList());
+        }
+
         return dto;
     }
 }

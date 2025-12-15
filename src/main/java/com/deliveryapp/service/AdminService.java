@@ -228,9 +228,98 @@ public List<Category> getAllCategories() {
     public void deleteStore(Long id) {
         storeRepository.deleteById(id);
     }
+    // 1. Get ALL Stores
+    public List<Store> getAllStores() {
+        return storeRepository.findAll();
+    }
+
+    // 2. Update Store
+    @Transactional
+    public Store updateStore(Long id, StoreRequest request, Boolean isActive, MultipartFile logo, MultipartFile cover) {
+        Store store = storeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Store not found with id: " + id));
+
+        // Update Basic Fields
+        if (request.getName() != null) store.setName(request.getName());
+        if (request.getDescription() != null) store.setDescription(request.getDescription());
+        if (request.getPhone() != null) store.setPhone(request.getPhone());
+        if (request.getAddress() != null) store.setAddress(request.getAddress());
+        if (request.getLatitude() != null) store.setLatitude(request.getLatitude());
+        if (request.getLongitude() != null) store.setLongitude(request.getLongitude());
+        if (request.getDeliveryFeeKM() != null) store.setDeliveryFeeKM(request.getDeliveryFeeKM());
+        if (request.getMinimumOrder() != null) store.setMinimumOrder(request.getMinimumOrder());
+        if (request.getEstimatedDeliveryTime() != null) store.setEstimatedDeliveryTime(request.getEstimatedDeliveryTime());
+
+        // Update Status
+        if (isActive != null) {
+            store.setIsActive(isActive);
+        }
+
+        // Update Categories
+        if (request.getCategoryId() != null) {
+            Category cat = categoryRepository.findById(request.getCategoryId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+            store.setCategory(cat);
+        }
+        if (request.getSubCategoryId() != null) {
+            SubCategory sub = subCategoryRepository.findById(request.getSubCategoryId())
+                    .orElseThrow(() -> new ResourceNotFoundException("SubCategory not found"));
+            store.setSubCategory(sub);
+        }
+
+        // Update Images
+        if (logo != null && !logo.isEmpty()) {
+            store.setLogo(fileStorageService.storeFile(logo, "stores"));
+        }
+        if (cover != null && !cover.isEmpty()) {
+            store.setCoverImage(fileStorageService.storeFile(cover, "stores"));
+        }
+
+        return storeRepository.save(store);
+    }
 
     // ==================== PRODUCT CRUD ====================
+// 1. Get ALL Products
+    public List<Product> getAllProducts() {
+        return productRepository.findAll();
+    }
 
+    // 2. Update Product
+    @Transactional
+    public Product updateProduct(Long id, ProductRequest request, MultipartFile image) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + id));
+
+        // Update Fields
+        if (request.getName() != null) product.setName(request.getName());
+        if (request.getDescription() != null) product.setDescription(request.getDescription());
+        if (request.getBasePrice() != null) product.setBasePrice(request.getBasePrice());
+        if (request.getIsAvailable() != null) product.setIsAvailable(request.getIsAvailable());
+
+        // Update Relationships
+        if (request.getStoreId() != null) {
+            Store store = storeRepository.findById(request.getStoreId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
+            product.setStore(store);
+        }
+        if (request.getCategoryId() != null) {
+            Category cat = categoryRepository.findById(request.getCategoryId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+            product.setCategory(cat);
+        }
+        if (request.getSubCategoryId() != null) {
+            SubCategory sub = subCategoryRepository.findById(request.getSubCategoryId())
+                    .orElseThrow(() -> new ResourceNotFoundException("SubCategory not found"));
+            product.setSubCategory(sub);
+        }
+
+        // Update Image
+        if (image != null && !image.isEmpty()) {
+            product.setImage(fileStorageService.storeFile(image, "products"));
+        }
+
+        return productRepository.save(product);
+    }
     @Transactional
     public Product createProduct(ProductRequest request, MultipartFile image) {
         Store store = storeRepository.findById(request.getStoreId())
@@ -271,6 +360,13 @@ public List<Category> getAllCategories() {
         variant.setPriceAdjustment(priceAdjustment);
         variant.setIsAvailable(true);
         return variantRepository.save(variant);
+    }
+    // DELETE Variant
+    public void deleteProductVariant(Long variantId) {
+        if (!variantRepository.existsById(variantId)) {
+            throw new ResourceNotFoundException("Variant not found with id: " + variantId);
+        }
+        variantRepository.deleteById(variantId);
     }
 
     public void deleteProduct(Long id) {
