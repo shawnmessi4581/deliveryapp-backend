@@ -91,6 +91,31 @@ public class AdminService {
         // Optional: Delete image file here using fileStorageService.deleteFile(category.getImageUrl());
         categoryRepository.delete(category);
     }
+    public Category updateCategory(Long id, String name, Boolean isActive, MultipartFile image) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + id));
+
+        // Update Name if provided
+        if (name != null && !name.trim().isEmpty()) {
+            category.setName(name);
+        }
+
+        // Update Status if provided
+        if (isActive != null) {
+            category.setIsActive(isActive);
+        }
+
+        // Update Image if provided
+        if (image != null && !image.isEmpty()) {
+            // Optional: You could delete the old file here using:
+             fileStorageService.deleteFile(category.getIcon());
+
+            String imageUrl = fileStorageService.storeFile(image, "categories");
+            category.setIcon(imageUrl);
+        }
+
+        return categoryRepository.save(category);
+    }
 
     // ==================== SUBCATEGORY CRUD ====================
 

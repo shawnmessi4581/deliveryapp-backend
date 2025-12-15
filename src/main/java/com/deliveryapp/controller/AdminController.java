@@ -63,6 +63,15 @@ public class AdminController {
         adminService.deleteCategory(id);
         return ResponseEntity.ok("Category deleted");
     }
+    @PutMapping(value = "/categories/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Category> updateCategory(
+            @PathVariable Long id,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(value = "image", required = false) MultipartFile image) {
+
+        return ResponseEntity.ok(adminService.updateCategory(id, name, isActive, image));
+    }
 
     // ==================== SUBCATEGORIES ====================
 

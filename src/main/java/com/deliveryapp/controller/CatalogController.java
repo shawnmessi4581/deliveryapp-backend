@@ -165,6 +165,7 @@ public class CatalogController {
         dto.setCategoryId(category.getCategoryId());
         dto.setName(category.getName());
         dto.setImageUrl(category.getIcon());
+        dto.setActive(category.getIsActive());
         return dto;
     }
 
