@@ -1,5 +1,6 @@
 package com.deliveryapp.service;
 
+import com.deliveryapp.dto.user.UserUpdateRequest;
 import com.deliveryapp.entity.OtpVerification;
 import com.deliveryapp.entity.User;
 import com.deliveryapp.enums.UserType;
@@ -11,6 +12,7 @@ import com.deliveryapp.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.Random;
@@ -21,6 +23,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final OtpVerificationRepository otpRepository;
+    private final FileStorageService fileStorageService;
 
     public User registerUser(User user) {
         if (userRepository.findByPhoneNumber(user.getPhoneNumber()).isPresent()) {
@@ -82,5 +85,43 @@ public class UserService {
         driver.setCurrentLocationLat(lat);
         driver.setCurrentLocationLng(lng);
         return userRepository.save(driver);
+    }
+    // ... imports ...
+
+    @Transactional
+    public User updateUserProfile(Long userId, UserUpdateRequest request, MultipartFile profileImage) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        // 1. Update Name
+        if (request.getName() != null && !request.getName().trim().isEmpty()) {
+            user.setName(request.getName());
+        }
+
+        // 2. Update Email
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            user.setEmail(request.getEmail());
+        }
+
+        // 3. Update Address (Primary Profile Address)
+        if (request.getAddress() != null && !request.getAddress().trim().isEmpty()) {
+            user.setAddress(request.getAddress());
+
+            // Only update coords if provided, otherwise keep old ones or null
+            if (request.getLatitude() != null) user.setLatitude(request.getLatitude());
+            if (request.getLongitude() != null) user.setLongitude(request.getLongitude());
+        }
+
+        // 4. Update Profile Image
+        if (profileImage != null && !profileImage.isEmpty()) {
+            String imageUrl = fileStorageService.storeFile(profileImage, "profiles");
+            user.setProfileImage(imageUrl);
+        }
+
+        return userRepository.save(user);
+    }
+    public User getUserById(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
     }
 }
