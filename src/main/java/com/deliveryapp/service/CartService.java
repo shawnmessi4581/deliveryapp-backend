@@ -97,13 +97,24 @@ public class CartService {
         cartItemRepository.deleteById(cartItemId);
     }
 
+    // ================== FIXED METHOD ==================
     @Transactional
     public void clearCart(Long userId) {
         Cart cart = getCartByUser(userId);
-        cartItemRepository.deleteByCartCartId(cart.getCartId());
 
-        // Reset the store association when clearing
+        // 1. Delete items from the Database
+        // We use deleteAll with the list to ensure Hibernate context is aware
+        if (cart.getItems() != null && !cart.getItems().isEmpty()) {
+            cartItemRepository.deleteAll(cart.getItems());
+
+            // 2. CRITICAL: Clear the list in memory so Hibernate doesn't try to merge deleted items
+            cart.getItems().clear();
+        }
+
+        // 3. Clear Store association
         cart.setStore(null);
+
+        // 4. Save the empty cart
         cartRepository.save(cart);
     }
 }
