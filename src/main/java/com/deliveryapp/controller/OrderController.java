@@ -69,7 +69,7 @@ public class OrderController {
 
         if (order.getDriver() != null) {
             response.setDriverId(order.getDriver().getUserId());
-            response.setDriverName(order.getDriver().getName()); // Assuming User has getFullName()
+            response.setDriverName(order.getDriver().getName());
             response.setDriverPhone(order.getDriver().getPhoneNumber());
         }
 
@@ -81,8 +81,14 @@ public class OrderController {
         response.setCreatedAt(order.getCreatedAt());
         response.setDeliveredAt(order.getDeliveredAt());
 
+        // --- FINANCIALS ---
         response.setSubtotal(order.getSubtotal());
         response.setDeliveryFee(order.getDeliveryFee());
+
+        // [ADDED] Map the Discount so the user sees how much they saved
+        response.setDiscountAmount(order.getDiscountAmount() != null ? order.getDiscountAmount() : 0.0);
+        response.setCouponId(order.getCouponId());
+
         response.setTotalAmount(order.getTotalAmount());
 
         List<OrderItemResponse> itemResponses;

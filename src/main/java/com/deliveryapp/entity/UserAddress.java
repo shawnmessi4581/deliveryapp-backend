@@ -1,5 +1,6 @@
 package com.deliveryapp.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -14,6 +15,7 @@ public class UserAddress {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore // Prevent infinite recursion
     private User user;
 
     private String label; // e.g., "Home", "Work"

@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,7 +37,11 @@ public class OrderService {
             throw new InvalidDataException("Cannot place order. Cart is empty.");
         }
 
-        // 1. Resolve & Validate Address
+        // 1. Resolve & Validate Address (Added Null Check)
+        if (addressId == null) {
+            throw new InvalidDataException("Delivery Address is required. Please select a saved address.");
+        }
+
         UserAddress userAddress = addressRepository.findById(addressId)
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found with id: " + addressId));
 
@@ -135,7 +140,8 @@ public class OrderService {
 
         // Final Total Calculation
         double finalTotal = (subtotal + deliveryFee) - discountAmount;
-        // Ensure total doesn't drop below zero (unlikely due to validation logic, but safe to add)
+
+        // Ensure total doesn't drop below zero
         order.setTotalAmount(Math.max(finalTotal, 0.0));
 
         // 7. Save Order
@@ -143,7 +149,6 @@ public class OrderService {
 
         // 8. Record Coupon Usage
         if(validCoupon != null) {
-            // We need the savedOrder ID to record usage
             couponService.recordUsage(validCoupon, userId, savedOrder.getOrderId(), discountAmount);
         }
 
@@ -185,5 +190,50 @@ public class OrderService {
 
     public List<Order> getUserOrders(Long userId) {
         return orderRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    // --- ADMIN: Get All Orders with Filters ---
+    public List<Order> getAdminOrders(OrderStatus status, LocalDate startDate, LocalDate endDate) {
+
+        // 1. If Date Range is provided
+        if (startDate != null && endDate != null) {
+            LocalDateTime startDateTime = startDate.atStartOfDay(); // 00:00:00
+            LocalDateTime endDateTime = endDate.atTime(23, 59, 59); // 23:59:59
+
+            if (status != null) {
+                // Filter by Status AND Date
+                return orderRepository.findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(status, startDateTime, endDateTime);
+            } else {
+                // Filter by Date only
+                return orderRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDateTime, endDateTime);
+            }
+        }
+
+        // 2. If only Status is provided
+        if (status != null) {
+            return orderRepository.findByStatusOrderByCreatedAtDesc(status);
+        }
+
+        // 3. No filters (Return all)
+        return orderRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    // --- ADMIN: Delete Order ---
+    @Transactional
+    public void deleteOrder(Long orderId) {
+        if (!orderRepository.existsById(orderId)) {
+            throw new ResourceNotFoundException("Order not found with id: " + orderId);
+        }
+        // Because Order has CascadeType.ALL on OrderItems, those will be deleted automatically.
+        // However, we must ensure OrderStatusHistory is also handled if it's not cascaded.
+        // Assuming your DB or Entity setup handles cascade, otherwise:
+        // historyRepository.deleteByOrderOrderId(orderId);
+
+        orderRepository.deleteById(orderId);
+    }
+    // Get Single Order (Admin or User)
+    public Order getOrderById(Long orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
     }
 }

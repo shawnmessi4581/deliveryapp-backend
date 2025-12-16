@@ -36,4 +36,10 @@ public class OrderResponse {
 
     // Items
     private List<OrderItemResponse> items;
+    // NEW: Add the customer details
+    private OrderCustomerResponse customerDetails;
+    // NEW FIELDS FOR COUPONS
+    private Double discountAmount; // How much was saved
+    private Long couponId;         // Which coupon was used (optional)
+
 }
