@@ -2,13 +2,16 @@ package com.deliveryapp.repository;
 
 import com.deliveryapp.entity.Product;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
-
+    // Fetch all active products in random order (PostgreSQL specific)
+    @Query(value = "SELECT * FROM products WHERE is_available = true ORDER BY RANDOM()", nativeQuery = true)
+    List<Product> findAllActiveProductsRandomly();
     // 1. Existing: Get menu for a specific store
     List<Product> findByStoreStoreIdAndIsAvailableTrue(Long storeId);
 

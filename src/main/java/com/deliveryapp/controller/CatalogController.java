@@ -104,7 +104,14 @@ public class CatalogController {
     }
 
     // ==================== PRODUCTS ====================
-
+    // GET All Products (Random Order)
+    @GetMapping("/products/all")
+    public ResponseEntity<List<ProductResponse>> getAllProductsRandom() {
+        List<Product> products = catalogService.getAllProductsRandomly();
+        return ResponseEntity.ok(products.stream()
+                .map(this::mapToProductResponse)
+                .collect(Collectors.toList()));
+    }
     @GetMapping("/products/{productId}")
     public ResponseEntity<ProductResponse> getProductById(@PathVariable Long productId) {
         Product product = catalogService.getProductById(productId);

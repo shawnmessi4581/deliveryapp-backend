@@ -66,6 +66,10 @@ public class CatalogService {
 
 
     // ================= PRODUCTS =================
+
+    public List<Product> getAllProductsRandomly() {
+        return productRepository.findAllActiveProductsRandomly();
+    }
     public Product getProductById(Long id) {
         return productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + id));
