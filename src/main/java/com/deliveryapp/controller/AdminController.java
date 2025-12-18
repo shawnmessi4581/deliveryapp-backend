@@ -7,6 +7,7 @@ import com.deliveryapp.entity.*;
 import com.deliveryapp.repository.DeliveryInstructionRepository;
 import com.deliveryapp.service.AdminService;
 import com.deliveryapp.service.CouponService;
+import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +28,7 @@ public class AdminController {
     private final AdminService adminService;
     private final CouponService couponService;
     private final DeliveryInstructionRepository instructionRepository;
+    private final UrlUtil urlUtil; // 2. Inject
 
     @GetMapping("/users")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
@@ -247,7 +249,7 @@ public class AdminController {
         CategoryResponse dto = new CategoryResponse();
         dto.setCategoryId(category.getCategoryId());
         dto.setName(category.getName());
-        dto.setImageUrl(category.getIcon());
+        dto.setImageUrl(urlUtil.getFullUrl(category.getIcon()));
         dto.setActive(category.getIsActive());
         return dto;
     }
@@ -255,7 +257,7 @@ public class AdminController {
         SubCategoryResponse dto = new SubCategoryResponse();
         dto.setSubCategoryId(subCategory.getSubcategoryId());
         dto.setName(subCategory.getName());
-        dto.setImageUrl(subCategory.getIcon());
+        dto.setImageUrl(urlUtil.getFullUrl(subCategory.getIcon()));
         dto.setIsActive(subCategory.getIsActive());
 
         if (subCategory.getCategory() != null) {
@@ -271,8 +273,8 @@ public class AdminController {
         dto.setName(store.getName());
         dto.setDescription(store.getDescription());
         dto.setPhone(store.getPhone()); // Added
-        dto.setLogo(store.getLogo());
-        dto.setCoverImage(store.getCoverImage());
+        dto.setLogo(urlUtil.getFullUrl(store.getLogo()));
+        dto.setCoverImage(urlUtil.getFullUrl(store.getCoverImage()));
         dto.setAddress(store.getAddress());
         dto.setLatitude(store.getLatitude());
         dto.setLongitude(store.getLongitude());
@@ -300,7 +302,7 @@ public class AdminController {
         dto.setName(product.getName());
         dto.setDescription(product.getDescription());
         dto.setBasePrice(product.getBasePrice());
-        dto.setImageUrl(product.getImage());
+        dto.setImageUrl(urlUtil.getFullUrl(product.getImage()));
         dto.setAvailable(product.getIsAvailable());
 
         if (product.getStore() != null) {

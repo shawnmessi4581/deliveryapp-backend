@@ -4,6 +4,7 @@ import com.deliveryapp.dto.catalog.*;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.service.CatalogService;
 import com.deliveryapp.util.DistanceUtil;
+import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +20,8 @@ public class CatalogController {
 
     private final CatalogService catalogService;
     private final DistanceUtil distanceUtil;
+    private final UrlUtil urlUtil; // 2. Inject
+
     // ==================== CATEGORIES ====================
 
     @GetMapping("/categories")
@@ -164,7 +167,7 @@ public class CatalogController {
         CategoryResponse dto = new CategoryResponse();
         dto.setCategoryId(category.getCategoryId());
         dto.setName(category.getName());
-        dto.setImageUrl(category.getIcon());
+        dto.setImageUrl(urlUtil.getFullUrl(category.getIcon()));
         dto.setActive(category.getIsActive());
         return dto;
     }
@@ -173,7 +176,7 @@ public class CatalogController {
         SubCategoryResponse dto = new SubCategoryResponse();
         dto.setSubCategoryId(subCategory.getSubcategoryId());
         dto.setName(subCategory.getName());
-        dto.setImageUrl(subCategory.getIcon());
+        dto.setImageUrl(urlUtil.getFullUrl(subCategory.getIcon()));
 //        dto.setDisplayOrder(subCategory.getDisplayOrder());
         if (subCategory.getCategory() != null) {
             dto.setParentCategoryId(subCategory.getCategory().getCategoryId());
@@ -187,8 +190,8 @@ public class CatalogController {
         dto.setStoreId(store.getStoreId());
         dto.setName(store.getName());
         dto.setDescription(store.getDescription());
-        dto.setLogo(store.getLogo());
-        dto.setCoverImage(store.getCoverImage());
+        dto.setLogo(urlUtil.getFullUrl(store.getLogo()));
+        dto.setCoverImage(urlUtil.getFullUrl(store.getCoverImage()));
         dto.setAddress(store.getAddress());
         dto.setLatitude(store.getLatitude());
         dto.setLongitude(store.getLongitude());
@@ -206,7 +209,7 @@ public class CatalogController {
         dto.setName(product.getName());
         dto.setDescription(product.getDescription());
         dto.setBasePrice(product.getBasePrice());
-        dto.setImageUrl(product.getImage());
+        dto.setImageUrl(urlUtil.getFullUrl(product.getImage()));
         dto.setAvailable(product.getIsAvailable());
 
         if (product.getStore() != null) {
