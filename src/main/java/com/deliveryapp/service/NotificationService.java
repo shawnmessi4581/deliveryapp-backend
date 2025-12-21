@@ -1,12 +1,15 @@
 package com.deliveryapp.service;
 
 import com.deliveryapp.entity.Notification;
+import com.deliveryapp.entity.User;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.NotificationRepository;
+import com.deliveryapp.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -14,7 +17,10 @@ import java.util.List;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+    private final UserRepository userRepository;
+    private final FCMService fcmService; // Inject FCM Service
 
+    // --- GETTERS ---
     public List<Notification> getUserNotifications(Long userId) {
         return notificationRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
     }
@@ -30,5 +36,36 @@ public class NotificationService {
 
         notification.setIsRead(true);
         notificationRepository.save(notification);
+    }
+
+    // --- SEND LOGIC (Call this from OrderService, etc.) ---
+    @Transactional
+    public void sendNotification(Long userId, String title, String message, String imageUrl, String type, Long referenceId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        // 1. Save to Database (So user can see it in 'Inbox' later)
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setTitle(title);
+        notification.setMessage(message);
+        notification.setImageUrl(imageUrl);
+        notification.setType(type);
+        notification.setReferenceType(type); // Usually same as type or generalized
+        notification.setReferenceId(referenceId);
+        notification.setIsRead(false);
+        notification.setCreatedAt(LocalDateTime.now());
+
+        notificationRepository.save(notification);
+
+        // 2. Send Push Notification via Firebase
+        fcmService.sendPushNotification(
+                user.getFcmToken(), // Ensure User entity has getFcmToken()
+                title,
+                message,
+                imageUrl,
+                type,
+                String.valueOf(referenceId)
+        );
     }
 }

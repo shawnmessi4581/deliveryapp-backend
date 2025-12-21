@@ -20,9 +20,13 @@ public class Notification {
 
     private String title;
     private String message;
-    private String type;
+
+    // NEW: Optional Image URL
+    private String imageUrl;
+
+    private String type; // e.g., "ORDER_UPDATE", "PROMO"
     private String referenceType; // e.g., "order"
-    private Long referenceId;
+    private Long referenceId;     // e.g., Order ID
     private Boolean isRead;
     private LocalDateTime createdAt;
 }
