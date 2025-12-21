@@ -35,28 +35,47 @@ public class NotificationController {
         return ResponseEntity.ok("Notification marked as read");
     }
 
-    // 4. Send Notification (For Admin Dashboard or Testing)
     @PostMapping("/send")
     public ResponseEntity<String> sendNotification(@RequestBody SendNotificationRequest request) {
-        notificationService.sendNotification(
-                request.getUserId(),
-                request.getTitle(),
-                request.getMessage(),
-                request.getImageUrl(),
-                request.getType(),
-                request.getReferenceId()
-        );
-        return ResponseEntity.ok("Notification sent successfully");
+
+        // CASE 1: Send to Specific User
+        if (request.getUserId() != null) {
+            notificationService.sendNotification(
+                    request.getUserId(),
+                    request.getTitle(),
+                    request.getMessage(),
+                    request.getImageUrl(),
+                    request.getType(),
+                    request.getReferenceId()
+            );
+            return ResponseEntity.ok("Sent to User " + request.getUserId());
+        }
+
+        // CASE 2: Send to Topic
+        else if (request.getTopic() != null && !request.getTopic().isEmpty()) {
+            notificationService.sendGlobalNotification(
+                    request.getTopic(),
+                    request.getTitle(),
+                    request.getMessage(),
+                    request.getImageUrl(),
+                    request.getType(),
+                    request.getReferenceId()
+            );
+            return ResponseEntity.ok("Sent to Topic: " + request.getTopic());
+        }
+
+        return ResponseEntity.badRequest().body("Please provide either userId or topic");
     }
 
-    // Internal DTO for the Send Endpoint
+    // Updated DTO
     @Data
     public static class SendNotificationRequest {
-        private Long userId;
+        private Long userId;     // Optional (For single user)
+        private String topic;    // Optional (For group, e.g., "all_users")
         private String title;
         private String message;
-        private String imageUrl; // Optional
-        private String type;     // e.g. "ORDER", "PROMO"
+        private String imageUrl;
+        private String type;
         private Long referenceId;
     }
 }

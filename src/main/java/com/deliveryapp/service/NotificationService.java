@@ -59,8 +59,20 @@ public class NotificationService {
         notificationRepository.save(notification);
 
         // 2. Send Push Notification via Firebase
-        fcmService.sendPushNotification(
+        fcmService.sendToToken(
                 user.getFcmToken(), // Ensure User entity has getFcmToken()
+                title,
+                message,
+                imageUrl,
+                type,
+                String.valueOf(referenceId)
+        );
+    }
+    // NEW: Send to Topic (No DB save needed usually, or save as system log)
+    @Transactional
+    public void sendGlobalNotification(String topic, String title, String message, String imageUrl, String type, Long referenceId) {
+        fcmService.sendToTopic(
+                topic,
                 title,
                 message,
                 imageUrl,
