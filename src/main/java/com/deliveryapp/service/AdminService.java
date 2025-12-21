@@ -6,6 +6,7 @@ import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.*;
+import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ public class AdminService {
     private final ProductVariantRepository variantRepository;
     private final FileStorageService fileStorageService;
     private final UserRepository userRepository;
+    private final UrlUtil urlUtil; // 2. Inject
 
     // ==================== CATEGORY CRUD ====================
 
@@ -379,7 +381,7 @@ public List<Category> getAllCategories() {
         dto.setEmail(user.getEmail());
         dto.setPhoneNumber(user.getPhoneNumber());
         dto.setUserType(user.getUserType());
-        dto.setProfileImage(user.getProfileImage()); // Ensure User entity has getProfileImage() or getImageUrl()
+        dto.setProfileImage(urlUtil.getFullUrl(user.getProfileImage())); // Ensure User entity has getProfileImage() or getImageUrl()
         dto.setIsActive(user.getIsActive());
 
         dto.setAddress(user.getAddress());
