@@ -2,13 +2,18 @@ package com.deliveryapp.controller;
 
 import com.deliveryapp.dto.catalog.*;
 import com.deliveryapp.dto.coupon.CouponRequest;
+import com.deliveryapp.dto.order.OrderCustomerResponse;
+import com.deliveryapp.dto.order.OrderItemResponse;
+import com.deliveryapp.dto.order.OrderResponse;
 import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.repository.DeliveryInstructionRepository;
 import com.deliveryapp.service.AdminService;
 import com.deliveryapp.service.CouponService;
+import com.deliveryapp.service.OrderService;
 import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,6 +32,7 @@ public class AdminController {
 
     private final AdminService adminService;
     private final CouponService couponService;
+    private final OrderService orderService;
     private final DeliveryInstructionRepository instructionRepository;
     private final UrlUtil urlUtil; // 2. Inject
 
@@ -52,6 +58,30 @@ public class AdminController {
         String status = active ? "activated" : "deactivated";
         return ResponseEntity.ok("User has been " + status);
     }
+
+    // 1. GET List of Drivers
+    @GetMapping("/drivers")
+    public ResponseEntity<List<UserResponse>> getAllDrivers() {
+        // We reuse the UserResponse DTO to hide passwords/tokens
+        List<UserResponse> drivers = adminService.getAllDrivers().stream()
+                .map(this::mapToUserResponse) // Define helper below or reuse from AdminController
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(drivers);
+    }
+
+    // 2. ASSIGN DRIVER
+    @PatchMapping("/{orderId}/assign/{driverId}")
+    public ResponseEntity<OrderResponse> assignDriver(
+            @PathVariable Long orderId,
+            @PathVariable Long driverId) {
+
+        Order order = orderService.assignDriver(orderId, driverId);
+        return ResponseEntity.ok(mapToOrderResponse(order));
+    }
+
+
+
+
     // ==================== CATEGORIES ====================
     @GetMapping("/categories")
     public ResponseEntity<List<CategoryResponse>> getAllCategories() {
@@ -245,6 +275,19 @@ public class AdminController {
     }
     // ==================== MANUAL MAPPERS ====================
 
+
+    // --- Helper: Map User to UserResponse (If not reusing from another service) ---
+    private UserResponse mapToUserResponse(com.deliveryapp.entity.User user) {
+        UserResponse dto = new UserResponse();
+        dto.setUserId(user.getUserId());
+        dto.setName(user.getName());
+        dto.setPhoneNumber(user.getPhoneNumber());
+        dto.setUserType(user.getUserType());
+        dto.setIsAvailable(user.getIsAvailable());
+        dto.setVehicleType(user.getVehicleType());
+        dto.setVehicleNumber(user.getVehicleNumber());
+        return dto;
+    }
     private CategoryResponse mapToCategoryResponse(Category category) {
         CategoryResponse dto = new CategoryResponse();
         dto.setCategoryId(category.getCategoryId());
@@ -333,5 +376,74 @@ public class AdminController {
         }
 
         return dto;
+    }
+    // ==================== MAPPER ====================
+    private OrderResponse mapToOrderResponse(Order order) {
+        OrderResponse response = new OrderResponse();
+        response.setOrderId(order.getOrderId());
+        response.setOrderNumber(order.getOrderNumber());
+
+        // --- Store Info ---
+        if (order.getStore() != null) {
+            response.setStoreId(order.getStore().getStoreId());
+            response.setStoreName(order.getStore().getName());
+        }
+
+        // --- Driver Info ---
+        if (order.getDriver() != null) {
+            response.setDriverId(order.getDriver().getUserId());
+            response.setDriverName(order.getDriver().getName());
+            response.setDriverPhone(order.getDriver().getPhoneNumber());
+        }
+
+        // --- Customer Info ---
+        if (order.getUser() != null) {
+            User customer = order.getUser();
+            // Ensure you have imported OrderCustomerResponse
+            OrderCustomerResponse customerDto = new OrderCustomerResponse();
+            customerDto.setUserId(customer.getUserId());
+            customerDto.setName(customer.getName());
+            customerDto.setPhoneNumber(customer.getPhoneNumber());
+            customerDto.setProfileAddress(customer.getAddress());
+
+            response.setCustomerDetails(customerDto);
+        }
+
+        // --- Location & Status ---
+        response.setDeliveryAddress(order.getDeliveryAddress());
+        response.setDeliveryLatitude(order.getDeliveryLatitude());
+        response.setDeliveryLongitude(order.getDeliveryLongitude());
+
+        response.setStatus(order.getStatus());
+        response.setCreatedAt(order.getCreatedAt());
+        response.setDeliveredAt(order.getDeliveredAt());
+
+        // --- FINANCIALS ---
+        response.setSubtotal(order.getSubtotal());
+        response.setDeliveryFee(order.getDeliveryFee());
+
+        // Map Discount & Coupon
+        response.setDiscountAmount(order.getDiscountAmount() != null ? order.getDiscountAmount() : 0.0);
+        response.setCouponId(order.getCouponId());
+
+        response.setTotalAmount(order.getTotalAmount());
+
+        // --- Order Items ---
+        if (order.getOrderItems() != null) {
+            response.setItems(order.getOrderItems().stream().map(item -> {
+                OrderItemResponse r = new OrderItemResponse();
+                r.setProductName(item.getProductName());
+                r.setVariantDetails(item.getVariantDetails());
+                r.setQuantity(item.getQuantity());
+                r.setUnitPrice(item.getUnitPrice());
+                r.setTotalPrice(item.getTotalPrice());
+                r.setNotes(item.getNotes());
+                return r;
+            }).collect(Collectors.toList()));
+        } else {
+            response.setItems(Collections.emptyList());
+        }
+
+        return response;
     }
 }

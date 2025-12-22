@@ -20,4 +20,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // Find available drivers
     List<User> findByUserTypeAndIsAvailableTrue(UserType userType);
+
 }

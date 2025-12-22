@@ -2,6 +2,7 @@ package com.deliveryapp.service;
 
 import com.deliveryapp.entity.*;
 import com.deliveryapp.enums.OrderStatus;
+import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.*;
@@ -24,11 +25,11 @@ public class OrderService {
     private final CartService cartService;
     private final OrderStatusHistoryRepository historyRepository;
     private final DistanceUtil distanceUtil;
-
+    private  final  UserRepository userRepository;
     // NEW DEPENDENCIES
     private final UserAddressRepository addressRepository;
     private final CouponService couponService;
-
+    private  final  NotificationService notificationService;
     @Transactional
     public Order placeOrder(Long userId, Long addressId, String instruction, String couponCode) {
         Cart cart = cartService.getCartByUser(userId);
@@ -235,5 +236,48 @@ public class OrderService {
     public Order getOrderById(Long orderId) {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+    }
+
+    @Transactional
+    public Order assignDriver(Long orderId, Long driverId) {
+        // 1. Fetch Order
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+
+        // 2. Fetch Driver
+        User driver = userRepository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + driverId));
+
+        // 3. Validate User is actually a Driver
+        if (driver.getUserType() != UserType.DRIVER) {
+            throw new InvalidDataException("The selected user is not a Driver");
+        }
+
+        // 4. Assign
+        order.setDriver(driver);
+
+        // 5. Auto-update status to CONFIRMED (or PREPARING) if it was just PENDING
+        if (order.getStatus() == OrderStatus.PENDING) {
+            order.setStatus(OrderStatus.CONFIRMED);
+        }
+
+        Order savedOrder = orderRepository.save(order);
+
+        // 6. Notify Driver (Optional but recommended)
+        try {
+            notificationService.sendNotification(
+                    driverId,
+                    "New Order Assigned",
+                    "You have been assigned to Order #" + order.getOrderNumber(),
+                    null,
+                    "DRIVER_ASSIGNMENT",
+                    orderId
+            );
+        } catch (Exception e) {
+            // Ignore notification errors to ensure transaction completes
+            System.err.println("Failed to notify driver: " + e.getMessage());
+        }
+
+        return savedOrder;
     }
 }

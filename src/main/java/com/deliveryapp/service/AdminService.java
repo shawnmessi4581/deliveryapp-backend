@@ -4,6 +4,7 @@ import com.deliveryapp.dto.catalog.ProductRequest;
 import com.deliveryapp.dto.catalog.StoreRequest;
 import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
+import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.*;
 import com.deliveryapp.util.UrlUtil;
@@ -52,6 +53,10 @@ public class AdminService {
 
         user.setIsActive(isActive);
         userRepository.save(user);
+    }
+
+    public List<User> getAllDrivers() {
+        return userRepository.findByUserType(UserType.DRIVER);
     }
 //categories
 public List<Category> getAllCategories() {
