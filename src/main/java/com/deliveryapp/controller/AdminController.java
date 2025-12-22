@@ -347,7 +347,18 @@ public class AdminController {
         dto.setBasePrice(product.getBasePrice());
         dto.setImageUrl(urlUtil.getFullUrl(product.getImage()));
         dto.setAvailable(product.getIsAvailable());
+        if (product.getStore() != null) {
+            // You need to duplicate/access a mapToStoreResponse logic here
+            // Or manually map it if you don't want to duplicate the whole method
+            StoreResponse storeDto = new StoreResponse();
+            storeDto.setStoreId(product.getStore().getStoreId());
+            storeDto.setName(product.getStore().getName());
+            storeDto.setLogo(urlUtil.getFullUrl(product.getStore().getLogo())); // Ensure UrlUtil is injected
+            storeDto.setDeliveryFeeKM(product.getStore().getDeliveryFeeKM());
+            // Map other fields as needed...
 
+            dto.setStore(storeDto);
+        }
         if (product.getStore() != null) {
             dto.setStoreId(product.getStore().getStoreId());
             dto.setStoreName(product.getStore().getName()); // Added

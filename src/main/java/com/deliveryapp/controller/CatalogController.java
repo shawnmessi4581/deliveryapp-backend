@@ -209,6 +209,7 @@ public class CatalogController {
         dto.setMinimumOrder(store.getMinimumOrder());
         return dto;
     }
+// ... inside CatalogController ...
 
     private ProductResponse mapToProductResponse(Product product) {
         ProductResponse dto = new ProductResponse();
@@ -219,10 +220,24 @@ public class CatalogController {
         dto.setImageUrl(urlUtil.getFullUrl(product.getImage()));
         dto.setAvailable(product.getIsAvailable());
 
+        // --- NEW: Map Full Store Details ---
         if (product.getStore() != null) {
-            dto.setStoreId(product.getStore().getStoreId());
+            // Reuse the existing store mapper to get Logo, Rating, Time, etc.
+            StoreResponse storeDto = mapToStoreResponse(product.getStore());
+            dto.setStore(storeDto);
         }
 
+        if (product.getCategory() != null) {
+            dto.setCategoryId(product.getCategory().getCategoryId());
+            dto.setCategoryName(product.getCategory().getName());
+        }
+
+        if (product.getSubCategory() != null) {
+            dto.setSubCategoryId(product.getSubCategory().getSubcategoryId());
+            dto.setSubCategoryName(product.getSubCategory().getName());
+        }
+
+        // Map Variants
         if (product.getVariants() != null && !product.getVariants().isEmpty()) {
             List<ProductVariantResponse> variantDtos = product.getVariants().stream().map(v -> {
                 ProductVariantResponse vDto = new ProductVariantResponse();
