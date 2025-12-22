@@ -1,5 +1,6 @@
 package com.deliveryapp.controller;
 
+import com.deliveryapp.dto.user.FcmTokenRequest;
 import com.deliveryapp.dto.user.UserProfileResponse;
 import com.deliveryapp.dto.user.UserUpdateRequest;
 import com.deliveryapp.entity.User;
@@ -70,5 +71,13 @@ public class UserController {
 
         // Recursively call get logic to return the full fresh profile
         return getUserProfile(userId);
+    }
+    @PatchMapping("/{userId}/fcm-token")
+    public ResponseEntity<String> updateFcmToken(
+            @PathVariable Long userId,
+            @RequestBody FcmTokenRequest request) {
+
+        userService.updateFcmToken(userId, request.getFcmToken());
+        return ResponseEntity.ok("FCM Token updated successfully");
     }
 }
