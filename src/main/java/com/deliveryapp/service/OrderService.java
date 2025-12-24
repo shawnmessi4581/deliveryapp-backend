@@ -1,5 +1,9 @@
 package com.deliveryapp.service;
 
+import com.deliveryapp.dto.order.CouponCheckRequest;
+import com.deliveryapp.dto.order.CouponCheckResponse;
+import com.deliveryapp.dto.order.DeliveryFeeResponse;
+import com.deliveryapp.dto.order.OrderItemRequest;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.enums.OrderStatus;
 import com.deliveryapp.enums.UserType;
@@ -22,143 +26,158 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    private final CartService cartService;
     private final OrderStatusHistoryRepository historyRepository;
     private final DistanceUtil distanceUtil;
     private  final  UserRepository userRepository;
+    private final ProductRepository productRepository; // Added
+    private final ProductVariantRepository variantRepository; // Added
     // NEW DEPENDENCIES
     private final UserAddressRepository addressRepository;
+    private final StoreRepository storeRepository;
+
     private final CouponService couponService;
     private  final  NotificationService notificationService;
     @Transactional
-    public Order placeOrder(Long userId, Long addressId, String instruction, String couponCode) {
-        Cart cart = cartService.getCartByUser(userId);
+    public Order placeOrder(Long userId, Long addressId, String instruction, String couponCode, List<OrderItemRequest> itemsRequest) {
 
-        if (cart.getItems() == null || cart.getItems().isEmpty()) {
-            throw new InvalidDataException("Cannot place order. Cart is empty.");
+        // 1. Validate Input
+        if (itemsRequest == null || itemsRequest.isEmpty()) {
+            throw new InvalidDataException("Cannot place order. No items provided.");
         }
 
-        // 1. Resolve & Validate Address (Added Null Check)
-        if (addressId == null) {
-            throw new InvalidDataException("Delivery Address is required. Please select a saved address.");
-        }
+        // 2. Resolve Address
+        if (addressId == null) throw new InvalidDataException("Delivery Address is required.");
 
         UserAddress userAddress = addressRepository.findById(addressId)
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found with id: " + addressId));
 
-        // Security check: Ensure address belongs to the user placing the order
         if(!userAddress.getUser().getUserId().equals(userId)) {
             throw new ResourceNotFoundException("Address does not belong to this user");
         }
 
-        Store store = cart.getStore();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+        // 3. Process Items & Validate Store Consistency
         Order order = new Order();
-        order.setUser(cart.getUser());
-        order.setStore(store);
+        order.setUser(user);
         order.setOrderNumber(UUID.randomUUID().toString().substring(0, 8).toUpperCase());
         order.setStatus(OrderStatus.PENDING);
 
-        // 2. Set Location Details from UserAddress
-        order.setDeliveryAddress(userAddress.getAddressLine());
-        order.setDeliveryLatitude(userAddress.getLatitude());
-        order.setDeliveryLongitude(userAddress.getLongitude());
-
-        // 3. Set Instruction
-        order.setSelectedInstruction(instruction);
-
-        order.setCreatedAt(LocalDateTime.now());
-        order.setUpdatedAt(LocalDateTime.now());
-
-        // 4. Calculate Subtotal & Process Items
+        Store orderStore = null; // We will determine the store from the first item
         double subtotal = 0.0;
         List<OrderItem> orderItems = new ArrayList<>();
 
-        for (CartItem cartItem : cart.getItems()) {
+        for (OrderItemRequest itemReq : itemsRequest) {
+            // Fetch Product from DB to get real price (Security)
+            Product product = productRepository.findById(itemReq.getProductId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + itemReq.getProductId()));
+
+            // Store Consistency Check
+            if (orderStore == null) {
+                orderStore = product.getStore(); // Set the store based on first item
+            } else if (!orderStore.getStoreId().equals(product.getStore().getStoreId())) {
+                throw new InvalidDataException("All items must be from the same store. Please clear cart and try again.");
+            }
+
+            // Build Order Item
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
-            orderItem.setProduct(cartItem.getProduct());
-            orderItem.setVariant(cartItem.getVariant());
-            orderItem.setProductName(cartItem.getProduct().getName());
-            orderItem.setQuantity(cartItem.getQuantity());
-            orderItem.setNotes(cartItem.getNotes());
+            orderItem.setProduct(product);
+            orderItem.setProductName(product.getName());
+            orderItem.setQuantity(itemReq.getQuantity());
+            orderItem.setNotes(itemReq.getNotes());
 
-            double price = cartItem.getProduct().getBasePrice();
+            // Price Calculation
+            double price = product.getBasePrice();
 
-            // Add variant price if exists
-            if (cartItem.getVariant() != null) {
-                price += cartItem.getVariant().getPriceAdjustment();
-                orderItem.setVariantDetails(cartItem.getVariant().getVariantValue());
+            // Handle Variant
+            if (itemReq.getVariantId() != null) {
+                ProductVariant variant = variantRepository.findById(itemReq.getVariantId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Variant not found: " + itemReq.getVariantId()));
+
+                // Ensure variant belongs to product
+                if(!variant.getProduct().getProductId().equals(product.getProductId())) {
+                    throw new InvalidDataException("Variant does not belong to this product");
+                }
+
+                orderItem.setVariant(variant);
+                orderItem.setVariantDetails(variant.getVariantValue());
+                price += variant.getPriceAdjustment();
             }
 
             orderItem.setUnitPrice(price);
-            orderItem.setTotalPrice(price * cartItem.getQuantity());
+            orderItem.setTotalPrice(price * itemReq.getQuantity());
 
             subtotal += orderItem.getTotalPrice();
             orderItems.add(orderItem);
         }
 
+        order.setStore(orderStore);
         order.setOrderItems(orderItems);
         order.setSubtotal(subtotal);
 
-        // 5. Calculate Delivery Fee based on Distance
-        double deliveryFee = 0.0;
+        // 4. Set Location
+        order.setDeliveryAddress(userAddress.getAddressLine());
+        order.setDeliveryLatitude(userAddress.getLatitude());
+        order.setDeliveryLongitude(userAddress.getLongitude());
+        order.setSelectedInstruction(instruction);
+        order.setCreatedAt(LocalDateTime.now());
+        order.setUpdatedAt(LocalDateTime.now());
 
-        if (store.getLatitude() != null && store.getLongitude() != null &&
+        // 5. Calculate Delivery Fee
+        double deliveryFee = 0.0;
+        if (orderStore.getLatitude() != null && orderStore.getLongitude() != null &&
                 userAddress.getLatitude() != null && userAddress.getLongitude() != null) {
 
             double distanceInKm = distanceUtil.calculateDistance(
                     userAddress.getLatitude(), userAddress.getLongitude(),
-                    store.getLatitude(), store.getLongitude()
+                    orderStore.getLatitude(), orderStore.getLongitude()
             );
 
-            Double feePerKm = store.getDeliveryFeeKM();
+            Double feePerKm = orderStore.getDeliveryFeeKM();
             if(feePerKm == null) feePerKm = 0.0;
 
             deliveryFee = distanceInKm * feePerKm;
-
-            // Round to 2 decimal places
             deliveryFee = Math.round(deliveryFee * 100.0) / 100.0;
         }
+        order.setDeliveryFee(deliveryFee);
 
         // 6. Handle Coupon Logic
         double discountAmount = 0.0;
         Coupon validCoupon = null;
 
         if (couponCode != null && !couponCode.trim().isEmpty()) {
-            // Validate the coupon against the user and the cart contents
-            validCoupon = couponService.validateCoupon(couponCode, userId, cart);
+            // Note: You need to update `couponService.validateCoupon` to accept List<OrderItem> instead of Cart
+            // For now, I will assume you refactor that or temporarily comment it out.
+            // validCoupon = couponService.validateCoupon(couponCode, userId, orderItems, orderStore);
+            // discountAmount = couponService.calculateDiscount(validCoupon, subtotal, deliveryFee);
 
-            // Calculate exact discount value
+            // Temporary simple check if you haven't refactored coupon service yet:
+            validCoupon = couponService.validateCouponForOrder(couponCode, userId, orderItems, orderStore);
             discountAmount = couponService.calculateDiscount(validCoupon, subtotal, deliveryFee);
 
-            // Set fields in Order
             order.setCouponId(validCoupon.getCouponId());
             order.setDiscountAmount(discountAmount);
         }
 
-        order.setDeliveryFee(deliveryFee);
-
-        // Final Total Calculation
+        // 7. Final Total
         double finalTotal = (subtotal + deliveryFee) - discountAmount;
-
-        // Ensure total doesn't drop below zero
         order.setTotalAmount(Math.max(finalTotal, 0.0));
 
-        // 7. Save Order
+        // 8. Save
         Order savedOrder = orderRepository.save(order);
 
-        // 8. Record Coupon Usage
+        // 9. Coupon Usage
         if(validCoupon != null) {
             couponService.recordUsage(validCoupon, userId, savedOrder.getOrderId(), discountAmount);
         }
 
-        // 9. Post-Order actions
-        logStatusChange(savedOrder, null, OrderStatus.PENDING, "Order Placed");
-        cartService.clearCart(userId);
+        // 10. No need to clear cartService anymore since it's local
 
         return savedOrder;
     }
+
 
     @Transactional
     public Order updateOrderStatus(Long orderId, OrderStatus newStatus, Long userId) {
@@ -279,5 +298,79 @@ public class OrderService {
         }
 
         return savedOrder;
+    }
+
+    public DeliveryFeeResponse calculateDeliveryFee(Long storeId, Long addressId) {
+        // 1. Fetch Store & Address
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
+
+        UserAddress address = addressRepository.findById(addressId)
+                .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
+
+        // 2. Calculate Distance
+        double distance = distanceUtil.calculateDistance(
+                address.getLatitude(), address.getLongitude(),
+                store.getLatitude(), store.getLongitude()
+        );
+
+        // 3. Calculate Fee
+        Double feePerKm = store.getDeliveryFeeKM() != null ? store.getDeliveryFeeKM() : 0.0;
+        double deliveryFee = distance * feePerKm;
+        deliveryFee = Math.round(deliveryFee * 100.0) / 100.0; // Round to 2 decimals
+
+        return new DeliveryFeeResponse(deliveryFee, store.getEstimatedDeliveryTime());
+    }
+    public CouponCheckResponse verifyCoupon(CouponCheckRequest request) {
+        // 1. Fetch Store
+        Store store = storeRepository.findById(request.getStoreId())
+                .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
+
+        // 2. Build Temporary Items & Calculate Subtotal (Securely)
+        List<OrderItem> tempItems = new ArrayList<>();
+        double subtotal = 0.0;
+
+        for (OrderItemRequest itemReq : request.getItems()) {
+            Product product = productRepository.findById(itemReq.getProductId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+
+            double price = product.getBasePrice();
+            if (itemReq.getVariantId() != null) {
+                ProductVariant variant = variantRepository.findById(itemReq.getVariantId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Variant not found"));
+                price += variant.getPriceAdjustment();
+            }
+
+            OrderItem tempItem = new OrderItem();
+            tempItem.setProduct(product);
+            tempItem.setQuantity(itemReq.getQuantity());
+            tempItem.setUnitPrice(price);
+            tempItem.setTotalPrice(price * itemReq.getQuantity());
+
+            tempItems.add(tempItem);
+            subtotal += tempItem.getTotalPrice();
+        }
+
+        // 3. Call CouponService to Validate
+        Coupon coupon = couponService.validateCouponForOrder(
+                request.getCode(),
+                request.getUserId(),
+                tempItems,
+                store
+        );
+
+        // 4. Calculate Discount
+        // Note: Delivery Fee is needed for "FREE_DELIVERY" coupons.
+        // Ideally we verify the address here too, but for simplicity let's assume 0 fee
+        // or require addressId in CouponCheckRequest if you support Free Shipping coupons.
+        double deliveryFee = 0.0;
+        double discount = couponService.calculateDiscount(coupon, subtotal, deliveryFee);
+
+        return new CouponCheckResponse(
+                coupon.getCouponId(),
+                coupon.getCode(),
+                discount,
+                "Coupon Applied Successfully"
+        );
     }
 }

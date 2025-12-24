@@ -1,9 +1,6 @@
 package com.deliveryapp.controller;
 
-import com.deliveryapp.dto.order.OrderItemResponse;
-import com.deliveryapp.dto.order.OrderResponse;
-import com.deliveryapp.dto.order.PlaceOrderRequest;
-import com.deliveryapp.dto.order.UpdateOrderStatusRequest;
+import com.deliveryapp.dto.order.*;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.entity.OrderItem;
 import com.deliveryapp.service.OrderService;
@@ -21,16 +18,27 @@ import java.util.stream.Collectors;
 public class OrderController {
 
     private final OrderService orderService;
+    // 1. Calculate Delivery Fee
+    @PostMapping("/calc-fee")
+    public ResponseEntity<DeliveryFeeResponse> calculateFee(@RequestBody DeliveryFeeRequest request) {
+        return ResponseEntity.ok(orderService.calculateDeliveryFee(request.getStoreId(), request.getAddressId()));
+    }
 
+    // 2. Verify Coupon
+    @PostMapping("/verify-coupon")
+    public ResponseEntity<CouponCheckResponse> verifyCoupon(@RequestBody CouponCheckRequest request) {
+        return ResponseEntity.ok(orderService.verifyCoupon(request));
+    }
     @PostMapping("/place")
     public ResponseEntity<OrderResponse> placeOrder(@RequestBody PlaceOrderRequest request) {
         Order order = orderService.placeOrder(
                 request.getUserId(),
                 request.getAddressId(),
                 request.getInstruction(),
-                request.getCouponCode()
+                request.getCouponCode(),
+                request.getItems() // Pass the list
         );
-        return ResponseEntity.ok(mapToOrderResponse(order)); // Make sure mapper handles discount field
+        return ResponseEntity.ok(mapToOrderResponse(order));
     }
     // Get User History
     @GetMapping("/user/{userId}")

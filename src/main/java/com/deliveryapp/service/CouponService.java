@@ -110,51 +110,81 @@ public class CouponService {
     // EXISTING LOGIC (Unchanged)
     // =================================================================================
 
-    public Coupon validateCoupon(String code, Long userId, Cart cart) {
+    public Coupon validateCouponForOrder(String code, Long userId, List<OrderItem> items, Store store) {
+        // 1. Fetch Coupon
         Coupon coupon = couponRepository.findByCode(code)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid coupon code"));
 
-        // 1. Basic Checks
-        if (!coupon.getIsActive()) throw new InvalidDataException("Coupon is inactive");
+        // 2. Basic Status Checks
+        if (Boolean.FALSE.equals(coupon.getIsActive())) {
+            throw new InvalidDataException("Coupon is inactive");
+        }
         LocalDateTime now = LocalDateTime.now();
         if (now.isBefore(coupon.getStartDate()) || now.isAfter(coupon.getEndDate())) {
             throw new InvalidDataException("Coupon is expired or not started yet");
         }
 
-        // 2. Usage Limits (Total)
-        if (coupon.getTotalUsageLimit() != null && coupon.getCurrentUsageCount() >= coupon.getTotalUsageLimit()) {
+        // 3. Global Usage Limit
+        if (coupon.getTotalUsageLimit() != null &&
+                coupon.getCurrentUsageCount() >= coupon.getTotalUsageLimit()) {
             throw new InvalidDataException("Coupon usage limit reached");
         }
 
-        // 3. Usage Limits (Per User)
+        // 4. Per User Usage Limit
         Integer userUsage = usageRepository.countByCouponIdAndUserId(coupon.getCouponId(), userId);
         if (userUsage >= coupon.getMaxUsagePerUser()) {
-            throw new InvalidDataException("You have already used this coupon maximum times");
+            throw new InvalidDataException("You have already used this coupon the maximum number of times");
         }
 
-        // 4. First Order Check
-        if (coupon.getIsFirstOrderOnly()) {
+        // 5. First Order Check
+        if (Boolean.TRUE.equals(coupon.getIsFirstOrderOnly())) {
+            // Check if user has ever used a coupon OR placed an order (depending on strictness)
+            // Here checking if they have a coupon usage record
             if (usageRepository.existsByUserId(userId)) {
-                throw new InvalidDataException("This coupon is for first orders only");
+                throw new InvalidDataException("This coupon is valid for first orders only");
             }
         }
 
-        // 5. Min Order Amount
-        double cartSubtotal = cart.getItems().stream()
-                .mapToDouble(item -> {
-                    double price = item.getProduct().getBasePrice();
-                    if(item.getVariant() != null) price += item.getVariant().getPriceAdjustment();
-                    return price * item.getQuantity();
-                }).sum();
+        // 6. Minimum Order Amount Check
+        // Calculate subtotal from the list of OrderItems
+        double itemsSubtotal = items.stream()
+                .mapToDouble(OrderItem::getTotalPrice)
+                .sum();
 
-        if (coupon.getMinOrderAmount() != null && BigDecimal.valueOf(cartSubtotal).compareTo(coupon.getMinOrderAmount()) < 0) {
-            throw new InvalidDataException("Minimum order amount not met for this coupon");
+        if (coupon.getMinOrderAmount() != null &&
+                BigDecimal.valueOf(itemsSubtotal).compareTo(coupon.getMinOrderAmount()) < 0) {
+            throw new InvalidDataException("Minimum order amount of " + coupon.getMinOrderAmount() + " not met");
         }
 
-        // 6. Applicability (Store/Category Logic)
-        if (coupon.getApplicableTo() == Coupon.ApplicableTo.STORE) {
-            if (!cart.getStore().getStoreId().equals(coupon.getApplicableId())) {
-                throw new InvalidDataException("Coupon not valid for this store");
+        // 7. Applicability Check (Scope)
+        if (coupon.getApplicableTo() != null) {
+            switch (coupon.getApplicableTo()) {
+                case STORE:
+                    if (!store.getStoreId().equals(coupon.getApplicableId())) {
+                        throw new InvalidDataException("Coupon is not valid for this store");
+                    }
+                    break;
+
+                case CATEGORY:
+                    boolean hasCategory = items.stream()
+                            .anyMatch(item -> item.getProduct().getCategory().getCategoryId().equals(coupon.getApplicableId()));
+                    if (!hasCategory) {
+                        throw new InvalidDataException("Coupon requires items from a specific category");
+                    }
+                    break;
+
+                case PRODUCT:
+                    boolean hasProduct = items.stream()
+                            .anyMatch(item -> item.getProduct().getProductId().equals(coupon.getApplicableId()));
+                    if (!hasProduct) {
+                        throw new InvalidDataException("Coupon requires a specific product in cart");
+                    }
+                    break;
+
+                case ALL:
+                default:
+                    // Valid for everything
+                    break;
             }
         }
 
