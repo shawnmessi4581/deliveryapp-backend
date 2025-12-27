@@ -2,13 +2,16 @@ package com.deliveryapp.service;
 
 import com.deliveryapp.dto.catalog.ProductRequest;
 import com.deliveryapp.dto.catalog.StoreRequest;
+import com.deliveryapp.dto.user.CreateDriverRequest;
 import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.enums.UserType;
+import com.deliveryapp.exception.DuplicateResourceException;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.*;
 import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,6 +31,7 @@ public class AdminService {
     private final FileStorageService fileStorageService;
     private final UserRepository userRepository;
     private final UrlUtil urlUtil; // 2. Inject
+     private final PasswordEncoder passwordEncoder;
 
     // ==================== CATEGORY CRUD ====================
 
@@ -53,6 +57,41 @@ public class AdminService {
 
         user.setIsActive(isActive);
         userRepository.save(user);
+    }
+    @Transactional
+    public User createDriver(CreateDriverRequest request, MultipartFile image) {
+        // 1. Check for duplicates
+        if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
+            throw new DuplicateResourceException("Phone number already registered");
+        }
+
+        // 2. Create User Entity
+        User driver = new User();
+        driver.setName(request.getName());
+        driver.setPhoneNumber(request.getPhoneNumber());
+        driver.setEmail(request.getEmail());
+
+        // 3. Security & Role
+        driver.setPassword(passwordEncoder.encode(request.getPassword()));
+        driver.setUserType(UserType.DRIVER);
+        driver.setIsActive(true);
+
+        // 4. Driver Specific Fields
+        driver.setVehicleType(request.getVehicleType());
+        driver.setVehicleNumber(request.getVehicleNumber());
+        driver.setIsAvailable(true); // Ready to take orders
+        driver.setRating(5.0);       // Default starting rating
+        driver.setTotalDeliveries(0);
+
+        driver.setCreatedAt(LocalDateTime.now());
+
+        // 5. Upload Image (Optional)
+        if (image != null && !image.isEmpty()) {
+            String imageUrl = fileStorageService.storeFile(image, "profiles");
+            driver.setProfileImage(imageUrl);
+        }
+
+        return userRepository.save(driver);
     }
 
     public List<User> getAllDrivers() {
@@ -379,6 +418,8 @@ public List<Category> getAllCategories() {
     public void deleteProduct(Long id) {
         productRepository.deleteById(id);
     }
+
+
     private UserResponse mapToUserResponse(User user) {
        UserResponse dto = new UserResponse();
         dto.setUserId(user.getUserId());
@@ -390,8 +431,8 @@ public List<Category> getAllCategories() {
         dto.setIsActive(user.getIsActive());
 
         dto.setAddress(user.getAddress());
-        dto.setLatitude(user.getLatitude());
-        dto.setLongitude(user.getLongitude());
+        dto.setCurrentLocationLat(user.getLatitude());
+        dto.setCurrentLocationLng(user.getLongitude());
 
         // Driver details
         dto.setVehicleType(user.getVehicleType());
@@ -399,10 +440,6 @@ public List<Category> getAllCategories() {
         dto.setIsAvailable(user.getIsAvailable());
         dto.setRating(user.getRating());
         dto.setTotalDeliveries(user.getTotalDeliveries());
-
-        dto.setCreatedAt(user.getCreatedAt());
-        dto.setLastLogin(user.getLastLogin());
-
         return dto;
     }
 }

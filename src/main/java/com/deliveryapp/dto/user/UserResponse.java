@@ -3,32 +3,25 @@ package com.deliveryapp.dto.user;
 import com.deliveryapp.enums.UserType;
 import lombok.Data;
 
-import java.time.LocalDateTime;
-
 @Data
 public class UserResponse {
     private Long userId;
     private String name;
-    private String phoneNumber;
     private String email;
+    private String phoneNumber;
+    private UserType userType;
     private String profileImage;
-    private UserType userType; // Enum: CUSTOMER, DRIVER, ADMIN
+    private Boolean isActive;
 
-    // Address Info
-    private String address;
-    private Double latitude;
-    private Double longitude;
-
-    // Driver Specific
+    // Driver Specifics
     private String vehicleType;
     private String vehicleNumber;
     private Boolean isAvailable;
-    private Double rating;
-    private Integer totalDeliveries;
+    private Double rating;           // <--- Check this
+    private Integer totalDeliveries; // <--- Check this
+    private Double currentLocationLat;
+    private Double currentLocationLng;
 
-    // Status
-    private Boolean isActive;
-
-    private LocalDateTime createdAt;
-    private LocalDateTime lastLogin;
+    // Address Info (Optional for driver list context, but part of user model)
+    private String address;
 }

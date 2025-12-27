@@ -145,8 +145,8 @@ public class AuthService {
 
         // Address
         response.setAddress(user.getAddress());
-        response.setLatitude(user.getLatitude());
-        response.setLongitude(user.getLongitude());
+        response.setCurrentLocationLng(user.getLatitude());
+        response.setCurrentLocationLng(user.getLongitude());
 
         // Driver Info (only if applicable, otherwise null)
         if (user.getUserType() == UserType.DRIVER) {

@@ -5,8 +5,10 @@ import com.deliveryapp.dto.coupon.CouponRequest;
 import com.deliveryapp.dto.order.OrderCustomerResponse;
 import com.deliveryapp.dto.order.OrderItemResponse;
 import com.deliveryapp.dto.order.OrderResponse;
+import com.deliveryapp.dto.user.CreateDriverRequest;
 import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
+import com.deliveryapp.enums.UserType;
 import com.deliveryapp.repository.DeliveryInstructionRepository;
 import com.deliveryapp.service.AdminService;
 import com.deliveryapp.service.CouponService;
@@ -78,7 +80,17 @@ public class AdminController {
         Order order = orderService.assignDriver(orderId, driverId);
         return ResponseEntity.ok(mapToOrderResponse(order));
     }
+    // CREATE DRIVER
+    @PostMapping(value = "/drivers", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<UserResponse> createDriver(
+            @ModelAttribute CreateDriverRequest request,
+            @RequestParam(value = "image", required = false) MultipartFile image) {
 
+        User driver = adminService.createDriver(request, image);
+
+        // Reuse your existing UserResponse Mapper or create a new one
+        return ResponseEntity.ok(mapToUserResponse(driver));
+    }
 
 
 
@@ -277,15 +289,40 @@ public class AdminController {
 
 
     // --- Helper: Map User to UserResponse (If not reusing from another service) ---
-    private UserResponse mapToUserResponse(com.deliveryapp.entity.User user) {
+    private UserResponse mapToUserResponse(User user) {
         UserResponse dto = new UserResponse();
+
+        // --- Basic User Info ---
         dto.setUserId(user.getUserId());
         dto.setName(user.getName());
+        dto.setEmail(user.getEmail());
         dto.setPhoneNumber(user.getPhoneNumber());
         dto.setUserType(user.getUserType());
-        dto.setIsAvailable(user.getIsAvailable());
-        dto.setVehicleType(user.getVehicleType());
-        dto.setVehicleNumber(user.getVehicleNumber());
+        dto.setIsActive(user.getIsActive());
+
+        // Convert Image Path to Full URL
+        if (urlUtil != null) {
+            dto.setProfileImage(urlUtil.getFullUrl(user.getProfileImage()));
+        } else {
+            dto.setProfileImage(user.getProfileImage());
+        }
+
+        // --- Driver Specific Info ---
+        // Only populate these if the user is actually a driver
+        if (user.getUserType() == UserType.DRIVER) {
+            dto.setVehicleType(user.getVehicleType());
+            dto.setVehicleNumber(user.getVehicleNumber());
+            dto.setIsAvailable(user.getIsAvailable());
+
+            // The specific fields you requested:
+            dto.setRating(user.getRating() != null ? user.getRating() : 5.0); // Default to 5.0 if null
+            dto.setTotalDeliveries(user.getTotalDeliveries() != null ? user.getTotalDeliveries() : 0);
+
+            // Location (Useful for map view)
+            dto.setCurrentLocationLat(user.getCurrentLocationLat());
+            dto.setCurrentLocationLng(user.getCurrentLocationLng());
+        }
+
         return dto;
     }
     private CategoryResponse mapToCategoryResponse(Category category) {
