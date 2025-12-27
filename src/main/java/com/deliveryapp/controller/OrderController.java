@@ -63,6 +63,11 @@ public class OrderController {
         );
         return ResponseEntity.ok(mapToOrderResponse(order));
     }
+    // TRACK ORDER (Real-time)
+    @GetMapping("/{orderId}/track")
+    public ResponseEntity<OrderTrackingResponse> trackOrder(@PathVariable Long orderId) {
+        return ResponseEntity.ok(orderService.trackOrder(orderId));
+    }
 
     // --- Manual Mapping Logic (Entity -> DTO) ---
     private OrderResponse mapToOrderResponse(Order order) {

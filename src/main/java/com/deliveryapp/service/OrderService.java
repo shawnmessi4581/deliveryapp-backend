@@ -1,9 +1,6 @@
 package com.deliveryapp.service;
 
-import com.deliveryapp.dto.order.CouponCheckRequest;
-import com.deliveryapp.dto.order.CouponCheckResponse;
-import com.deliveryapp.dto.order.DeliveryFeeResponse;
-import com.deliveryapp.dto.order.OrderItemRequest;
+import com.deliveryapp.dto.order.*;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.enums.OrderStatus;
 import com.deliveryapp.enums.UserType;
@@ -372,5 +369,42 @@ public class OrderService {
                 discount,
                 "Coupon Applied Successfully"
         );
+    }
+    // ... inside OrderService ...
+
+    public OrderTrackingResponse trackOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+
+        OrderTrackingResponse response = new OrderTrackingResponse();
+
+        // Basic Info
+        response.setOrderId(order.getOrderId());
+        response.setStatus(order.getStatus());
+
+        if (order.getStore() != null) {
+            response.setEstimatedTime(order.getStore().getEstimatedDeliveryTime());
+        }
+
+        // --- User Location / Destination ---
+        // These are saved in the Order entity at the time of placement
+        response.setDeliveryAddress(order.getDeliveryAddress());
+        response.setDeliveryLatitude(order.getDeliveryLatitude());
+        response.setDeliveryLongitude(order.getDeliveryLongitude());
+
+        // --- Driver Info ---
+        if (order.getDriver() != null) {
+            User driver = order.getDriver();
+            response.setDriverId(driver.getUserId());
+            response.setDriverName(driver.getName());
+            response.setDriverPhone(driver.getPhoneNumber());
+            response.setDriverVehicle(driver.getVehicleNumber());
+
+            // Driver's Real-time Location
+            response.setDriverLatitude(driver.getCurrentLocationLat());
+            response.setDriverLongitude(driver.getCurrentLocationLng());
+        }
+
+        return response;
     }
 }
