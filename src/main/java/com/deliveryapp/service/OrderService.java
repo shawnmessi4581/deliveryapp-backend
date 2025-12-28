@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -406,5 +407,20 @@ public class OrderService {
         }
 
         return response;
+    }
+    // GET DRIVER ORDERS
+    public List<Order> getDriverOrders(Long driverId, Boolean activeOnly) {
+        if (Boolean.TRUE.equals(activeOnly)) {
+            // Active = CONFIRMED, PREPARING, OUT_FOR_DELIVERY
+            List<OrderStatus> activeStatuses = Arrays.asList(
+                    OrderStatus.CONFIRMED,
+                    OrderStatus.PREPARING,
+                    OrderStatus.OUT_FOR_DELIVERY
+            );
+            return orderRepository.findByDriverUserIdAndStatusInOrderByCreatedAtDesc(driverId, activeStatuses);
+        } else {
+            // Return All (History)
+            return orderRepository.findByDriverUserIdOrderByCreatedAtDesc(driverId);
+        }
     }
 }

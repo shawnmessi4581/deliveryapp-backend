@@ -36,4 +36,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     // 4. Filter by Status AND Date Range
     List<Order> findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(OrderStatus status, LocalDateTime start, LocalDateTime end);
+
+    // 1. Get All Driver Orders (History)
+    List<Order> findByDriverUserIdOrderByCreatedAtDesc(Long driverId);
+
+    // 2. Get Driver Orders by specific status (e.g., Active ones)
+    List<Order> findByDriverUserIdAndStatusInOrderByCreatedAtDesc(Long driverId, List<OrderStatus> statuses);
 }

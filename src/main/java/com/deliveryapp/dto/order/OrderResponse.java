@@ -1,5 +1,6 @@
 package com.deliveryapp.dto.order;
 
+import com.deliveryapp.dto.catalog.StoreResponse; // Import the Store DTO
 import com.deliveryapp.enums.OrderStatus;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -10,7 +11,10 @@ public class OrderResponse {
     private Long orderId;
     private String orderNumber;
 
-    // Store Info
+    // --- NEW: Full Store Details (Address, Phone, Coords) ---
+    private StoreResponse store;
+
+    // Existing Store Info (Kept as requested)
     private Long storeId;
     private String storeName;
 
@@ -36,10 +40,11 @@ public class OrderResponse {
 
     // Items
     private List<OrderItemResponse> items;
-    // NEW: Add the customer details
+
+    // Customer details
     private OrderCustomerResponse customerDetails;
-    // NEW FIELDS FOR COUPONS
+
+    // FIELDS FOR COUPONS
     private Double discountAmount; // How much was saved
     private Long couponId;         // Which coupon was used (optional)
-
 }
