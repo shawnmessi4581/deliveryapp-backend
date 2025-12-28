@@ -1,5 +1,6 @@
 package com.deliveryapp.config;
 
+import com.deliveryapp.util.KeyUtils;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -46,18 +47,13 @@ public class SecurityConfig {
     private final RSAPublicKey publicKey;
     private final RSAPrivateKey privateKey;
 
-    public SecurityConfig() {
-        // Generate Keys in-memory on startup
-        try {
-            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
-            keyPairGenerator.initialize(2048);
-            KeyPair keyPair = keyPairGenerator.generateKeyPair();
-            this.publicKey = (RSAPublicKey) keyPair.getPublic();
-            this.privateKey = (RSAPrivateKey) keyPair.getPrivate();
-        } catch (Exception e) {
-            throw new RuntimeException("Error generating RSA keys", e);
-        }
+    public SecurityConfig(KeyUtils keyUtils) {
+        // Use the utility to load or generate persistent keys
+        KeyPair keyPair = keyUtils.getRsaKeyPair();
+        this.publicKey = (RSAPublicKey) keyPair.getPublic();
+        this.privateKey = (RSAPrivateKey) keyPair.getPrivate();
     }
+
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
