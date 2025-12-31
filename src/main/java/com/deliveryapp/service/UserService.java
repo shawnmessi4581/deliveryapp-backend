@@ -93,23 +93,33 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        // 1. Update Name
+        // 1. Update Basic Info
         if (request.getName() != null && !request.getName().trim().isEmpty()) {
             user.setName(request.getName());
         }
 
-        // 2. Update Email
         if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
             user.setEmail(request.getEmail());
         }
 
-        // 3. Update Address (Primary Profile Address)
+        // 2. Update Primary Address
         if (request.getAddress() != null && !request.getAddress().trim().isEmpty()) {
             user.setAddress(request.getAddress());
-
-            // Only update coords if provided, otherwise keep old ones or null
             if (request.getLatitude() != null) user.setLatitude(request.getLatitude());
             if (request.getLongitude() != null) user.setLongitude(request.getLongitude());
+        }
+
+        // 3. Update Driver Specifics (Only if user is a DRIVER)
+        if (user.getUserType() == com.deliveryapp.enums.UserType.DRIVER) {
+            if (request.getVehicleType() != null && !request.getVehicleType().isEmpty()) {
+                user.setVehicleType(request.getVehicleType());
+            }
+            if (request.getVehicleNumber() != null && !request.getVehicleNumber().isEmpty()) {
+                user.setVehicleNumber(request.getVehicleNumber());
+            }
+            if (request.getIsAvailable() != null) {
+                user.setIsAvailable(request.getIsAvailable());
+            }
         }
 
         // 4. Update Profile Image
