@@ -183,14 +183,36 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
         OrderStatus oldStatus = order.getStatus();
+
+        // Update Order Details
         order.setStatus(newStatus);
         order.setUpdatedAt(LocalDateTime.now());
 
-        if(newStatus == OrderStatus.DELIVERED) {
+        // --- LOGIC: Handle Delivery Completion ---
+        if (newStatus == OrderStatus.DELIVERED) {
+            // Set timestamp
             order.setDeliveredAt(LocalDateTime.now());
+
+            // Check if we are transitioning TO delivered (to prevent double counting)
+            if (oldStatus != OrderStatus.DELIVERED) {
+                // Increment Driver's Total Deliveries
+                if (order.getDriver() != null) {
+                    User driver = order.getDriver();
+
+                    // Safety check for null
+                    int currentCount = driver.getTotalDeliveries() != null ? driver.getTotalDeliveries() : 0;
+
+                    driver.setTotalDeliveries(currentCount + 1);
+
+                    // Save the driver entity to persist the new count
+                    userRepository.save(driver);
+                }
+            }
         }
 
         Order savedOrder = orderRepository.save(order);
+
+        // Log History
         logStatusChange(savedOrder, oldStatus, newStatus, "Status updated by user " + userId);
 
         return savedOrder;
