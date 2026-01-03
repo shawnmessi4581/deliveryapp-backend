@@ -8,6 +8,7 @@ import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.*;
 import com.deliveryapp.util.DistanceUtil;
+import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,8 @@ public class OrderService {
     private  final  UserRepository userRepository;
     private final ProductRepository productRepository; // Added
     private final ProductVariantRepository variantRepository; // Added
+    private final UrlUtil urlUtil;
+
     // NEW DEPENDENCIES
     private final UserAddressRepository addressRepository;
     private final StoreRepository storeRepository;
@@ -421,6 +424,7 @@ public class OrderService {
             response.setDriverId(driver.getUserId());
             response.setDriverName(driver.getName());
             response.setDriverPhone(driver.getPhoneNumber());
+            response.setDriverImage(urlUtil.getFullUrl(driver.getProfileImage()));
             response.setDriverVehicle(driver.getVehicleNumber());
 
             // Driver's Real-time Location

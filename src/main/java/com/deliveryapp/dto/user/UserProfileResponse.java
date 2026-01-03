@@ -22,4 +22,5 @@ public class UserProfileResponse {
     private String userType;
     private String vehicleType;
     private Double rating;
+    private  Integer totalDeliveries;
 }

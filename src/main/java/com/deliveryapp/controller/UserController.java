@@ -53,6 +53,7 @@ public class UserController {
 
         // Driver Fields
         if (user.getUserType().name().equals("DRIVER")) {
+            response.setTotalDeliveries(user.getTotalDeliveries());
             response.setVehicleType(user.getVehicleType());
             response.setRating(user.getRating());
         }

@@ -15,6 +15,7 @@ public class OrderTrackingResponse {
     private Long driverId;
     private String driverName;
     private String driverPhone;
+    private String driverImage;
     private String driverVehicle;
     private Double driverLatitude;
     private Double driverLongitude;
