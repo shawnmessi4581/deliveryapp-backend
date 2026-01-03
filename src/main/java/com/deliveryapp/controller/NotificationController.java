@@ -1,12 +1,12 @@
 package com.deliveryapp.controller;
 
 import com.deliveryapp.dto.notification.NotificationResponse;
-import com.deliveryapp.entity.Notification;
 import com.deliveryapp.service.NotificationService;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -22,6 +22,7 @@ public class NotificationController {
     public ResponseEntity<List<NotificationResponse>> getUserNotifications(@PathVariable Long userId) {
         return ResponseEntity.ok(notificationService.getUserNotifications(userId));
     }
+
     // 2. Get Unread Count
     @GetMapping("/{userId}/unread")
     public ResponseEntity<Long> getUnreadCount(@PathVariable Long userId) {
@@ -35,47 +36,32 @@ public class NotificationController {
         return ResponseEntity.ok("Notification marked as read");
     }
 
-    @PostMapping("/send")
-    public ResponseEntity<String> sendNotification(@RequestBody SendNotificationRequest request) {
+    // 4. Send Notification (Updated for Multipart/File Upload)
+    @PostMapping(value = "/send", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<String> sendNotification(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String topic,
+            @RequestParam String title,
+            @RequestParam String message,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) Long referenceId,
+            @RequestParam(value = "image", required = false) MultipartFile image) {
 
-        // CASE 1: Send to Specific User
-        if (request.getUserId() != null) {
+        if (userId != null) {
+            // Send to Specific User
             notificationService.sendNotification(
-                    request.getUserId(),
-                    request.getTitle(),
-                    request.getMessage(),
-                    request.getImageUrl(),
-                    request.getType(),
-                    request.getReferenceId()
+                    userId, title, message, image, type, referenceId
             );
-            return ResponseEntity.ok("Sent to User " + request.getUserId());
+            return ResponseEntity.ok("Sent to User " + userId);
         }
-
-        // CASE 2: Send to Topic
-        else if (request.getTopic() != null && !request.getTopic().isEmpty()) {
+        else if (topic != null && !topic.isEmpty()) {
+            // Send to Topic
             notificationService.sendGlobalNotification(
-                    request.getTopic(),
-                    request.getTitle(),
-                    request.getMessage(),
-                    request.getImageUrl(),
-                    request.getType(),
-                    request.getReferenceId()
+                    topic, title, message, image, type, referenceId
             );
-            return ResponseEntity.ok("Sent to Topic: " + request.getTopic());
+            return ResponseEntity.ok("Sent to Topic: " + topic);
         }
 
         return ResponseEntity.badRequest().body("Please provide either userId or topic");
-    }
-
-    // Updated DTO
-    @Data
-    public static class SendNotificationRequest {
-        private Long userId;     // Optional (For single user)
-        private String topic;    // Optional (For group, e.g., "all_users")
-        private String title;
-        private String message;
-        private String imageUrl;
-        private String type;
-        private Long referenceId;
     }
 }
