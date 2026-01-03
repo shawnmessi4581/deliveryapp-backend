@@ -1,5 +1,6 @@
 package com.deliveryapp.controller;
 
+import com.deliveryapp.dto.notification.NotificationResponse;
 import com.deliveryapp.entity.Notification;
 import com.deliveryapp.service.NotificationService;
 import lombok.Data;
@@ -18,10 +19,9 @@ public class NotificationController {
 
     // 1. Get My Notifications
     @GetMapping("/{userId}")
-    public ResponseEntity<List<Notification>> getUserNotifications(@PathVariable Long userId) {
+    public ResponseEntity<List<NotificationResponse>> getUserNotifications(@PathVariable Long userId) {
         return ResponseEntity.ok(notificationService.getUserNotifications(userId));
     }
-
     // 2. Get Unread Count
     @GetMapping("/{userId}/unread")
     public ResponseEntity<Long> getUnreadCount(@PathVariable Long userId) {
