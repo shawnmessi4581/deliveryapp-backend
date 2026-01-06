@@ -2,9 +2,9 @@ package com.deliveryapp.controller;
 
 import com.deliveryapp.dto.catalog.*;
 import com.deliveryapp.entity.*;
+import com.deliveryapp.mapper.catalog.CatalogMapper; // Import the Mapper
 import com.deliveryapp.service.CatalogService;
 import com.deliveryapp.util.DistanceUtil;
-import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,7 +20,7 @@ public class CatalogController {
 
     private final CatalogService catalogService;
     private final DistanceUtil distanceUtil;
-    private final UrlUtil urlUtil; // 2. Inject
+    private final CatalogMapper catalogMapper; // Inject Mapper
 
     // ==================== CATEGORIES ====================
 
@@ -28,7 +28,7 @@ public class CatalogController {
     public ResponseEntity<List<CategoryResponse>> getAllCategories() {
         List<Category> categories = catalogService.getAllActiveCategories();
         List<CategoryResponse> response = categories.stream()
-                .map(this::mapToCategoryResponse)
+                .map(catalogMapper::toCategoryResponse) // Use Mapper
                 .collect(Collectors.toList());
         return ResponseEntity.ok(response);
     }
@@ -36,7 +36,7 @@ public class CatalogController {
     @GetMapping("/categories/{categoryId}")
     public ResponseEntity<CategoryResponse> getCategoryById(@PathVariable Long categoryId) {
         Category category = catalogService.getCategoryById(categoryId);
-        return ResponseEntity.ok(mapToCategoryResponse(category));
+        return ResponseEntity.ok(catalogMapper.toCategoryResponse(category)); // Use Mapper
     }
 
     // ==================== SUBCATEGORIES ====================
@@ -45,7 +45,7 @@ public class CatalogController {
     public ResponseEntity<List<SubCategoryResponse>> getSubCategories(@PathVariable Long categoryId) {
         List<SubCategory> subCategories = catalogService.getSubCategoriesByCategoryId(categoryId);
         List<SubCategoryResponse> response = subCategories.stream()
-                .map(this::mapToSubCategoryResponse)
+                .map(catalogMapper::toSubCategoryResponse) // Use Mapper
                 .collect(Collectors.toList());
         return ResponseEntity.ok(response);
     }
@@ -56,7 +56,7 @@ public class CatalogController {
     public ResponseEntity<List<StoreResponse>> getAllActiveStores() {
         List<Store> stores = catalogService.getAllActiveStores();
         List<StoreResponse> response = stores.stream()
-                .map(this::mapToStoreResponse)
+                .map(catalogMapper::toStoreResponse) // Use Mapper
                 .collect(Collectors.toList());
         return ResponseEntity.ok(response);
     }
@@ -70,7 +70,8 @@ public class CatalogController {
     ) {
         Store store = catalogService.getStoreById(storeId);
 
-        StoreResponse response = mapToStoreResponse(store);
+        // Map using CatalogMapper
+        StoreResponse response = catalogMapper.toStoreResponse(store);
 
         // Calculate Fee if user location is provided
         if (userLat != null && userLng != null && store.getLatitude() != null && store.getLongitude() != null) {
@@ -85,7 +86,7 @@ public class CatalogController {
 
             response.setPredictedDeliveryFee(predictedFee);
         } else {
-            response.setPredictedDeliveryFee(0.0); // Or null if you prefer
+            response.setPredictedDeliveryFee(0.0);
         }
 
         return ResponseEntity.ok(response);
@@ -94,41 +95,50 @@ public class CatalogController {
     @GetMapping("/stores/category/{categoryId}")
     public ResponseEntity<List<StoreResponse>> getStoresByCategory(@PathVariable Long categoryId) {
         List<Store> stores = catalogService.getStoresByCategory(categoryId);
-        return ResponseEntity.ok(stores.stream().map(this::mapToStoreResponse).collect(Collectors.toList()));
+        return ResponseEntity.ok(stores.stream()
+                .map(catalogMapper::toStoreResponse) // Use Mapper
+                .collect(Collectors.toList()));
     }
 
     @GetMapping("/stores/subcategory/{subCategoryId}")
     public ResponseEntity<List<StoreResponse>> getStoresBySubCategory(@PathVariable Long subCategoryId) {
         List<Store> stores = catalogService.getStoresBySubCategory(subCategoryId);
-        return ResponseEntity.ok(stores.stream().map(this::mapToStoreResponse).collect(Collectors.toList()));
+        return ResponseEntity.ok(stores.stream()
+                .map(catalogMapper::toStoreResponse) // Use Mapper
+                .collect(Collectors.toList()));
     }
 
     // ==================== PRODUCTS ====================
+
     // GET All Products (Random Order)
     @GetMapping("/products/all")
     public ResponseEntity<List<ProductResponse>> getAllProductsRandom() {
         List<Product> products = catalogService.getAllProductsRandomly();
         return ResponseEntity.ok(products.stream()
-                .map(this::mapToProductResponse)
+                .map(catalogMapper::toProductResponse) // Use Mapper
                 .collect(Collectors.toList()));
     }
+
     @GetMapping("/products/{productId}")
     public ResponseEntity<ProductResponse> getProductById(@PathVariable Long productId) {
         Product product = catalogService.getProductById(productId);
-        return ResponseEntity.ok(mapToProductResponse(product));
+        return ResponseEntity.ok(catalogMapper.toProductResponse(product)); // Use Mapper
     }
 
     @GetMapping("/products/store/{storeId}")
     public ResponseEntity<List<ProductResponse>> getProductsByStore(@PathVariable Long storeId) {
         List<Product> products = catalogService.getProductsByStore(storeId);
-        return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
+        return ResponseEntity.ok(products.stream()
+                .map(catalogMapper::toProductResponse) // Use Mapper
+                .collect(Collectors.toList()));
     }
+
     // GET Products by Category (All stores)
     @GetMapping("/products/category/{categoryId}")
     public ResponseEntity<List<ProductResponse>> getProductsByCategory(@PathVariable Long categoryId) {
         List<Product> products = catalogService.getProductsByCategory(categoryId);
         return ResponseEntity.ok(products.stream()
-                .map(this::mapToProductResponse)
+                .map(catalogMapper::toProductResponse) // Use Mapper
                 .collect(Collectors.toList()));
     }
 
@@ -137,19 +147,28 @@ public class CatalogController {
     public ResponseEntity<List<ProductResponse>> getProductsBySubCategory(@PathVariable Long subCategoryId) {
         List<Product> products = catalogService.getProductsBySubCategory(subCategoryId);
         return ResponseEntity.ok(products.stream()
-                .map(this::mapToProductResponse)
+                .map(catalogMapper::toProductResponse) // Use Mapper
                 .collect(Collectors.toList()));
     }
 
     @GetMapping("/products/search")
-    public ResponseEntity<List<ProductResponse>> searchProducts(@RequestParam("q") String keyword,@RequestParam("categoryId") long categoryId) {
-        List<Product> products = catalogService.searchProducts(keyword,categoryId);
-        return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
+    public ResponseEntity<List<ProductResponse>> searchProducts(
+            @RequestParam("q") String keyword,
+            @RequestParam("categoryId") long categoryId) {
+        List<Product> products = catalogService.searchProducts(keyword, categoryId);
+        return ResponseEntity.ok(products.stream()
+                .map(catalogMapper::toProductResponse) // Use Mapper
+                .collect(Collectors.toList()));
     }
+
     @GetMapping("/products/store/search")
-    public ResponseEntity<List<ProductResponse>> searchProductsInStore(@RequestParam("q") String keyword,@RequestParam("storeId") long storeId) {
-        List<Product> products = catalogService.searchProductsInStore(keyword,storeId);
-        return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
+    public ResponseEntity<List<ProductResponse>> searchProductsInStore(
+            @RequestParam("q") String keyword,
+            @RequestParam("storeId") long storeId) {
+        List<Product> products = catalogService.searchProductsInStore(keyword, storeId);
+        return ResponseEntity.ok(products.stream()
+                .map(catalogMapper::toProductResponse) // Use Mapper
+                .collect(Collectors.toList()));
     }
 
     @GetMapping("/products/store/{storeId}/category/{categoryId}")
@@ -157,7 +176,9 @@ public class CatalogController {
             @PathVariable Long storeId,
             @PathVariable Long categoryId) {
         List<Product> products = catalogService.getProductsByStoreAndCategory(storeId, categoryId);
-        return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
+        return ResponseEntity.ok(products.stream()
+                .map(catalogMapper::toProductResponse) // Use Mapper
+                .collect(Collectors.toList()));
     }
 
     @GetMapping("/products/store/{storeId}/subcategory/{subCategoryId}")
@@ -165,92 +186,8 @@ public class CatalogController {
             @PathVariable Long storeId,
             @PathVariable Long subCategoryId) {
         List<Product> products = catalogService.getProductsByStoreAndSubCategory(storeId, subCategoryId);
-        return ResponseEntity.ok(products.stream().map(this::mapToProductResponse).collect(Collectors.toList()));
-    }
-
-    // ==================== MANUAL MAPPERS ====================
-
-    private CategoryResponse mapToCategoryResponse(Category category) {
-        CategoryResponse dto = new CategoryResponse();
-        dto.setCategoryId(category.getCategoryId());
-        dto.setName(category.getName());
-        dto.setImageUrl(urlUtil.getFullUrl(category.getIcon()));
-        dto.setActive(category.getIsActive());
-        return dto;
-    }
-
-    private SubCategoryResponse mapToSubCategoryResponse(SubCategory subCategory) {
-        SubCategoryResponse dto = new SubCategoryResponse();
-        dto.setSubCategoryId(subCategory.getSubcategoryId());
-        dto.setName(subCategory.getName());
-        dto.setImageUrl(urlUtil.getFullUrl(subCategory.getIcon()));
-//        dto.setDisplayOrder(subCategory.getDisplayOrder());
-        if (subCategory.getCategory() != null) {
-            dto.setParentCategoryId(subCategory.getCategory().getCategoryId());
-        }
-        return dto;
-    }
-
-    // Update the Manual Mapper to include the new logic (optional, but handled above mostly)
-    private StoreResponse mapToStoreResponse(Store store) {
-        StoreResponse dto = new StoreResponse();
-        dto.setStoreId(store.getStoreId());
-        dto.setName(store.getName());
-        dto.setDescription(store.getDescription());
-        dto.setLogo(urlUtil.getFullUrl(store.getLogo()));
-        dto.setCoverImage(urlUtil.getFullUrl(store.getCoverImage()));
-        dto.setAddress(store.getAddress());
-        dto.setLatitude(store.getLatitude());
-        dto.setLongitude(store.getLongitude());
-        dto.setRating(store.getRating());
-        dto.setTotalOrders(store.getTotalOrders());
-        dto.setEstimatedDeliveryTime(store.getEstimatedDeliveryTime());
-        dto.setDeliveryFeeKM(store.getDeliveryFeeKM());
-        dto.setMinimumOrder(store.getMinimumOrder());
-        return dto;
-    }
-// ... inside CatalogController ...
-
-    private ProductResponse mapToProductResponse(Product product) {
-        ProductResponse dto = new ProductResponse();
-        dto.setProductId(product.getProductId());
-        dto.setName(product.getName());
-        dto.setDescription(product.getDescription());
-        dto.setBasePrice(product.getBasePrice());
-        dto.setImageUrl(urlUtil.getFullUrl(product.getImage()));
-        dto.setAvailable(product.getIsAvailable());
-
-        // --- NEW: Map Full Store Details ---
-        if (product.getStore() != null) {
-            // Reuse the existing store mapper to get Logo, Rating, Time, etc.
-            StoreResponse storeDto = mapToStoreResponse(product.getStore());
-            dto.setStore(storeDto);
-        }
-
-        if (product.getCategory() != null) {
-            dto.setCategoryId(product.getCategory().getCategoryId());
-            dto.setCategoryName(product.getCategory().getName());
-        }
-
-        if (product.getSubCategory() != null) {
-            dto.setSubCategoryId(product.getSubCategory().getSubcategoryId());
-            dto.setSubCategoryName(product.getSubCategory().getName());
-        }
-
-        // Map Variants
-        if (product.getVariants() != null && !product.getVariants().isEmpty()) {
-            List<ProductVariantResponse> variantDtos = product.getVariants().stream().map(v -> {
-                ProductVariantResponse vDto = new ProductVariantResponse();
-                vDto.setVariantId(v.getVariantId());
-                vDto.setVariantName(v.getVariantValue());
-                vDto.setPriceAdjustment(v.getPriceAdjustment());
-                return vDto;
-            }).collect(Collectors.toList());
-            dto.setVariants(variantDtos);
-        } else {
-            dto.setVariants(Collections.emptyList());
-        }
-
-        return dto;
+        return ResponseEntity.ok(products.stream()
+                .map(catalogMapper::toProductResponse) // Use Mapper
+                .collect(Collectors.toList()));
     }
 }

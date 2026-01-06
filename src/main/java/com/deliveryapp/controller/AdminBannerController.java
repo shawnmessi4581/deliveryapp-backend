@@ -3,8 +3,8 @@ package com.deliveryapp.controller;
 import com.deliveryapp.dto.banners.BannerRequest;
 import com.deliveryapp.dto.banners.BannerResponse;
 import com.deliveryapp.entity.Banner;
+import com.deliveryapp.mapper.banner.BannerMapper; // Import the Mapper
 import com.deliveryapp.service.BannerService;
-import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -22,12 +22,12 @@ import java.util.stream.Collectors;
 public class AdminBannerController {
 
     private final BannerService bannerService;
-    private final UrlUtil urlUtil; // 2. Inject
+    private final BannerMapper bannerMapper; // Inject Mapper
 
     @GetMapping
     public ResponseEntity<List<BannerResponse>> getAllBanners() {
         return ResponseEntity.ok(bannerService.getAllBanners().stream()
-                .map(this::mapToResponse)
+                .map(bannerMapper::toBannerResponse) // Use Mapper
                 .collect(Collectors.toList()));
     }
 
@@ -37,7 +37,7 @@ public class AdminBannerController {
             @RequestParam("image") MultipartFile image) {
 
         Banner banner = bannerService.createBanner(request, image);
-        return ResponseEntity.ok(mapToResponse(banner));
+        return ResponseEntity.ok(bannerMapper.toBannerResponse(banner));
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -47,26 +47,12 @@ public class AdminBannerController {
             @RequestParam(value = "image", required = false) MultipartFile image) {
 
         Banner banner = bannerService.updateBanner(id, request, image);
-        return ResponseEntity.ok(mapToResponse(banner));
+        return ResponseEntity.ok(bannerMapper.toBannerResponse(banner));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteBanner(@PathVariable Long id) {
         bannerService.deleteBanner(id);
         return ResponseEntity.ok("Banner deleted successfully");
-    }
-
-    private BannerResponse mapToResponse(Banner banner) {
-        BannerResponse dto = new BannerResponse();
-        dto.setBannerId(banner.getBannerId());
-        dto.setTitle(banner.getTitle());
-        dto.setImageUrl(urlUtil.getFullUrl(banner.getImage()));
-        dto.setLinkType(banner.getLinkType());
-        dto.setLinkId(banner.getLinkId());
-        dto.setDisplayOrder(banner.getDisplayOrder());
-        dto.setStartDate(banner.getStartDate());
-        dto.setEndDate(banner.getEndDate());
-        dto.setIsActive(banner.getIsActive());
-        return dto;
     }
 }
