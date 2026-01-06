@@ -10,6 +10,7 @@ import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.DuplicateResourceException;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
+import com.deliveryapp.mapper.user.UserMapper; // 1. Import Mapper
 import com.deliveryapp.repository.OtpVerificationRepository;
 import com.deliveryapp.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -30,7 +31,9 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final TokenService tokenService;
-    private  final OtpVerificationRepository  otpVerificationRepository;
+    private final OtpVerificationRepository otpVerificationRepository;
+    private final UserMapper userMapper; // 2. Inject Mapper
+
     public AuthResponse register(SignupRequest request) {
         if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
             throw new DuplicateResourceException("Phone number already exists");
@@ -70,22 +73,25 @@ public class AuthService {
         // 4. Generate Token
         String token = tokenService.generateToken(authentication, user.getUserId());
 
-        // 5. Map Entity to UserResponse DTO
-        UserResponse userResponse = mapToUserResponse(user);
+        // 5. Map Entity to UserResponse DTO using the shared Mapper
+        UserResponse userResponse = userMapper.toUserResponse(user);
 
         // 6. Return combined response
         return new AuthResponse(token, userResponse);
     }
 
     @Transactional
-    public String initiatePasswordReset (String phoneNumber) {
+    public String initiatePasswordReset(String phoneNumber) {
         User user = userRepository.findByPhoneNumber(phoneNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with this phone number"));
+
         String otpCode = String.valueOf((int) (Math.random() * 9000) + 1000);
+
         // Clear existing OTPs for this number to prevent clutter
         otpVerificationRepository.deleteByPhoneNumber(phoneNumber);
+
         // Save new OTP
-       OtpVerification otp = new OtpVerification();
+        OtpVerification otp = new OtpVerification();
         otp.setPhoneNumber(phoneNumber);
         otp.setOtpCode(otpCode);
         otp.setExpiresAt(LocalDateTime.now().plusMinutes(10)); // Valid for 10 mins
@@ -105,7 +111,7 @@ public class AuthService {
     @Transactional
     public String resetPassword(String phoneNumber, String otpCode, String newPassword) {
         // Find the OTP
-     OtpVerification dbOtp = otpVerificationRepository.findFirstByPhoneNumberOrderByCreatedAtDesc(phoneNumber)
+        OtpVerification dbOtp = otpVerificationRepository.findFirstByPhoneNumberOrderByCreatedAtDesc(phoneNumber)
                 .orElseThrow(() -> new InvalidDataException("Invalid or expired OTP"));
 
         // Check Expiry
@@ -130,33 +136,5 @@ public class AuthService {
         otpVerificationRepository.delete(dbOtp);
 
         return "Password changed successfully. You can now login.";
-    }
-
-    // Helper Method to Map Entity -> DTO
-    private UserResponse mapToUserResponse(User user) {
-        UserResponse response = new UserResponse();
-        response.setUserId(user.getUserId());
-        response.setName(user.getName());
-        response.setPhoneNumber(user.getPhoneNumber());
-        response.setEmail(user.getEmail());
-        response.setProfileImage(user.getProfileImage());
-        response.setUserType(user.getUserType());
-        response.setIsActive(user.getIsActive());
-
-        // Address
-        response.setAddress(user.getAddress());
-        response.setCurrentLocationLng(user.getLatitude());
-        response.setCurrentLocationLng(user.getLongitude());
-
-        // Driver Info (only if applicable, otherwise null)
-        if (user.getUserType() == UserType.DRIVER) {
-            response.setVehicleType(user.getVehicleType());
-            response.setVehicleNumber(user.getVehicleNumber());
-            response.setIsAvailable(user.getIsAvailable());
-            response.setRating(user.getRating());
-            response.setTotalDeliveries(user.getTotalDeliveries());
-        }
-
-        return response;
     }
 }
