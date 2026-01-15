@@ -1,5 +1,9 @@
 package com.deliveryapp.dto.catalog;
 
+import java.time.LocalTime;
+
+import org.springframework.format.annotation.DateTimeFormat;
+
 import lombok.Data;
 
 @Data
@@ -15,4 +19,9 @@ public class StoreRequest {
     private String estimatedDeliveryTime; // e.g., "30-45 min"
     private Long categoryId;
     private Long subCategoryId;
+    @DateTimeFormat(iso = DateTimeFormat.ISO.TIME)
+    private LocalTime openingTime;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.TIME)
+    private LocalTime closingTime;
 }

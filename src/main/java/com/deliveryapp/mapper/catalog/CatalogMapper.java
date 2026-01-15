@@ -6,6 +6,7 @@ import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalTime;
 import java.util.Collections;
 import java.util.stream.Collectors;
 
@@ -68,6 +69,14 @@ public class CatalogMapper {
             dto.setSubCategoryId(store.getSubCategory().getSubcategoryId());
             dto.setSubCategoryName(store.getSubCategory().getName());
         }
+        // Map Times
+        if (store.getOpeningTime() != null)
+            dto.setOpeningTime(store.getOpeningTime().toString());
+        if (store.getClosingTime() != null)
+            dto.setClosingTime(store.getClosingTime().toString());
+
+        // Calculate Open Status
+        dto.setIsOpenNow(isStoreOpen(store));
         return dto;
     }
 
@@ -113,5 +122,19 @@ public class CatalogMapper {
         }
 
         return dto;
+    }
+
+    private boolean isStoreOpen(Store store) {
+        if (store.getOpeningTime() == null || store.getClosingTime() == null)
+            return true; // Assume open if not set
+
+        LocalTime now = LocalTime.now();
+        // Handle midnight crossing (e.g. 18:00 to 02:00)
+        if (store.getClosingTime().isBefore(store.getOpeningTime())) {
+            return now.isAfter(store.getOpeningTime()) || now.isBefore(store.getClosingTime());
+        } else {
+            // Normal day (e.g. 09:00 to 22:00)
+            return now.isAfter(store.getOpeningTime()) && now.isBefore(store.getClosingTime());
+        }
     }
 }

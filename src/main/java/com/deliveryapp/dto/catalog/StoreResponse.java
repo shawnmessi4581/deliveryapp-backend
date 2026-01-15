@@ -13,13 +13,13 @@ public class StoreResponse {
     private String coverImage;
 
     // Contact & Location
-    private String phone;       // Added
+    private String phone; // Added
     private String address;
     private Double latitude;
     private Double longitude;
 
     // Stats & Info
-    private Boolean isActive;   // Added (Crucial for Admin)
+    private Boolean isActive; // Added (Crucial for Admin)
     private Double rating;
     private Integer totalOrders;
     private String estimatedDeliveryTime;
@@ -36,4 +36,8 @@ public class StoreResponse {
 
     // User Context (Calculated fee)
     private Double predictedDeliveryFee;
+    //
+    private String openingTime; // String is easier for Flutter to display
+    private String closingTime;
+    private Boolean isOpenNow; // Calculated field for UI
 }

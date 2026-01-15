@@ -3,6 +3,7 @@ package com.deliveryapp.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Entity
 @Table(name = "stores")
@@ -37,5 +38,7 @@ public class Store {
     private Double minimumOrder;
     private String estimatedDeliveryTime;
     private Boolean isActive;
+    private LocalTime openingTime; // e.g. 09:00:00
+    private LocalTime closingTime; // e.g. 22:00:00
     private LocalDateTime createdAt;
 }

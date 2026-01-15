@@ -228,6 +228,9 @@ public class AdminService {
         if (cover != null && !cover.isEmpty()) {
             store.setCoverImage(fileStorageService.storeFile(cover, "stores"));
         }
+        // inside createStore:
+        store.setOpeningTime(request.getOpeningTime());
+        store.setClosingTime(request.getClosingTime());
 
         return storeRepository.save(store);
     }
@@ -237,17 +240,27 @@ public class AdminService {
         Store store = storeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Store not found with id: " + id));
 
-        if (request.getName() != null) store.setName(request.getName());
-        if (request.getDescription() != null) store.setDescription(request.getDescription());
-        if (request.getPhone() != null) store.setPhone(request.getPhone());
-        if (request.getAddress() != null) store.setAddress(request.getAddress());
-        if (request.getLatitude() != null) store.setLatitude(request.getLatitude());
-        if (request.getLongitude() != null) store.setLongitude(request.getLongitude());
-        if (request.getDeliveryFeeKM() != null) store.setDeliveryFeeKM(request.getDeliveryFeeKM());
-        if (request.getMinimumOrder() != null) store.setMinimumOrder(request.getMinimumOrder());
-        if (request.getEstimatedDeliveryTime() != null) store.setEstimatedDeliveryTime(request.getEstimatedDeliveryTime());
+        if (request.getName() != null)
+            store.setName(request.getName());
+        if (request.getDescription() != null)
+            store.setDescription(request.getDescription());
+        if (request.getPhone() != null)
+            store.setPhone(request.getPhone());
+        if (request.getAddress() != null)
+            store.setAddress(request.getAddress());
+        if (request.getLatitude() != null)
+            store.setLatitude(request.getLatitude());
+        if (request.getLongitude() != null)
+            store.setLongitude(request.getLongitude());
+        if (request.getDeliveryFeeKM() != null)
+            store.setDeliveryFeeKM(request.getDeliveryFeeKM());
+        if (request.getMinimumOrder() != null)
+            store.setMinimumOrder(request.getMinimumOrder());
+        if (request.getEstimatedDeliveryTime() != null)
+            store.setEstimatedDeliveryTime(request.getEstimatedDeliveryTime());
 
-        if (isActive != null) store.setIsActive(isActive);
+        if (isActive != null)
+            store.setIsActive(isActive);
 
         if (request.getCategoryId() != null) {
             Category cat = categoryRepository.findById(request.getCategoryId())
@@ -266,6 +279,11 @@ public class AdminService {
         if (cover != null && !cover.isEmpty()) {
             store.setCoverImage(fileStorageService.storeFile(cover, "stores"));
         }
+        // inside updateStore:
+        if (request.getOpeningTime() != null)
+            store.setOpeningTime(request.getOpeningTime());
+        if (request.getClosingTime() != null)
+            store.setClosingTime(request.getClosingTime());
 
         return storeRepository.save(store);
     }
@@ -313,10 +331,14 @@ public class AdminService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + id));
 
-        if (request.getName() != null) product.setName(request.getName());
-        if (request.getDescription() != null) product.setDescription(request.getDescription());
-        if (request.getBasePrice() != null) product.setBasePrice(request.getBasePrice());
-        if (request.getIsAvailable() != null) product.setIsAvailable(request.getIsAvailable());
+        if (request.getName() != null)
+            product.setName(request.getName());
+        if (request.getDescription() != null)
+            product.setDescription(request.getDescription());
+        if (request.getBasePrice() != null)
+            product.setBasePrice(request.getBasePrice());
+        if (request.getIsAvailable() != null)
+            product.setIsAvailable(request.getIsAvailable());
 
         if (request.getStoreId() != null) {
             Store store = storeRepository.findById(request.getStoreId())

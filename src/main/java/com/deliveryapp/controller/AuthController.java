@@ -9,6 +9,8 @@ import com.deliveryapp.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -26,6 +28,17 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
+
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(@AuthenticationPrincipal Jwt jwt) {
+        // Extract userId from the token claims
+        Long userId = jwt.getClaim("userId");
+
+        authService.logout(userId);
+
+        return ResponseEntity.ok("Logged out successfully");
+    }
+
     // Step 1: Request OTP
     @PostMapping("/forgot-password")
     public ResponseEntity<String> forgotPassword(@RequestBody ForgotPasswordRequest request) {
@@ -39,8 +52,7 @@ public class AuthController {
         String response = authService.resetPassword(
                 request.getPhoneNumber(),
                 request.getOtp(),
-                request.getNewPassword()
-        );
+                request.getNewPassword());
         return ResponseEntity.ok(response);
     }
 }

@@ -59,9 +59,7 @@ public class AuthService {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getPhoneNumber(),
-                        request.getPassword()
-                )
-        );
+                        request.getPassword()));
 
         // 2. Fetch User Entity
         User user = userRepository.findByPhoneNumber(request.getPhoneNumber()).orElseThrow();
@@ -78,6 +76,16 @@ public class AuthService {
 
         // 6. Return combined response
         return new AuthResponse(token, userResponse);
+    }
+
+    @Transactional
+    public void logout(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        // Clear FCM Token to stop notifications for this device
+        user.setFcmToken(null);
+        userRepository.save(user);
     }
 
     @Transactional
