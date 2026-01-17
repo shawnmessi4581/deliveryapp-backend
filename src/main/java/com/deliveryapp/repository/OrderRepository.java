@@ -14,9 +14,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     // Customer history
     List<Order> findByUserUserIdOrderByCreatedAtDesc(Long userId);
 
-    // Store orders (e.g. for restaurant dashboard)
-    List<Order> findByStoreStoreId(Long storeId);
-
     // Driver orders
     List<Order> findByDriverUserId(Long driverId);
 
@@ -35,11 +32,18 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByCreatedAtBetweenOrderByCreatedAtDesc(LocalDateTime start, LocalDateTime end);
 
     // 4. Filter by Status AND Date Range
-    List<Order> findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(OrderStatus status, LocalDateTime start, LocalDateTime end);
+    List<Order> findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(OrderStatus status, LocalDateTime start,
+            LocalDateTime end);
 
     // 1. Get All Driver Orders (History)
     List<Order> findByDriverUserIdOrderByCreatedAtDesc(Long driverId);
 
     // 2. Get Driver Orders by specific status (e.g., Active ones)
     List<Order> findByDriverUserIdAndStatusInOrderByCreatedAtDesc(Long driverId, List<OrderStatus> statuses);
+
+    // --- FIX IS HERE ---
+    // Old (Wrong): List<Order> findByStoreStoreId(Long storeId);
+    // New (Correct): Notice 'Stores' (Plural) and the underscore '_' to traverse
+    // the list
+    List<Order> findByStores_StoreId(Long storeId);
 }

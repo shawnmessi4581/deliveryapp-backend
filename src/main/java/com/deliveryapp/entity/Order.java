@@ -22,9 +22,10 @@ public class Order {
     @JoinColumn(name = "user_id") // The customer
     private User user;
 
-    @ManyToOne
-    @JoinColumn(name = "store_id")
-    private Store store;
+    // MUST BE PLURAL 'stores'
+    @ManyToMany
+    @JoinTable(name = "order_stores", joinColumns = @JoinColumn(name = "order_id"), inverseJoinColumns = @JoinColumn(name = "store_id"))
+    private List<Store> stores;
 
     @ManyToOne
     @JoinColumn(name = "driver_id") // The driver
@@ -43,14 +44,11 @@ public class Order {
     private Double deliveryFee;
     private Double totalAmount;
 
-
     private String selectedInstruction; // Text copy of the instruction
-
 
     // Coupon Info
     private Long couponId;
     private Double discountAmount; // Stored as Double to match your existing financial fields
-
 
     private String notes;
     private LocalDateTime createdAt;

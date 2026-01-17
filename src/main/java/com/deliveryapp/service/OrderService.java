@@ -17,7 +17,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -26,34 +28,33 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderStatusHistoryRepository historyRepository;
-    private final DistanceUtil distanceUtil;
     private final UserRepository userRepository;
-    private final ProductRepository productRepository; // Added
-    private final ProductVariantRepository variantRepository; // Added
-    private final UrlUtil urlUtil;
-
-    // NEW DEPENDENCIES
+    private final ProductRepository productRepository;
+    private final ProductVariantRepository variantRepository;
     private final UserAddressRepository addressRepository;
     private final StoreRepository storeRepository;
 
     private final CouponService couponService;
     private final NotificationService notificationService;
 
+    private final DistanceUtil distanceUtil;
+    private final UrlUtil urlUtil;
+
+    // =================================================================================
+    // PLACE ORDER LOGIC
+    // =================================================================================
     @Transactional
     public Order placeOrder(Long userId, Long addressId, String instruction, String couponCode,
             List<OrderItemRequest> itemsRequest) {
 
-        // 1. Validate Input
-        if (itemsRequest == null || itemsRequest.isEmpty()) {
-            throw new InvalidDataException("Cannot place order. No items provided.");
-        }
-
-        // 2. Resolve Address
+        // 1. Basic Validation
+        if (itemsRequest == null || itemsRequest.isEmpty())
+            throw new InvalidDataException("No items provided.");
         if (addressId == null)
             throw new InvalidDataException("Delivery Address is required.");
 
         UserAddress userAddress = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("Address not found with id: " + addressId));
+                .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
 
         if (!userAddress.getUser().getUserId().equals(userId)) {
             throw new ResourceNotFoundException("Address does not belong to this user");
@@ -62,28 +63,30 @@ public class OrderService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // 3. Process Items & Validate Store Consistency
+        // 2. Process Items & Identify Stores
         Order order = new Order();
         order.setUser(user);
         order.setOrderNumber(UUID.randomUUID().toString().substring(0, 8).toUpperCase());
         order.setStatus(OrderStatus.PENDING);
 
-        Store orderStore = null;
-        double subtotal = 0.0;
         List<OrderItem> orderItems = new ArrayList<>();
+        Set<Store> uniqueStores = new HashSet<>(); // Use Set to avoid duplicates
+        double subtotal = 0.0;
 
         for (OrderItemRequest itemReq : itemsRequest) {
             Product product = productRepository.findById(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + itemReq.getProductId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
-            // Store Consistency Check
-            if (orderStore == null) {
-                orderStore = product.getStore();
-            } else if (!orderStore.getStoreId().equals(product.getStore().getStoreId())) {
-                throw new InvalidDataException(
-                        "All items must be from the same store. Please clear cart and try again.");
+            Store store = product.getStore();
+
+            // Check Store Hours
+            if (!isStoreOpen(store)) {
+                throw new InvalidDataException("Store '" + store.getName() + "' is currently closed.");
             }
 
+            uniqueStores.add(store);
+
+            // Build Item
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
             orderItem.setProduct(product);
@@ -92,16 +95,12 @@ public class OrderService {
             orderItem.setNotes(itemReq.getNotes());
 
             double price = product.getBasePrice();
-
             if (itemReq.getVariantId() != null) {
                 ProductVariant variant = variantRepository.findById(itemReq.getVariantId())
-                        .orElseThrow(
-                                () -> new ResourceNotFoundException("Variant not found: " + itemReq.getVariantId()));
-
+                        .orElseThrow(() -> new ResourceNotFoundException("Variant not found"));
                 if (!variant.getProduct().getProductId().equals(product.getProductId())) {
-                    throw new InvalidDataException("Variant does not belong to this product");
+                    throw new InvalidDataException("Variant invalid for product");
                 }
-
                 orderItem.setVariant(variant);
                 orderItem.setVariantDetails(variant.getVariantValue());
                 price += variant.getPriceAdjustment();
@@ -114,16 +113,9 @@ public class OrderService {
             orderItems.add(orderItem);
         }
 
-        // ============================================================
-        // NEW: VALIDATE STORE OPENING HOURS
-        // ============================================================
-        if (!isStoreOpen(orderStore)) {
-            throw new InvalidDataException("This store is currently closed. Opening hours: "
-                    + orderStore.getOpeningTime() + " - " + orderStore.getClosingTime());
-        }
-        // ============================================================
-
-        order.setStore(orderStore);
+        // 3. Set Relationships
+        // Convert Set to List for the Entity
+        order.setStores(new ArrayList<>(uniqueStores));
         order.setOrderItems(orderItems);
         order.setSubtotal(subtotal);
 
@@ -135,53 +127,58 @@ public class OrderService {
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
 
-        // 5. Calculate Delivery Fee
-        double deliveryFee = 0.0;
-        if (orderStore.getLatitude() != null && orderStore.getLongitude() != null &&
-                userAddress.getLatitude() != null && userAddress.getLongitude() != null) {
+        // ============================================================
+        // 5. CALCULATE BEST ROUTE FEE
+        // ============================================================
 
-            double distanceInKm = distanceUtil.calculateDistance(
-                    userAddress.getLatitude(), userAddress.getLongitude(),
-                    orderStore.getLatitude(), orderStore.getLongitude());
+        // A. Find highest fee per KM among all stores involved
+        double maxFeePerKm = uniqueStores.stream()
+                .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
+                .max().orElse(0.0);
 
-            Double feePerKm = orderStore.getDeliveryFeeKM();
-            if (feePerKm == null)
-                feePerKm = 0.0;
+        // B. Calculate Optimized Total Distance (Store A -> Store B -> User)
+        double totalDistanceKm = calculateOptimizedDistance(
+                new ArrayList<>(uniqueStores),
+                userAddress.getLatitude(),
+                userAddress.getLongitude());
 
-            deliveryFee = distanceInKm * feePerKm;
-            deliveryFee = Math.round(deliveryFee * 100.0) / 100.0;
-        }
+        // C. Final Fee
+        double deliveryFee = Math.round(totalDistanceKm * maxFeePerKm * 100.0) / 100.0;
         order.setDeliveryFee(deliveryFee);
 
-        // 6. Handle Coupon Logic
+        // ============================================================
+
+        // 6. Handle Coupon
         double discountAmount = 0.0;
         Coupon validCoupon = null;
 
         if (couponCode != null && !couponCode.trim().isEmpty()) {
-            validCoupon = couponService.validateCouponForOrder(couponCode, userId, orderItems, orderStore);
+            // Pass the first store for basic validation context
+            Store primaryStore = uniqueStores.iterator().next();
+            validCoupon = couponService.validateCouponForOrder(couponCode, userId, orderItems, primaryStore);
             discountAmount = couponService.calculateDiscount(validCoupon, subtotal, deliveryFee);
 
             order.setCouponId(validCoupon.getCouponId());
             order.setDiscountAmount(discountAmount);
         }
 
-        // 7. Final Total
+        // 7. Total & Save
         double finalTotal = (subtotal + deliveryFee) - discountAmount;
         order.setTotalAmount(Math.max(finalTotal, 0.0));
 
-        // 8. Save
         Order savedOrder = orderRepository.save(order);
 
-        // 9. Coupon Usage
         if (validCoupon != null) {
             couponService.recordUsage(validCoupon, userId, savedOrder.getOrderId(), discountAmount);
         }
 
-        // 10. Log and Return
         logStatusChange(savedOrder, null, OrderStatus.PENDING, "Order Placed");
 
         return savedOrder;
     }
+    // =================================================================================
+    // ORDER MANAGEMENT
+    // =================================================================================
 
     @Transactional
     public Order updateOrderStatus(Long orderId, OrderStatus newStatus, Long userId) {
@@ -189,36 +186,22 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
         OrderStatus oldStatus = order.getStatus();
-
-        // Update Order Details
         order.setStatus(newStatus);
         order.setUpdatedAt(LocalDateTime.now());
 
-        // --- LOGIC: Handle Delivery Completion ---
+        // Handle Delivery Completion (Increment Driver Stats)
         if (newStatus == OrderStatus.DELIVERED) {
-            // Set timestamp
             order.setDeliveredAt(LocalDateTime.now());
 
-            // Check if we are transitioning TO delivered (to prevent double counting)
-            if (oldStatus != OrderStatus.DELIVERED) {
-                // Increment Driver's Total Deliveries
-                if (order.getDriver() != null) {
-                    User driver = order.getDriver();
-
-                    // Safety check for null
-                    int currentCount = driver.getTotalDeliveries() != null ? driver.getTotalDeliveries() : 0;
-
-                    driver.setTotalDeliveries(currentCount + 1);
-
-                    // Save the driver entity to persist the new count
-                    userRepository.save(driver);
-                }
+            if (oldStatus != OrderStatus.DELIVERED && order.getDriver() != null) {
+                User driver = order.getDriver();
+                int currentCount = driver.getTotalDeliveries() != null ? driver.getTotalDeliveries() : 0;
+                driver.setTotalDeliveries(currentCount + 1);
+                userRepository.save(driver);
             }
         }
 
         Order savedOrder = orderRepository.save(order);
-
-        // Log History
         logStatusChange(savedOrder, oldStatus, newStatus, "Status updated by user " + userId);
 
         return savedOrder;
@@ -234,85 +217,71 @@ public class OrderService {
         historyRepository.save(history);
     }
 
+    // =================================================================================
+    // GETTERS & UTILS
+    // =================================================================================
+
     public List<Order> getUserOrders(Long userId) {
         return orderRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
     }
 
-    // --- ADMIN: Get All Orders with Filters ---
-    public List<Order> getAdminOrders(OrderStatus status, LocalDate startDate, LocalDate endDate) {
-
-        // 1. If Date Range is provided
-        if (startDate != null && endDate != null) {
-            LocalDateTime startDateTime = startDate.atStartOfDay(); // 00:00:00
-            LocalDateTime endDateTime = endDate.atTime(23, 59, 59); // 23:59:59
-
-            if (status != null) {
-                // Filter by Status AND Date
-                return orderRepository.findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(status, startDateTime,
-                        endDateTime);
-            } else {
-                // Filter by Date only
-                return orderRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDateTime, endDateTime);
-            }
-        }
-
-        // 2. If only Status is provided
-        if (status != null) {
-            return orderRepository.findByStatusOrderByCreatedAtDesc(status);
-        }
-
-        // 3. No filters (Return all)
-        return orderRepository.findAllByOrderByCreatedAtDesc();
-    }
-
-    // --- ADMIN: Delete Order ---
-    @Transactional
-    public void deleteOrder(Long orderId) {
-        if (!orderRepository.existsById(orderId)) {
-            throw new ResourceNotFoundException("Order not found with id: " + orderId);
-        }
-        // Because Order has CascadeType.ALL on OrderItems, those will be deleted
-        // automatically.
-        // However, we must ensure OrderStatusHistory is also handled if it's not
-        // cascaded.
-        // Assuming your DB or Entity setup handles cascade, otherwise:
-        // historyRepository.deleteByOrderOrderId(orderId);
-
-        orderRepository.deleteById(orderId);
-    }
-
-    // Get Single Order (Admin or User)
     public Order getOrderById(Long orderId) {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
     }
 
+    // ADMIN: Filtered List
+    public List<Order> getAdminOrders(OrderStatus status, LocalDate startDate, LocalDate endDate) {
+        if (startDate != null && endDate != null) {
+            LocalDateTime startDateTime = startDate.atStartOfDay();
+            LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
+
+            if (status != null) {
+                return orderRepository.findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(status, startDateTime,
+                        endDateTime);
+            } else {
+                return orderRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDateTime, endDateTime);
+            }
+        }
+        if (status != null) {
+            return orderRepository.findByStatusOrderByCreatedAtDesc(status);
+        }
+        return orderRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    @Transactional
+    public void deleteOrder(Long orderId) {
+        if (!orderRepository.existsById(orderId)) {
+            throw new ResourceNotFoundException("Order not found with id: " + orderId);
+        }
+        orderRepository.deleteById(orderId);
+    }
+
+    // =================================================================================
+    // DRIVER & ASSIGNMENT
+    // =================================================================================
+
     @Transactional
     public Order assignDriver(Long orderId, Long driverId) {
-        // 1. Fetch Order
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-        // 2. Fetch Driver
         User driver = userRepository.findById(driverId)
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + driverId));
 
-        // 3. Validate User is actually a Driver
         if (driver.getUserType() != UserType.DRIVER) {
             throw new InvalidDataException("The selected user is not a Driver");
         }
 
-        // 4. Assign
         order.setDriver(driver);
 
-        // 5. Auto-update status to CONFIRMED (or PREPARING) if it was just PENDING
         if (order.getStatus() == OrderStatus.PENDING) {
             order.setStatus(OrderStatus.CONFIRMED);
         }
 
         Order savedOrder = orderRepository.save(order);
 
-        // 6. Notify Driver (Optional but recommended)
+        // Notify Driver
         try {
             notificationService.sendNotification(
                     driverId,
@@ -322,40 +291,50 @@ public class OrderService {
                     "DRIVER_ASSIGNMENT",
                     orderId);
         } catch (Exception e) {
-            // Ignore notification errors to ensure transaction completes
             System.err.println("Failed to notify driver: " + e.getMessage());
         }
 
         return savedOrder;
     }
 
+    public List<Order> getDriverOrders(Long driverId, Boolean activeOnly) {
+        if (Boolean.TRUE.equals(activeOnly)) {
+            List<OrderStatus> activeStatuses = Arrays.asList(
+                    OrderStatus.CONFIRMED,
+                    OrderStatus.PREPARING,
+                    OrderStatus.OUT_FOR_DELIVERY);
+            return orderRepository.findByDriverUserIdAndStatusInOrderByCreatedAtDesc(driverId, activeStatuses);
+        } else {
+            return orderRepository.findByDriverUserIdOrderByCreatedAtDesc(driverId);
+        }
+    }
+
+    // =================================================================================
+    // FEES & COUPONS (PRE-CALCULATION)
+    // =================================================================================
+
     public DeliveryFeeResponse calculateDeliveryFee(Long storeId, Long addressId) {
-        // 1. Fetch Store & Address
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
 
         UserAddress address = addressRepository.findById(addressId)
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
 
-        // 2. Calculate Distance
         double distance = distanceUtil.calculateDistance(
                 address.getLatitude(), address.getLongitude(),
                 store.getLatitude(), store.getLongitude());
 
-        // 3. Calculate Fee
         Double feePerKm = store.getDeliveryFeeKM() != null ? store.getDeliveryFeeKM() : 0.0;
         double deliveryFee = distance * feePerKm;
-        deliveryFee = Math.round(deliveryFee * 100.0) / 100.0; // Round to 2 decimals
+        deliveryFee = Math.round(deliveryFee * 100.0) / 100.0;
 
         return new DeliveryFeeResponse(deliveryFee, store.getEstimatedDeliveryTime());
     }
 
     public CouponCheckResponse verifyCoupon(CouponCheckRequest request) {
-        // 1. Fetch Store
         Store store = storeRepository.findById(request.getStoreId())
                 .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
 
-        // 2. Build Temporary Items & Calculate Subtotal (Securely)
         List<OrderItem> tempItems = new ArrayList<>();
         double subtotal = 0.0;
 
@@ -380,20 +359,15 @@ public class OrderService {
             subtotal += tempItem.getTotalPrice();
         }
 
-        // 3. Call CouponService to Validate
         Coupon coupon = couponService.validateCouponForOrder(
                 request.getCode(),
                 request.getUserId(),
                 tempItems,
                 store);
 
-        // 4. Calculate Discount
-        // Note: Delivery Fee is needed for "FREE_DELIVERY" coupons.
-        // Ideally we verify the address here too, but for simplicity let's assume 0 fee
-        // or require addressId in CouponCheckRequest if you support Free Shipping
-        // coupons.
-        double deliveryFee = 0.0;
-        double discount = couponService.calculateDiscount(coupon, subtotal, deliveryFee);
+        // Assuming delivery fee is needed for Free Shipping logic, but simple calc for
+        // now
+        double discount = couponService.calculateDiscount(coupon, subtotal, 0.0);
 
         return new CouponCheckResponse(
                 coupon.getCouponId(),
@@ -401,38 +375,37 @@ public class OrderService {
                 discount,
                 "Coupon Applied Successfully");
     }
-    // ... inside OrderService ...
+
+    // =================================================================================
+    // TRACKING
+    // =================================================================================
 
     public OrderTrackingResponse trackOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
         OrderTrackingResponse response = new OrderTrackingResponse();
-
-        // Basic Info
         response.setOrderId(order.getOrderId());
         response.setStatus(order.getStatus());
 
-        if (order.getStore() != null) {
-            response.setEstimatedTime(order.getStore().getEstimatedDeliveryTime());
-        }
+        // if (order.getStore() != null) {
+        // response.setEstimatedTime(order.getStore().getEstimatedDeliveryTime());
+        // }
 
-        // --- User Location / Destination ---
-        // These are saved in the Order entity at the time of placement
         response.setDeliveryAddress(order.getDeliveryAddress());
         response.setDeliveryLatitude(order.getDeliveryLatitude());
         response.setDeliveryLongitude(order.getDeliveryLongitude());
 
-        // --- Driver Info ---
         if (order.getDriver() != null) {
             User driver = order.getDriver();
             response.setDriverId(driver.getUserId());
             response.setDriverName(driver.getName());
             response.setDriverPhone(driver.getPhoneNumber());
-            response.setDriverImage(urlUtil.getFullUrl(driver.getProfileImage()));
-            response.setDriverVehicle(driver.getVehicleNumber());
 
-            // Driver's Real-time Location
+            // Full URL for Driver Image (as requested)
+            response.setDriverImage(urlUtil.getFullUrl(driver.getProfileImage()));
+
+            response.setDriverVehicle(driver.getVehicleNumber());
             response.setDriverLatitude(driver.getCurrentLocationLat());
             response.setDriverLongitude(driver.getCurrentLocationLng());
         }
@@ -440,35 +413,98 @@ public class OrderService {
         return response;
     }
 
-    // GET DRIVER ORDERS
-    public List<Order> getDriverOrders(Long driverId, Boolean activeOnly) {
-        if (Boolean.TRUE.equals(activeOnly)) {
-            // Active = CONFIRMED, PREPARING, OUT_FOR_DELIVERY
-            List<OrderStatus> activeStatuses = Arrays.asList(
-                    OrderStatus.CONFIRMED,
-                    OrderStatus.PREPARING,
-                    OrderStatus.OUT_FOR_DELIVERY);
-            return orderRepository.findByDriverUserIdAndStatusInOrderByCreatedAtDesc(driverId, activeStatuses);
-        } else {
-            // Return All (History)
-            return orderRepository.findByDriverUserIdOrderByCreatedAtDesc(driverId);
-        }
-    }
+    // =================================================================================
+    // HELPERS
+    // =================================================================================
 
-    // --- HELPER METHOD TO CHECK TIME ---
     private boolean isStoreOpen(Store store) {
-        // If times are not set, assume open 24/7
         if (store.getOpeningTime() == null || store.getClosingTime() == null)
             return true;
 
         java.time.LocalTime now = java.time.LocalTime.now();
 
-        // Handle overnight hours (e.g. 18:00 to 02:00)
         if (store.getClosingTime().isBefore(store.getOpeningTime())) {
             return now.isAfter(store.getOpeningTime()) || now.isBefore(store.getClosingTime());
         } else {
-            // Normal day hours (e.g. 09:00 to 22:00)
             return now.isAfter(store.getOpeningTime()) && now.isBefore(store.getClosingTime());
         }
+    }
+
+    // =================================================================================
+    // MULTI-STORE FEE CALCULATION
+    // =================================================================================
+
+    public DeliveryFeeResponse calculateMultiStoreFee(List<Long> storeIds, Long addressId) {
+        if (storeIds == null || storeIds.isEmpty()) {
+            throw new InvalidDataException("No stores provided for fee calculation");
+        }
+
+        // 1. Fetch Stores
+        List<Store> stores = storeRepository.findAllById(storeIds);
+        if (stores.isEmpty()) {
+            throw new ResourceNotFoundException("No valid stores found");
+        }
+
+        // 2. Fetch User Address
+        UserAddress address = addressRepository.findById(addressId)
+                .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
+
+        // 3. Find Max Fee Per KM among selected stores
+        double maxFeePerKm = stores.stream()
+                .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
+                .max().orElse(0.0);
+
+        // 4. Calculate Optimized Distance (Best Route)
+        double totalDistanceKm = calculateOptimizedDistance(stores, address.getLatitude(), address.getLongitude());
+
+        // 5. Calculate Final Fee
+        double deliveryFee = Math.round(totalDistanceKm * maxFeePerKm * 100.0) / 100.0;
+
+        // Estimated Time: Pick the longest estimate (simple logic)
+        String estimatedTime = stores.get(0).getEstimatedDeliveryTime();
+
+        return new DeliveryFeeResponse(deliveryFee, estimatedTime);
+    }
+
+    // =================================================================================
+    // ALGORITHM: NEAREST NEIGHBOR (Route Optimization)
+    // =================================================================================
+    // Logic: User -> Closest Store -> Next Closest Store...
+    // We work backward from the user's location to find the total travel path.
+    private double calculateOptimizedDistance(List<Store> stores, double userLat, double userLng) {
+        if (stores.isEmpty())
+            return 0.0;
+
+        List<Store> unvisited = new ArrayList<>(stores);
+        double currentLat = userLat;
+        double currentLng = userLng;
+        double totalDistance = 0.0;
+
+        while (!unvisited.isEmpty()) {
+            Store closestStore = null;
+            double minDist = Double.MAX_VALUE;
+
+            for (Store s : unvisited) {
+                if (s.getLatitude() == null || s.getLongitude() == null)
+                    continue;
+
+                double d = distanceUtil.calculateDistance(currentLat, currentLng, s.getLatitude(), s.getLongitude());
+                if (d < minDist) {
+                    minDist = d;
+                    closestStore = s;
+                }
+            }
+
+            if (closestStore != null) {
+                totalDistance += minDist;
+                currentLat = closestStore.getLatitude();
+                currentLng = closestStore.getLongitude();
+                unvisited.remove(closestStore);
+            } else {
+                break; // Should happen only if coordinates are missing
+            }
+        }
+
+        return totalDistance;
     }
 }

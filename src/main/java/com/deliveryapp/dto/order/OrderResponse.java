@@ -11,8 +11,7 @@ public class OrderResponse {
     private Long orderId;
     private String orderNumber;
 
-    // --- NEW: Full Store Details (Address, Phone, Coords) ---
-    private StoreResponse store;
+    private List<StoreResponse> stores;
 
     // Existing Store Info (Kept as requested)
     private Long storeId;
@@ -46,5 +45,5 @@ public class OrderResponse {
 
     // FIELDS FOR COUPONS
     private Double discountAmount; // How much was saved
-    private Long couponId;         // Which coupon was used (optional)
+    private Long couponId; // Which coupon was used (optional)
 }

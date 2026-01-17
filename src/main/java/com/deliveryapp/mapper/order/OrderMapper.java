@@ -1,5 +1,6 @@
 package com.deliveryapp.mapper.order;
 
+import com.deliveryapp.dto.catalog.StoreResponse;
 import com.deliveryapp.dto.order.OrderItemResponse;
 import com.deliveryapp.dto.order.OrderResponse;
 import com.deliveryapp.entity.Order;
@@ -9,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
@@ -23,16 +25,17 @@ public class OrderMapper {
         response.setOrderId(order.getOrderId());
         response.setOrderNumber(order.getOrderNumber());
 
-        // --- Store Info (Reusing CatalogMapper) ---
-        if (order.getStore() != null) {
-            // Get full store details (address, logo, etc.)
-            response.setStore(catalogMapper.toStoreResponse(order.getStore()));
+        // --- MAP LIST OF STORES ---
+        if (order.getStores() != null && !order.getStores().isEmpty()) {
+            List<StoreResponse> storeDtos = order.getStores().stream()
+                    .map(catalogMapper::toStoreResponse)
+                    .collect(Collectors.toList());
+            response.setStores(storeDtos);
 
-            // Set flat fields for backward compatibility
-            response.setStoreId(order.getStore().getStoreId());
-            response.setStoreName(order.getStore().getName());
+            // Set first store name for flat display if needed
+            response.setStoreName(
+                    order.getStores().get(0).getName() + (order.getStores().size() > 1 ? " & others" : ""));
         }
-
         // --- Driver Info ---
         if (order.getDriver() != null) {
             response.setDriverId(order.getDriver().getUserId());
