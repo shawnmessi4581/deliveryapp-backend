@@ -1,5 +1,5 @@
 package com.deliveryapp.enums;
 
 public enum UserType {
-    CUSTOMER, DRIVER, ADMIN
+    CUSTOMER, DRIVER, ADMIN, EMPLOYEE,
 }

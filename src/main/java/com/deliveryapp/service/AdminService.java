@@ -3,9 +3,11 @@ package com.deliveryapp.service;
 import com.deliveryapp.dto.catalog.ProductRequest;
 import com.deliveryapp.dto.catalog.StoreRequest;
 import com.deliveryapp.dto.user.CreateDriverRequest;
+import com.deliveryapp.dto.user.CreateUserRequest;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.DuplicateResourceException;
+import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -91,6 +93,32 @@ public class AdminService {
         return userRepository.findByUserType(UserType.DRIVER);
     }
 
+    // ... imports ...
+
+    @Transactional
+    public User createDashboardUser(CreateUserRequest request) {
+        if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
+            throw new DuplicateResourceException("Phone number already exists");
+        }
+
+        User user = new User();
+        user.setName(request.getName());
+        user.setPhoneNumber(request.getPhoneNumber());
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+
+        // Ensure role is valid (Only allow creating ADMIN or EMPLOYEE here)
+        if (request.getRole() == UserType.ADMIN || request.getRole() == UserType.EMPLOYEE) {
+            user.setUserType(request.getRole());
+        } else {
+            throw new InvalidDataException("Invalid role. Use ADMIN or EMPLOYEE.");
+        }
+
+        user.setIsActive(true);
+        user.setCreatedAt(LocalDateTime.now());
+
+        return userRepository.save(user);
+    }
     // ==================== CATEGORY CRUD ====================
 
     public List<Category> getAllCategories() {

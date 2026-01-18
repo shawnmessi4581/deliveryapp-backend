@@ -3,11 +3,12 @@ package com.deliveryapp.controller;
 import com.deliveryapp.dto.catalog.*;
 import com.deliveryapp.dto.order.OrderResponse;
 import com.deliveryapp.dto.user.CreateDriverRequest;
+import com.deliveryapp.dto.user.CreateUserRequest;
 import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.mapper.catalog.CatalogMapper; // Inject
-import com.deliveryapp.mapper.order.OrderMapper;     // Inject (Create this one based on previous chat if missing)
-import com.deliveryapp.mapper.user.UserMapper;       // Inject
+import com.deliveryapp.mapper.order.OrderMapper; // Inject (Create this one based on previous chat if missing)
+import com.deliveryapp.mapper.user.UserMapper; // Inject
 import com.deliveryapp.repository.DeliveryInstructionRepository;
 import com.deliveryapp.service.AdminService;
 import com.deliveryapp.service.CouponService;
@@ -25,11 +26,9 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
 public class AdminController {
 
     private final AdminService adminService;
-    private final CouponService couponService;
     private final OrderService orderService;
     private final DeliveryInstructionRepository instructionRepository;
 
@@ -42,7 +41,7 @@ public class AdminController {
     @GetMapping("/users")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
         return ResponseEntity.ok(adminService.getAllUsers().stream() // Returns Stream<User>
-                .map(userMapper::toUserResponse)             // Maps User -> UserResponse
+                .map(userMapper::toUserResponse) // Maps User -> UserResponse
                 .collect(Collectors.toList()));
     }
 
@@ -59,6 +58,13 @@ public class AdminController {
         adminService.updateUserStatus(userId, active);
         String status = active ? "activated" : "deactivated";
         return ResponseEntity.ok("User has been " + status);
+    }
+
+    // CREATE DASHBOARD USER (Admin/Employee)
+    @PostMapping("/users/create")
+    public ResponseEntity<UserResponse> createDashboardUser(@RequestBody CreateUserRequest request) {
+        User user = adminService.createDashboardUser(request);
+        return ResponseEntity.ok(userMapper.toUserResponse(user)); // Reuse your existing mapper logic (via UserMapper)
     }
 
     // --- DRIVERS ---
