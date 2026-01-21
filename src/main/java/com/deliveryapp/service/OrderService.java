@@ -33,6 +33,7 @@ public class OrderService {
     private final ProductVariantRepository variantRepository;
     private final UserAddressRepository addressRepository;
     private final StoreRepository storeRepository;
+    private final CouponUsageRepository couponUsageRepository;
 
     private final CouponService couponService;
     private final NotificationService notificationService;
@@ -254,6 +255,9 @@ public class OrderService {
         if (!orderRepository.existsById(orderId)) {
             throw new ResourceNotFoundException("Order not found with id: " + orderId);
         }
+        historyRepository.deleteByOrderOrderId(orderId);
+        couponUsageRepository.deleteByOrderId(orderId);
+
         orderRepository.deleteById(orderId);
     }
 

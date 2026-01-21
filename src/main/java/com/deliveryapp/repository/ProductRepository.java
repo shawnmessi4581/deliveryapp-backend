@@ -12,13 +12,16 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     // Fetch all active products in random order (PostgreSQL specific)
     @Query(value = "SELECT * FROM products WHERE is_available = true ORDER BY RANDOM()", nativeQuery = true)
     List<Product> findAllActiveProductsRandomly();
+
     // 1. Existing: Get menu for a specific store
     List<Product> findByStoreStoreIdAndIsAvailableTrue(Long storeId);
 
     // 2. Existing: Search products
     List<Product> findByNameContainingIgnoreCase(String keyword);
-    List<Product> findByNameContainingIgnoreCaseAndCategoryCategoryId(String keyword,long categoryId);
-    List<Product> findByNameContainingIgnoreCaseAndStoreStoreId(String keyword,long storeId);
+
+    List<Product> findByNameContainingIgnoreCaseAndCategoryCategoryId(String keyword, long categoryId);
+
+    List<Product> findByNameContainingIgnoreCaseAndStoreStoreId(String keyword, long storeId);
 
     // --- NEW METHODS ADDED BELOW ---
 
@@ -35,7 +38,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     // Variation: Find by SubCategory only if available
     List<Product> findBySubCategorySubcategoryIdAndIsAvailableTrue(Long subcategoryId);
 
-    // 5. Find by Store AND Category (Useful for filtering a specific restaurant's menu)
+    // 5. Find by Store AND Category (Useful for filtering a specific restaurant's
+    // menu)
     List<Product> findByStoreStoreIdAndCategoryCategoryId(Long storeId, Long categoryId);
 
     // Get products belonging to a specific Store AND specific Category
@@ -43,4 +47,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     // Get products belonging to a specific Store AND specific SubCategory
     List<Product> findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(Long storeId, Long subCategoryId);
+
+    //
+    List<Product> findByBasePriceLessThanEqualAndIsAvailableTrue(Double price);
+
 }

@@ -55,6 +55,7 @@ public class CatalogService {
     public List<Store> getStoresByCategory(Long categoryId) {
         return storeRepository.findByCategoryCategoryId(categoryId);
     }
+
     // NEW: Get Stores by SubCategory
     public List<Store> getStoresBySubCategory(Long subCategoryId) {
         // Validate subcategory exists (optional, but good for error messaging)
@@ -64,12 +65,12 @@ public class CatalogService {
         return storeRepository.findBySubCategorySubcategoryId(subCategoryId);
     }
 
-
     // ================= PRODUCTS =================
 
     public List<Product> getAllProductsRandomly() {
         return productRepository.findAllActiveProductsRandomly();
     }
+
     public Product getProductById(Long id) {
         return productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + id));
@@ -90,12 +91,14 @@ public class CatalogService {
         return productRepository.findBySubCategorySubcategoryIdAndIsAvailableTrue(subCategoryId);
     }
 
-    public List<Product> searchProducts(String keyword,long categoryId) {
-        return productRepository.findByNameContainingIgnoreCaseAndCategoryCategoryId(keyword,categoryId);
+    public List<Product> searchProducts(String keyword, long categoryId) {
+        return productRepository.findByNameContainingIgnoreCaseAndCategoryCategoryId(keyword, categoryId);
     }
-    public List<Product> searchProductsInStore(String keyword,long storeId) {
-        return productRepository.findByNameContainingIgnoreCaseAndStoreStoreId(keyword,storeId);
+
+    public List<Product> searchProductsInStore(String keyword, long storeId) {
+        return productRepository.findByNameContainingIgnoreCaseAndStoreStoreId(keyword, storeId);
     }
+
     // NEW: Filter by Store + Category
     public List<Product> getProductsByStoreAndCategory(Long storeId, Long categoryId) {
         return productRepository.findByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(storeId, categoryId);
@@ -103,6 +106,12 @@ public class CatalogService {
 
     // NEW: Filter by Store + SubCategory
     public List<Product> getProductsByStoreAndSubCategory(Long storeId, Long subCategoryId) {
-        return productRepository.findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(storeId, subCategoryId);
+        return productRepository.findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(storeId,
+                subCategoryId);
+    }
+
+    //
+    public List<Product> getProductsUnderPrice(Double price) {
+        return productRepository.findByBasePriceLessThanEqualAndIsAvailableTrue(price);
     }
 }

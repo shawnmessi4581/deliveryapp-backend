@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -66,8 +65,7 @@ public class CatalogController {
     public ResponseEntity<StoreResponse> getStoreById(
             @PathVariable Long storeId,
             @RequestParam(required = false) Double userLat,
-            @RequestParam(required = false) Double userLng
-    ) {
+            @RequestParam(required = false) Double userLng) {
         Store store = catalogService.getStoreById(storeId);
 
         // Map using CatalogMapper
@@ -75,7 +73,8 @@ public class CatalogController {
 
         // Calculate Fee if user location is provided
         if (userLat != null && userLng != null && store.getLatitude() != null && store.getLongitude() != null) {
-            double distance = distanceUtil.calculateDistance(userLat, userLng, store.getLatitude(), store.getLongitude());
+            double distance = distanceUtil.calculateDistance(userLat, userLng, store.getLatitude(),
+                    store.getLongitude());
 
             // Fee = Distance (km) * Store Fee Per KM
             double feePerKm = store.getDeliveryFeeKM() != null ? store.getDeliveryFeeKM() : 0.0;
@@ -188,6 +187,16 @@ public class CatalogController {
         List<Product> products = catalogService.getProductsByStoreAndSubCategory(storeId, subCategoryId);
         return ResponseEntity.ok(products.stream()
                 .map(catalogMapper::toProductResponse) // Use Mapper
+                .collect(Collectors.toList()));
+    }
+
+    // Usage: /api/catalog/products/price?max=50
+    @GetMapping("/products/price")
+    public ResponseEntity<List<ProductResponse>> getProductsByPrice(@RequestParam Double max) {
+        List<Product> products = catalogService.getProductsUnderPrice(max);
+
+        return ResponseEntity.ok(products.stream()
+                .map(catalogMapper::toProductResponse)
                 .collect(Collectors.toList()));
     }
 }
