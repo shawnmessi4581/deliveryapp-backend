@@ -114,4 +114,9 @@ public class CatalogService {
     public List<Product> getProductsUnderPrice(Double price) {
         return productRepository.findByBasePriceLessThanEqualAndIsAvailableTrue(price);
     }
+
+    public List<Product> getNewestProducts() {
+        // Returns the 10 most recently added products
+        return productRepository.findTop10ByIsAvailableTrueOrderByProductIdDesc();
+    }
 }

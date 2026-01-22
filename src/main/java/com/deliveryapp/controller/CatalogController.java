@@ -199,4 +199,14 @@ public class CatalogController {
                 .map(catalogMapper::toProductResponse)
                 .collect(Collectors.toList()));
     }
+
+    // NEW ROUTE: /api/catalog/products/new
+    @GetMapping("/products/new")
+    public ResponseEntity<List<ProductResponse>> getNewestProducts() {
+        List<Product> products = catalogService.getNewestProducts();
+
+        return ResponseEntity.ok(products.stream()
+                .map(catalogMapper::toProductResponse)
+                .collect(Collectors.toList()));
+    }
 }

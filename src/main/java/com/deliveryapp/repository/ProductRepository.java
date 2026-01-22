@@ -51,4 +51,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     //
     List<Product> findByBasePriceLessThanEqualAndIsAvailableTrue(Double price);
 
+    //
+    List<Product> findTop10ByIsAvailableTrueOrderByProductIdDesc();
+
 }
