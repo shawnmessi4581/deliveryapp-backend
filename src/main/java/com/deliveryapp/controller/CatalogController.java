@@ -150,13 +150,16 @@ public class CatalogController {
                 .collect(Collectors.toList()));
     }
 
+    // GET /api/catalog/products/search?q=burger&categoryId=0
     @GetMapping("/products/search")
     public ResponseEntity<List<ProductResponse>> searchProducts(
             @RequestParam("q") String keyword,
-            @RequestParam("categoryId") long categoryId) {
+            @RequestParam(value = "categoryId", defaultValue = "0") Long categoryId) {
+
         List<Product> products = catalogService.searchProducts(keyword, categoryId);
+
         return ResponseEntity.ok(products.stream()
-                .map(catalogMapper::toProductResponse) // Use Mapper
+                .map(catalogMapper::toProductResponse)
                 .collect(Collectors.toList()));
     }
 

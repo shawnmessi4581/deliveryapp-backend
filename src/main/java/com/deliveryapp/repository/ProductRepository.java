@@ -16,10 +16,17 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     // 1. Existing: Get menu for a specific store
     List<Product> findByStoreStoreIdAndIsAvailableTrue(Long storeId);
 
-    // 2. Existing: Search products
-    List<Product> findByNameContainingIgnoreCase(String keyword);
+    // 1. Search Global (Category ID = 0)
+    List<Product> findByNameContainingIgnoreCaseAndIsAvailableTrue(String keyword);
 
-    List<Product> findByNameContainingIgnoreCaseAndCategoryCategoryId(String keyword, long categoryId);
+    // 2. Search Specific Category
+    List<Product> findByCategoryCategoryIdAndNameContainingIgnoreCaseAndIsAvailableTrue(Long categoryId,
+            String keyword);
+    // // 2. Existing: Search products
+    // List<Product> findByNameContainingIgnoreCase(String keyword);
+
+    // List<Product> findByNameContainingIgnoreCaseAndCategoryCategoryId(String
+    // keyword, long categoryId);
 
     List<Product> findByNameContainingIgnoreCaseAndStoreStoreId(String keyword, long storeId);
 

@@ -91,8 +91,17 @@ public class CatalogService {
         return productRepository.findBySubCategorySubcategoryIdAndIsAvailableTrue(subCategoryId);
     }
 
-    public List<Product> searchProducts(String keyword, long categoryId) {
-        return productRepository.findByNameContainingIgnoreCaseAndCategoryCategoryId(keyword, categoryId);
+    public List<Product> searchProducts(String keyword, Long categoryId) {
+        if (keyword == null)
+            keyword = ""; // Safety check
+
+        // Logic: 0 (or null) means "All Categories"
+        if (categoryId == null || categoryId == 0) {
+            return productRepository.findByNameContainingIgnoreCaseAndIsAvailableTrue(keyword);
+        } else {
+            return productRepository.findByCategoryCategoryIdAndNameContainingIgnoreCaseAndIsAvailableTrue(categoryId,
+                    keyword);
+        }
     }
 
     public List<Product> searchProductsInStore(String keyword, long storeId) {
