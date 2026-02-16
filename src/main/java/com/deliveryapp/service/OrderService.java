@@ -94,9 +94,10 @@ public class OrderService {
             orderItem.setProductName(product.getName());
             orderItem.setQuantity(itemReq.getQuantity());
             orderItem.setNotes(itemReq.getNotes());
+            orderItem.setSelectedColor(itemReq.getSelectedColor());
 
             double price = product.getBasePrice();
-            if (itemReq.getVariantId() != null) {
+            if (itemReq.getVariantId() != null && itemReq.getVariantId() != 0) {
                 ProductVariant variant = variantRepository.findById(itemReq.getVariantId())
                         .orElseThrow(() -> new ResourceNotFoundException("Variant not found"));
                 if (!variant.getProduct().getProductId().equals(product.getProductId())) {

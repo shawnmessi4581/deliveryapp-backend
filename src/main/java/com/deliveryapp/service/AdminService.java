@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -312,6 +313,8 @@ public class AdminService {
             store.setOpeningTime(request.getOpeningTime());
         if (request.getClosingTime() != null)
             store.setClosingTime(request.getClosingTime());
+        if (request.getIsBusy() != null)
+            store.setIsBusy(request.getIsBusy());
 
         return storeRepository.save(store);
     }
@@ -327,7 +330,7 @@ public class AdminService {
     }
 
     @Transactional
-    public Product createProduct(ProductRequest request, MultipartFile image) {
+    public Product createProduct(ProductRequest request, MultipartFile mainImage, List<MultipartFile> galleryImages) {
         Store store = storeRepository.findById(request.getStoreId())
                 .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
 
@@ -347,15 +350,31 @@ public class AdminService {
             product.setSubCategory(sub);
         }
 
-        if (image != null && !image.isEmpty()) {
-            product.setImage(fileStorageService.storeFile(image, "products"));
+        // 2. Main Image
+        if (mainImage != null && !mainImage.isEmpty()) {
+            product.setImage(fileStorageService.storeFile(mainImage, "products"));
+        }
+        // 1. Map Colors
+        if (request.getColors() != null) {
+            product.setColors(request.getColors());
+        }
+        // 3. Gallery Images (Loop and Save)
+        if (galleryImages != null && !galleryImages.isEmpty()) {
+            List<String> imagePaths = new ArrayList<>();
+            for (MultipartFile file : galleryImages) {
+                if (!file.isEmpty()) {
+                    imagePaths.add(fileStorageService.storeFile(file, "products"));
+                }
+            }
+            product.setImages(imagePaths);
         }
 
         return productRepository.save(product);
     }
 
     @Transactional
-    public Product updateProduct(Long id, ProductRequest request, MultipartFile image) {
+    public Product updateProduct(Long id, ProductRequest request, MultipartFile mainImage,
+            List<MultipartFile> galleryImages) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + id));
 
@@ -384,8 +403,22 @@ public class AdminService {
             product.setSubCategory(sub);
         }
 
-        if (image != null && !image.isEmpty()) {
-            product.setImage(fileStorageService.storeFile(image, "products"));
+        if (mainImage != null && !mainImage.isEmpty()) {
+            product.setImage(fileStorageService.storeFile(mainImage, "products"));
+        }
+
+        if (request.getColors() != null) {
+            product.setColors(request.getColors());
+        }
+        if (galleryImages != null && !galleryImages.isEmpty()) {
+            // Optional: Clear old images if you want full replace
+            // product.getImages().clear();
+
+            for (MultipartFile file : galleryImages) {
+                if (!file.isEmpty()) {
+                    product.getImages().add(fileStorageService.storeFile(file, "products"));
+                }
+            }
         }
 
         return productRepository.save(product);

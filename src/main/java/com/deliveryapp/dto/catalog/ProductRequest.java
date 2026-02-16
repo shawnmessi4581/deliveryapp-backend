@@ -1,5 +1,6 @@
 package com.deliveryapp.dto.catalog;
 
+import java.util.List;
 
 import lombok.Data;
 
@@ -12,4 +13,6 @@ public class ProductRequest {
     private Long categoryId;
     private Long subCategoryId; // Optional
     private Boolean isAvailable;
+    private List<String> colors; // ["Red", "Blue"]
+
 }

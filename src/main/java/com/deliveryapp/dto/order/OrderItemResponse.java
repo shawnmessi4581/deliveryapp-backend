@@ -10,4 +10,5 @@ public class OrderItemResponse {
     private Double unitPrice;
     private Double totalPrice;
     private String notes;
+    private String selectedColor;
 }

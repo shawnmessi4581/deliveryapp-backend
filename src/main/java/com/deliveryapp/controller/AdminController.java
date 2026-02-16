@@ -11,12 +11,10 @@ import com.deliveryapp.mapper.order.OrderMapper; // Inject (Create this one base
 import com.deliveryapp.mapper.user.UserMapper; // Inject
 import com.deliveryapp.repository.DeliveryInstructionRepository;
 import com.deliveryapp.service.AdminService;
-import com.deliveryapp.service.CouponService;
 import com.deliveryapp.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -202,8 +200,11 @@ public class AdminController {
     @PostMapping(value = "/products", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ProductResponse> createProduct(
             @ModelAttribute ProductRequest request,
-            @RequestParam(value = "image", required = false) MultipartFile image) {
-        Product product = adminService.createProduct(request, image);
+            @RequestParam(value = "image", required = false) MultipartFile image,
+            // NEW: Accept List of Files
+            @RequestParam(value = "gallery", required = false) List<MultipartFile> gallery) {
+
+        Product product = adminService.createProduct(request, image, gallery);
         return ResponseEntity.ok(catalogMapper.toProductResponse(product));
     }
 
@@ -211,8 +212,9 @@ public class AdminController {
     public ResponseEntity<ProductResponse> updateProduct(
             @PathVariable Long id,
             @ModelAttribute ProductRequest request,
-            @RequestParam(value = "image", required = false) MultipartFile image) {
-        Product product = adminService.updateProduct(id, request, image);
+            @RequestParam(value = "image", required = false) MultipartFile image,
+            @RequestParam(value = "gallery", required = false) List<MultipartFile> gallery) {
+        Product product = adminService.updateProduct(id, request, image, gallery);
         return ResponseEntity.ok(catalogMapper.toProductResponse(product));
     }
 

@@ -38,6 +38,7 @@ public class Store {
     private Double minimumOrder;
     private String estimatedDeliveryTime;
     private Boolean isActive;
+    private Boolean isBusy; // NEW: If true, show "Busy" tag or warning
     private LocalTime openingTime; // e.g. 09:00:00
     private LocalTime closingTime; // e.g. 22:00:00
     private LocalDateTime createdAt;

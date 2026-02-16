@@ -24,4 +24,6 @@ public class ProductResponse {
     private String subCategoryName;
 
     private List<ProductVariantResponse> variants;
+    private List<String> images; // Full URLs
+    private List<String> colors; // Available options
 }

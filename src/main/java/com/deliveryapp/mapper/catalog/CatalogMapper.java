@@ -77,6 +77,8 @@ public class CatalogMapper {
 
         // Calculate Open Status
         dto.setIsOpenNow(isStoreOpen(store));
+        dto.setIsBusy(store.getIsBusy()); // Map Busy Flag
+
         return dto;
     }
 
@@ -119,6 +121,12 @@ public class CatalogMapper {
             }).collect(Collectors.toList()));
         } else {
             dto.setVariants(Collections.emptyList());
+        }
+        dto.setColors(product.getColors());
+        if (product.getImages() != null) {
+            dto.setImages(product.getImages().stream()
+                    .map(urlUtil::getFullUrl)
+                    .collect(Collectors.toList()));
         }
 
         return dto;

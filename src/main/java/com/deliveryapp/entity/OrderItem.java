@@ -25,6 +25,8 @@ public class OrderItem {
     @JoinColumn(name = "variant_id")
     private ProductVariant variant;
 
+    private String selectedColor;
+
     private String productName; // Snapshot of name at time of order
     private String variantDetails;
     private Integer quantity;
