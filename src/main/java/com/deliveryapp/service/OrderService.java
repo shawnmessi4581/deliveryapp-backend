@@ -34,6 +34,7 @@ public class OrderService {
     private final UserAddressRepository addressRepository;
     private final StoreRepository storeRepository;
     private final CouponUsageRepository couponUsageRepository;
+    private final ColorRepository colorRepository;
 
     private final CouponService couponService;
     private final NotificationService notificationService;
@@ -94,8 +95,23 @@ public class OrderService {
             orderItem.setProductName(product.getName());
             orderItem.setQuantity(itemReq.getQuantity());
             orderItem.setNotes(itemReq.getNotes());
-            orderItem.setSelectedColor(itemReq.getSelectedColor());
+            if (itemReq.getColorId() != null) {
+                // We fetch the color from the Product's available list or Repo
+                Color color = colorRepository.findById(itemReq.getColorId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Color not found"));
 
+                // Optional: Validate product actually has this color
+                boolean isValidColor = product.getColors().stream()
+                        .anyMatch(c -> c.getColorId().equals(color.getColorId()));
+
+                if (!isValidColor)
+                    throw new InvalidDataException("Color not available for this product");
+
+                // Save Snapshot
+                orderItem.setSelectedColorId(color.getColorId());
+                orderItem.setSelectedColorName(color.getName());
+                orderItem.setSelectedColorHex(color.getHexCode());
+            }
             double price = product.getBasePrice();
             if (itemReq.getVariantId() != null && itemReq.getVariantId() != 0) {
                 ProductVariant variant = variantRepository.findById(itemReq.getVariantId())

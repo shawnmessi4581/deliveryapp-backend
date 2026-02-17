@@ -8,6 +8,6 @@ public class OrderItemRequest {
     private Long variantId; // Optional
     private Integer quantity;
     private String notes;
-    private String selectedColor; // Optional/Nullable
+    private Long colorId; // Nullable
 
 }

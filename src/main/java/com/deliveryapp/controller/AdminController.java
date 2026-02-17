@@ -257,4 +257,30 @@ public class AdminController {
     public ResponseEntity<List<DeliveryInstruction>> getAllInstructions() {
         return ResponseEntity.ok(instructionRepository.findAll());
     }
+
+    // --- COLORS ---
+    @GetMapping("/colors")
+    public ResponseEntity<List<ColorResponse>> getAllColors() {
+        // Map entity to DTO (simple mapping)
+        List<ColorResponse> response = adminService.getAllColors().stream().map(c -> {
+            ColorResponse dto = new ColorResponse();
+            dto.setColorId(c.getColorId());
+            dto.setName(c.getName());
+            dto.setHexCode(c.getHexCode());
+            return dto;
+        }).collect(Collectors.toList());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/colors")
+    public ResponseEntity<String> createColor(@RequestBody ColorRequest request) {
+        adminService.createColor(request.getName(), request.getHexCode());
+        return ResponseEntity.ok("Color created");
+    }
+
+    @DeleteMapping("/colors/{id}")
+    public ResponseEntity<String> deleteColor(@PathVariable Long id) {
+        adminService.deleteColor(id);
+        return ResponseEntity.ok("Color deleted");
+    }
 }

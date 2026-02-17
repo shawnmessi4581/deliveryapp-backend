@@ -32,6 +32,7 @@ public class AdminService {
     private final FileStorageService fileStorageService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ColorRepository colorRepository;
 
     // ==================== USER MANAGEMENT ====================
 
@@ -354,9 +355,9 @@ public class AdminService {
         if (mainImage != null && !mainImage.isEmpty()) {
             product.setImage(fileStorageService.storeFile(mainImage, "products"));
         }
-        // 1. Map Colors
-        if (request.getColors() != null) {
-            product.setColors(request.getColors());
+        if (request.getColorIds() != null && !request.getColorIds().isEmpty()) {
+            List<Color> selectedColors = colorRepository.findAllById(request.getColorIds());
+            product.setColors(selectedColors);
         }
         // 3. Gallery Images (Loop and Save)
         if (galleryImages != null && !galleryImages.isEmpty()) {
@@ -407,8 +408,9 @@ public class AdminService {
             product.setImage(fileStorageService.storeFile(mainImage, "products"));
         }
 
-        if (request.getColors() != null) {
-            product.setColors(request.getColors());
+        if (request.getColorIds() != null && !request.getColorIds().isEmpty()) {
+            List<Color> selectedColors = colorRepository.findAllById(request.getColorIds());
+            product.setColors(selectedColors);
         }
         if (galleryImages != null && !galleryImages.isEmpty()) {
             // Optional: Clear old images if you want full replace
@@ -445,5 +447,23 @@ public class AdminService {
             throw new ResourceNotFoundException("Variant not found with id: " + variantId);
         }
         variantRepository.deleteById(variantId);
+    }
+
+    // 1. Create Color
+    public Color createColor(String name, String hexCode) {
+        Color color = new Color();
+        color.setName(name);
+        color.setHexCode(hexCode);
+        return colorRepository.save(color);
+    }
+
+    // 2. Get All Colors
+    public List<Color> getAllColors() {
+        return colorRepository.findAll();
+    }
+
+    // 3. Delete Color
+    public void deleteColor(Long id) {
+        colorRepository.deleteById(id);
     }
 }

@@ -25,5 +25,5 @@ public class ProductResponse {
 
     private List<ProductVariantResponse> variants;
     private List<String> images; // Full URLs
-    private List<String> colors; // Available options
+    private List<ColorResponse> colors;
 }

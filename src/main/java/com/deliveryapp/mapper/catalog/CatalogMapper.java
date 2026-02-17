@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalTime;
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
@@ -122,11 +123,16 @@ public class CatalogMapper {
         } else {
             dto.setVariants(Collections.emptyList());
         }
-        dto.setColors(product.getColors());
-        if (product.getImages() != null) {
-            dto.setImages(product.getImages().stream()
-                    .map(urlUtil::getFullUrl)
-                    .collect(Collectors.toList()));
+        if (product.getColors() != null) {
+            List<ColorResponse> colorDtos = product.getColors().stream().map(c -> {
+                ColorResponse cd = new ColorResponse();
+                cd.setColorId(c.getColorId());
+                cd.setName(c.getName());
+                cd.setHexCode(c.getHexCode());
+                return cd;
+            }).collect(Collectors.toList());
+
+            dto.setColors(colorDtos); // Ensure ProductResponse has List<ColorResponse> colors
         }
 
         return dto;

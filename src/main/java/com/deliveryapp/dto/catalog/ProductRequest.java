@@ -13,6 +13,6 @@ public class ProductRequest {
     private Long categoryId;
     private Long subCategoryId; // Optional
     private Boolean isAvailable;
-    private List<String> colors; // ["Red", "Blue"]
+    private List<Long> colorIds; // e.g. [1, 5, 8]
 
 }
