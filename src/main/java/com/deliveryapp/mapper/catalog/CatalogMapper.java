@@ -90,19 +90,41 @@ public class CatalogMapper {
         dto.setName(product.getName());
         dto.setDescription(product.getDescription());
         dto.setBasePrice(product.getBasePrice());
-        dto.setImageUrl(urlUtil.getFullUrl(product.getImage())); // Use getImage() per your entity
+        dto.setImageUrl(urlUtil.getFullUrl(product.getImage())); // Main Thumbnail
         dto.setAvailable(product.getIsAvailable());
 
+        // --- MAP GALLERY IMAGES (NEW) ---
+        if (product.getImages() != null && !product.getImages().isEmpty()) {
+            dto.setImages(product.getImages().stream()
+                    .map(urlUtil::getFullUrl) // Convert each relative path to Full URL
+                    .collect(Collectors.toList()));
+        } else {
+            dto.setImages(Collections.emptyList());
+        }
+
+        // --- MAP COLORS ---
+        if (product.getColors() != null && !product.getColors().isEmpty()) {
+            List<ColorResponse> colorDtos = product.getColors().stream().map(c -> {
+                ColorResponse cd = new ColorResponse();
+                cd.setColorId(c.getColorId());
+                cd.setName(c.getName());
+                cd.setHexCode(c.getHexCode());
+                return cd;
+            }).collect(Collectors.toList());
+            dto.setColors(colorDtos);
+        } else {
+            dto.setColors(Collections.emptyList());
+        }
+
+        // --- Store Info ---
         if (product.getStore() != null) {
-            // Reuse store logic to get logo etc.
             StoreResponse storeDto = toStoreResponse(product.getStore());
             dto.setStore(storeDto);
-
-            // Flat fields
             dto.setStoreId(product.getStore().getStoreId());
             dto.setStoreName(product.getStore().getName());
         }
 
+        // --- Category Info ---
         if (product.getCategory() != null) {
             dto.setCategoryId(product.getCategory().getCategoryId());
             dto.setCategoryName(product.getCategory().getName());
@@ -112,6 +134,7 @@ public class CatalogMapper {
             dto.setSubCategoryName(product.getSubCategory().getName());
         }
 
+        // --- Variants ---
         if (product.getVariants() != null && !product.getVariants().isEmpty()) {
             dto.setVariants(product.getVariants().stream().map(v -> {
                 ProductVariantResponse vDto = new ProductVariantResponse();
@@ -122,17 +145,6 @@ public class CatalogMapper {
             }).collect(Collectors.toList()));
         } else {
             dto.setVariants(Collections.emptyList());
-        }
-        if (product.getColors() != null) {
-            List<ColorResponse> colorDtos = product.getColors().stream().map(c -> {
-                ColorResponse cd = new ColorResponse();
-                cd.setColorId(c.getColorId());
-                cd.setName(c.getName());
-                cd.setHexCode(c.getHexCode());
-                return cd;
-            }).collect(Collectors.toList());
-
-            dto.setColors(colorDtos); // Ensure ProductResponse has List<ColorResponse> colors
         }
 
         return dto;
