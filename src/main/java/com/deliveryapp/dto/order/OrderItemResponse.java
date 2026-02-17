@@ -1,5 +1,7 @@
 package com.deliveryapp.dto.order;
 
+import com.deliveryapp.entity.Color;
+
 import lombok.Data;
 
 @Data
@@ -10,5 +12,5 @@ public class OrderItemResponse {
     private Double unitPrice;
     private Double totalPrice;
     private String notes;
-    private String selectedColor;
+    private Color selectedColor;
 }

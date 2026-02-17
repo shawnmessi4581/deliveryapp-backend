@@ -108,9 +108,8 @@ public class OrderService {
                     throw new InvalidDataException("Color not available for this product");
 
                 // Save Snapshot
-                orderItem.setSelectedColorId(color.getColorId());
-                orderItem.setSelectedColorName(color.getName());
-                orderItem.setSelectedColorHex(color.getHexCode());
+                orderItem.setSelectedColor(color);
+
             }
             double price = product.getBasePrice();
             if (itemReq.getVariantId() != null && itemReq.getVariantId() != 0) {

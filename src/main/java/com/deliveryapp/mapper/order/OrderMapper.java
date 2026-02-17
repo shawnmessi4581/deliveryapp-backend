@@ -74,7 +74,7 @@ public class OrderMapper {
                 r.setUnitPrice(item.getUnitPrice());
                 r.setTotalPrice(item.getTotalPrice());
                 r.setNotes(item.getNotes());
-                r.setSelectedColor(item.getSelectedColorName());
+                r.setSelectedColor(item.getSelectedColor());
                 return r;
             }).collect(Collectors.toList()));
         } else {

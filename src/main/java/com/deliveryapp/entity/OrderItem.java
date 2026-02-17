@@ -25,10 +25,10 @@ public class OrderItem {
     @JoinColumn(name = "variant_id")
     private ProductVariant variant;
 
-    private Long selectedColorId; // Optional reference
-    private String selectedColorName;
-    private String selectedColorHex;
-    //
+    @ManyToOne // <--- This annotation was missing!
+    @JoinColumn(name = "selected_color_id") // This creates a Foreign Key in DB
+    private Color selectedColor;
+
     private String productName; // Snapshot of name at time of order
     private String variantDetails;
     private Integer quantity;
