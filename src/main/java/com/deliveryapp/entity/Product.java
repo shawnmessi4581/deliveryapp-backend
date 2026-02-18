@@ -45,4 +45,6 @@ public class Product {
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
     private List<ProductVariant> variants;
+    private Boolean isTrending = false; // Default to false
+
 }

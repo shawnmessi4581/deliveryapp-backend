@@ -92,6 +92,7 @@ public class CatalogMapper {
         dto.setBasePrice(product.getBasePrice());
         dto.setImageUrl(urlUtil.getFullUrl(product.getImage())); // Main Thumbnail
         dto.setAvailable(product.getIsAvailable());
+        dto.setIsTrending(product.getIsTrending() != null ? product.getIsTrending() : false);
 
         // --- MAP GALLERY IMAGES (NEW) ---
         if (product.getImages() != null && !product.getImages().isEmpty()) {

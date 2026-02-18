@@ -11,6 +11,8 @@ public class ProductResponse {
     private Double basePrice;
     private String imageUrl;
     private boolean isAvailable; // Crucial for toggling availability
+    private Boolean isTrending; // <--- Add this
+
     // --- UPDATED: Full Store Details Object ---
     private StoreResponse store;
     // Relationships (IDs and Names for Admin Display)

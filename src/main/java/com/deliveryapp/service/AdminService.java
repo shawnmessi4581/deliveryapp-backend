@@ -369,6 +369,11 @@ public class AdminService {
             }
             product.setImages(imagePaths);
         }
+        if (request.getIsTrending() != null) {
+            product.setIsTrending(request.getIsTrending());
+        } else {
+            product.setIsTrending(false);
+        }
 
         return productRepository.save(product);
     }
@@ -421,6 +426,9 @@ public class AdminService {
                     product.getImages().add(fileStorageService.storeFile(file, "products"));
                 }
             }
+        }
+        if (request.getIsTrending() != null) {
+            product.setIsTrending(request.getIsTrending());
         }
 
         return productRepository.save(product);

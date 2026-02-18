@@ -212,4 +212,14 @@ public class CatalogController {
                 .map(catalogMapper::toProductResponse)
                 .collect(Collectors.toList()));
     }
+
+    // GET Trending Products
+    @GetMapping("/products/trending")
+    public ResponseEntity<List<ProductResponse>> getTrendingProducts() {
+        List<Product> products = catalogService.getTrendingProducts();
+
+        return ResponseEntity.ok(products.stream()
+                .map(catalogMapper::toProductResponse)
+                .collect(Collectors.toList()));
+    }
 }

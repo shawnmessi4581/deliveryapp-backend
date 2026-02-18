@@ -128,4 +128,8 @@ public class CatalogService {
         // Returns the 10 most recently added products
         return productRepository.findTop10ByIsAvailableTrueOrderByProductIdDesc();
     }
+
+    public List<Product> getTrendingProducts() {
+        return productRepository.findByIsTrendingTrueAndIsAvailableTrue();
+    }
 }
