@@ -419,7 +419,7 @@ public class AdminService {
         }
         if (galleryImages != null && !galleryImages.isEmpty()) {
             // Optional: Clear old images if you want full replace
-            // product.getImages().clear();
+            product.getImages().clear();
 
             for (MultipartFile file : galleryImages) {
                 if (!file.isEmpty()) {
