@@ -36,20 +36,22 @@ public class AdminService {
 
     // ==================== USER MANAGEMENT ====================
 
-    // 1. Get All Users (Returns Entities)
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
 
-    // 2. Permanently Delete User
     public void deleteUser(Long userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new ResourceNotFoundException("User not found with id: " + userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        // 🧹 Cleanup: Delete profile image if exists
+        if (user.getProfileImage() != null) {
+            fileStorageService.deleteFile(user.getProfileImage());
         }
+
         userRepository.deleteById(userId);
     }
 
-    // 3. Toggle Active Status
     @Transactional
     public void updateUserStatus(Long userId, Boolean isActive) {
         User user = userRepository.findById(userId)
@@ -59,7 +61,6 @@ public class AdminService {
         userRepository.save(user);
     }
 
-    // 4. Create Driver
     @Transactional
     public User createDriver(CreateDriverRequest request, MultipartFile image) {
         if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
@@ -74,7 +75,6 @@ public class AdminService {
         driver.setUserType(UserType.DRIVER);
         driver.setIsActive(true);
 
-        // Driver Specifics
         driver.setVehicleType(request.getVehicleType());
         driver.setVehicleNumber(request.getVehicleNumber());
         driver.setIsAvailable(true);
@@ -90,12 +90,9 @@ public class AdminService {
         return userRepository.save(driver);
     }
 
-    // 5. Get All Drivers
     public List<User> getAllDrivers() {
         return userRepository.findByUserType(UserType.DRIVER);
     }
-
-    // ... imports ...
 
     @Transactional
     public User createDashboardUser(CreateUserRequest request) {
@@ -109,7 +106,6 @@ public class AdminService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
 
-        // Ensure role is valid (Only allow creating ADMIN or EMPLOYEE here)
         if (request.getRole() == UserType.ADMIN || request.getRole() == UserType.EMPLOYEE) {
             user.setUserType(request.getRole());
         } else {
@@ -121,6 +117,7 @@ public class AdminService {
 
         return userRepository.save(user);
     }
+
     // ==================== CATEGORY CRUD ====================
 
     public List<Category> getAllCategories() {
@@ -128,22 +125,36 @@ public class AdminService {
     }
 
     public Category createCategory(String name, MultipartFile image) {
-        Category category = new Category();
-        category.setName(name);
-        category.setIsActive(true);
-        category.setDisplayOrder(0);
+        System.out.println("Attempting to create category: " + name);
+        try {
+            Category category = new Category();
+            category.setName(name);
+            category.setIsActive(true);
+            category.setDisplayOrder(0);
 
-        if (image != null && !image.isEmpty()) {
-            String imageUrl = fileStorageService.storeFile(image, "categories");
-            category.setIcon(imageUrl);
+            if (image != null && !image.isEmpty()) {
+                System.out.println("Image received. Name: " + image.getOriginalFilename());
+                String imageUrl = fileStorageService.storeFile(image, "categories");
+                System.out.println("Image saved at: " + imageUrl);
+                category.setIcon(imageUrl);
+            }
+            return categoryRepository.save(category);
+        } catch (Exception e) {
+            System.err.println("CRASHED IN CREATE CATEGORY:");
+            e.printStackTrace();
+            throw new RuntimeException("Error creating category: " + e.getMessage());
         }
-
-        return categoryRepository.save(category);
     }
 
     public void deleteCategory(Long id) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+
+        // 🧹 Cleanup: Delete category icon
+        if (category.getIcon() != null) {
+            fileStorageService.deleteFile(category.getIcon());
+        }
+
         categoryRepository.delete(category);
     }
 
@@ -157,8 +168,12 @@ public class AdminService {
         if (isActive != null) {
             category.setIsActive(isActive);
         }
+
         if (image != null && !image.isEmpty()) {
-            // Optional: fileStorageService.deleteFile(category.getIcon());
+            // 🧹 Cleanup: Delete the old file before saving the new one
+            if (category.getIcon() != null) {
+                fileStorageService.deleteFile(category.getIcon());
+            }
             String imageUrl = fileStorageService.storeFile(image, "categories");
             category.setIcon(imageUrl);
         }
@@ -206,6 +221,10 @@ public class AdminService {
             subCategory.setIsActive(isActive);
         }
         if (image != null && !image.isEmpty()) {
+            // 🧹 Cleanup: Delete old subcategory icon
+            if (subCategory.getIcon() != null) {
+                fileStorageService.deleteFile(subCategory.getIcon());
+            }
             String imageUrl = fileStorageService.storeFile(image, "subcategories");
             subCategory.setIcon(imageUrl);
         }
@@ -214,9 +233,14 @@ public class AdminService {
     }
 
     public void deleteSubCategory(Long id) {
-        if (!subCategoryRepository.existsById(id)) {
-            throw new ResourceNotFoundException("SubCategory not found with id: " + id);
+        SubCategory subCategory = subCategoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("SubCategory not found with id: " + id));
+
+        // 🧹 Cleanup: Delete icon
+        if (subCategory.getIcon() != null) {
+            fileStorageService.deleteFile(subCategory.getIcon());
         }
+
         subCategoryRepository.deleteById(id);
     }
 
@@ -258,7 +282,6 @@ public class AdminService {
         if (cover != null && !cover.isEmpty()) {
             store.setCoverImage(fileStorageService.storeFile(cover, "stores"));
         }
-        // inside createStore:
         store.setOpeningTime(request.getOpeningTime());
         store.setClosingTime(request.getClosingTime());
 
@@ -304,12 +327,18 @@ public class AdminService {
         }
 
         if (logo != null && !logo.isEmpty()) {
+            // 🧹 Cleanup: Delete old logo
+            if (store.getLogo() != null)
+                fileStorageService.deleteFile(store.getLogo());
             store.setLogo(fileStorageService.storeFile(logo, "stores"));
         }
         if (cover != null && !cover.isEmpty()) {
+            // 🧹 Cleanup: Delete old cover
+            if (store.getCoverImage() != null)
+                fileStorageService.deleteFile(store.getCoverImage());
             store.setCoverImage(fileStorageService.storeFile(cover, "stores"));
         }
-        // inside updateStore:
+
         if (request.getOpeningTime() != null)
             store.setOpeningTime(request.getOpeningTime());
         if (request.getClosingTime() != null)
@@ -321,6 +350,15 @@ public class AdminService {
     }
 
     public void deleteStore(Long id) {
+        Store store = storeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
+
+        // 🧹 Cleanup: Delete store images
+        if (store.getLogo() != null)
+            fileStorageService.deleteFile(store.getLogo());
+        if (store.getCoverImage() != null)
+            fileStorageService.deleteFile(store.getCoverImage());
+
         storeRepository.deleteById(id);
     }
 
@@ -351,7 +389,6 @@ public class AdminService {
             product.setSubCategory(sub);
         }
 
-        // 2. Main Image
         if (mainImage != null && !mainImage.isEmpty()) {
             product.setImage(fileStorageService.storeFile(mainImage, "products"));
         }
@@ -359,7 +396,7 @@ public class AdminService {
             List<Color> selectedColors = colorRepository.findAllById(request.getColorIds());
             product.setColors(selectedColors);
         }
-        // 3. Gallery Images (Loop and Save)
+
         if (galleryImages != null && !galleryImages.isEmpty()) {
             List<String> imagePaths = new ArrayList<>();
             for (MultipartFile file : galleryImages) {
@@ -410,6 +447,10 @@ public class AdminService {
         }
 
         if (mainImage != null && !mainImage.isEmpty()) {
+            // 🧹 Cleanup: Delete old main image
+            if (product.getImage() != null) {
+                fileStorageService.deleteFile(product.getImage());
+            }
             product.setImage(fileStorageService.storeFile(mainImage, "products"));
         }
 
@@ -417,16 +458,25 @@ public class AdminService {
             List<Color> selectedColors = colorRepository.findAllById(request.getColorIds());
             product.setColors(selectedColors);
         }
-        if (galleryImages != null && !galleryImages.isEmpty()) {
-            // Optional: Clear old images if you want full replace
-            product.getImages().clear();
 
+        if (galleryImages != null && !galleryImages.isEmpty()) {
+            // 🧹 Cleanup: Delete ALL old gallery images from the server disk before
+            // replacing the list
+            if (product.getImages() != null && !product.getImages().isEmpty()) {
+                for (String oldImagePath : product.getImages()) {
+                    fileStorageService.deleteFile(oldImagePath);
+                }
+                product.getImages().clear(); // Clear DB list
+            }
+
+            // Save new images
             for (MultipartFile file : galleryImages) {
                 if (!file.isEmpty()) {
                     product.getImages().add(fileStorageService.storeFile(file, "products"));
                 }
             }
         }
+
         if (request.getIsTrending() != null) {
             product.setIsTrending(request.getIsTrending());
         }
@@ -435,6 +485,21 @@ public class AdminService {
     }
 
     public void deleteProduct(Long id) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+
+        // 🧹 Cleanup: Delete main image
+        if (product.getImage() != null) {
+            fileStorageService.deleteFile(product.getImage());
+        }
+
+        // 🧹 Cleanup: Delete all gallery images
+        if (product.getImages() != null && !product.getImages().isEmpty()) {
+            for (String imagePath : product.getImages()) {
+                fileStorageService.deleteFile(imagePath);
+            }
+        }
+
         productRepository.deleteById(id);
     }
 
