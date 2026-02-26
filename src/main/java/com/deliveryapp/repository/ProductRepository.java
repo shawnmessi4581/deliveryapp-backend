@@ -1,67 +1,72 @@
 package com.deliveryapp.repository;
 
 import com.deliveryapp.entity.Product;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
-    // Fetch all active products in random order (PostgreSQL specific)
-    @Query(value = "SELECT * FROM products WHERE is_available = true ORDER BY RANDOM()", nativeQuery = true)
-    List<Product> findAllActiveProductsRandomly();
+
+    // Note: True random sorting is generally not compatible with standard
+    // pagination,
+    // because page 2 might show items from page 1 as the random order reshuffles.
+    // If you need random products, it's often better to just return a standard Page
+    // or use a custom native query that doesn't use Pageable.
+    // For now, replacing the random query with a standard paged query for active
+    // products:
+    @Query("SELECT p FROM Product p WHERE p.isAvailable = true")
+    Page<Product> findAllActiveProducts(Pageable pageable);
 
     // 1. Existing: Get menu for a specific store
-    List<Product> findByStoreStoreIdAndIsAvailableTrue(Long storeId);
+    Page<Product> findByStoreStoreIdAndIsAvailableTrue(Long storeId, Pageable pageable);
 
     // 1. Search Global (Category ID = 0)
-    List<Product> findByNameContainingIgnoreCaseAndIsAvailableTrue(String keyword);
+    Page<Product> findByNameContainingIgnoreCaseAndIsAvailableTrue(String keyword, Pageable pageable);
 
     // 2. Search Specific Category
-    List<Product> findByCategoryCategoryIdAndNameContainingIgnoreCaseAndIsAvailableTrue(Long categoryId,
-            String keyword);
-    // // 2. Existing: Search products
-    // List<Product> findByNameContainingIgnoreCase(String keyword);
+    Page<Product> findByCategoryCategoryIdAndNameContainingIgnoreCaseAndIsAvailableTrue(Long categoryId, String keyword,
+            Pageable pageable);
 
-    // List<Product> findByNameContainingIgnoreCaseAndCategoryCategoryId(String
-    // keyword, long categoryId);
-
-    List<Product> findByNameContainingIgnoreCaseAndStoreStoreId(String keyword, long storeId);
-
+    // Search in Store
+    // 6. Search inside specific Store (THIS FIXES YOUR ERROR)
+    Page<Product> findByStoreStoreIdAndNameContainingIgnoreCaseAndIsAvailableTrue(Long storeId, String keyword,
+            Pageable pageable);
     // --- NEW METHODS ADDED BELOW ---
 
     // 3. Find by Category
-    List<Product> findByCategoryCategoryId(Long categoryId);
+    Page<Product> findByCategoryCategoryId(Long categoryId, Pageable pageable);
 
     // Variation: Find by Category only if available
-    List<Product> findByCategoryCategoryIdAndIsAvailableTrue(Long categoryId);
+    Page<Product> findByCategoryCategoryIdAndIsAvailableTrue(Long categoryId, Pageable pageable);
 
     // 4. Find by SubCategory
-    // Note: The Entity field is named 'subCategory', so we use 'SubCategory' here
-    List<Product> findBySubCategorySubcategoryId(Long subcategoryId);
+    Page<Product> findBySubCategorySubcategoryId(Long subcategoryId, Pageable pageable);
 
     // Variation: Find by SubCategory only if available
-    List<Product> findBySubCategorySubcategoryIdAndIsAvailableTrue(Long subcategoryId);
+    Page<Product> findBySubCategorySubcategoryIdAndIsAvailableTrue(Long subcategoryId, Pageable pageable);
 
     // 5. Find by Store AND Category (Useful for filtering a specific restaurant's
     // menu)
-    List<Product> findByStoreStoreIdAndCategoryCategoryId(Long storeId, Long categoryId);
+    Page<Product> findByStoreStoreIdAndCategoryCategoryId(Long storeId, Long categoryId, Pageable pageable);
 
     // Get products belonging to a specific Store AND specific Category
-    List<Product> findByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(Long storeId, Long categoryId);
+    Page<Product> findByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(Long storeId, Long categoryId,
+            Pageable pageable);
 
     // Get products belonging to a specific Store AND specific SubCategory
-    List<Product> findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(Long storeId, Long subCategoryId);
+    Page<Product> findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(Long storeId, Long subCategoryId,
+            Pageable pageable);
 
-    //
-    List<Product> findByBasePriceLessThanEqualAndIsAvailableTrue(Double price);
+    // Under Price
+    Page<Product> findByBasePriceLessThanEqualAndIsAvailableTrue(Double price, Pageable pageable);
 
-    //
-    List<Product> findTop10ByIsAvailableTrueOrderByProductIdDesc();
+    // Newest Products (Order by Product ID Descending)
+    // Note: Instead of Top10, we use Pageable to control the limit dynamically
+    Page<Product> findByIsAvailableTrueOrderByProductIdDesc(Pageable pageable);
 
-    //
-    List<Product> findByIsTrendingTrueAndIsAvailableTrue();
-
+    // Trending
+    Page<Product> findByIsTrendingTrueAndIsAvailableTrue(Pageable pageable);
 }

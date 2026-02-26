@@ -1,11 +1,16 @@
 package com.deliveryapp.controller;
 
+import com.deliveryapp.dto.PagedResponse;
 import com.deliveryapp.dto.catalog.*;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.mapper.catalog.CatalogMapper; // Import the Mapper
 import com.deliveryapp.service.CatalogService;
 import com.deliveryapp.util.DistanceUtil;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -111,115 +116,140 @@ public class CatalogController {
 
     // GET All Products (Random Order)
     @GetMapping("/products/all")
-    public ResponseEntity<List<ProductResponse>> getAllProductsRandom() {
-        List<Product> products = catalogService.getAllProductsRandomly();
-        return ResponseEntity.ok(products.stream()
-                .map(catalogMapper::toProductResponse) // Use Mapper
-                .collect(Collectors.toList()));
+    public ResponseEntity<PagedResponse<ProductResponse>> getAllProductsRandom(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = catalogService.getAllProductsRandomly(pageable);
+        return ResponseEntity.ok(createPagedResponse(productPage));
     }
 
     @GetMapping("/products/{productId}")
     public ResponseEntity<ProductResponse> getProductById(@PathVariable Long productId) {
         Product product = catalogService.getProductById(productId);
-        return ResponseEntity.ok(catalogMapper.toProductResponse(product)); // Use Mapper
+        return ResponseEntity.ok(catalogMapper.toProductResponse(product));
     }
 
     @GetMapping("/products/store/{storeId}")
-    public ResponseEntity<List<ProductResponse>> getProductsByStore(@PathVariable Long storeId) {
-        List<Product> products = catalogService.getProductsByStore(storeId);
-        return ResponseEntity.ok(products.stream()
-                .map(catalogMapper::toProductResponse) // Use Mapper
-                .collect(Collectors.toList()));
+    public ResponseEntity<PagedResponse<ProductResponse>> getProductsByStore(
+            @PathVariable Long storeId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = catalogService.getProductsByStore(storeId, pageable);
+        return ResponseEntity.ok(createPagedResponse(productPage));
     }
 
     // GET Products by Category (All stores)
     @GetMapping("/products/category/{categoryId}")
-    public ResponseEntity<List<ProductResponse>> getProductsByCategory(@PathVariable Long categoryId) {
-        List<Product> products = catalogService.getProductsByCategory(categoryId);
-        return ResponseEntity.ok(products.stream()
-                .map(catalogMapper::toProductResponse) // Use Mapper
-                .collect(Collectors.toList()));
+    public ResponseEntity<PagedResponse<ProductResponse>> getProductsByCategory(
+            @PathVariable Long categoryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = catalogService.getProductsByCategory(categoryId, pageable);
+        return ResponseEntity.ok(createPagedResponse(productPage));
     }
 
     // GET Products by SubCategory (All stores)
     @GetMapping("/products/subcategory/{subCategoryId}")
-    public ResponseEntity<List<ProductResponse>> getProductsBySubCategory(@PathVariable Long subCategoryId) {
-        List<Product> products = catalogService.getProductsBySubCategory(subCategoryId);
-        return ResponseEntity.ok(products.stream()
-                .map(catalogMapper::toProductResponse) // Use Mapper
-                .collect(Collectors.toList()));
+    public ResponseEntity<PagedResponse<ProductResponse>> getProductsBySubCategory(
+            @PathVariable Long subCategoryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = catalogService.getProductsBySubCategory(subCategoryId, pageable);
+        return ResponseEntity.ok(createPagedResponse(productPage));
     }
 
     // GET /api/catalog/products/search?q=burger&categoryId=0
     @GetMapping("/products/search")
-    public ResponseEntity<List<ProductResponse>> searchProducts(
+    public ResponseEntity<PagedResponse<ProductResponse>> searchProducts(
             @RequestParam("q") String keyword,
-            @RequestParam(value = "categoryId", defaultValue = "0") Long categoryId) {
-
-        List<Product> products = catalogService.searchProducts(keyword, categoryId);
-
-        return ResponseEntity.ok(products.stream()
-                .map(catalogMapper::toProductResponse)
-                .collect(Collectors.toList()));
+            @RequestParam(value = "categoryId", defaultValue = "0") Long categoryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = catalogService.searchProducts(keyword, categoryId, pageable);
+        return ResponseEntity.ok(createPagedResponse(productPage));
     }
 
     @GetMapping("/products/store/search")
-    public ResponseEntity<List<ProductResponse>> searchProductsInStore(
+    public ResponseEntity<PagedResponse<ProductResponse>> searchProductsInStore(
             @RequestParam("q") String keyword,
-            @RequestParam("storeId") long storeId) {
-        List<Product> products = catalogService.searchProductsInStore(keyword, storeId);
-        return ResponseEntity.ok(products.stream()
-                .map(catalogMapper::toProductResponse) // Use Mapper
-                .collect(Collectors.toList()));
+            @RequestParam("storeId") long storeId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = catalogService.searchProductsInStore(keyword, storeId, pageable);
+        return ResponseEntity.ok(createPagedResponse(productPage));
     }
 
     @GetMapping("/products/store/{storeId}/category/{categoryId}")
-    public ResponseEntity<List<ProductResponse>> getProductsByStoreAndCategory(
+    public ResponseEntity<PagedResponse<ProductResponse>> getProductsByStoreAndCategory(
             @PathVariable Long storeId,
-            @PathVariable Long categoryId) {
-        List<Product> products = catalogService.getProductsByStoreAndCategory(storeId, categoryId);
-        return ResponseEntity.ok(products.stream()
-                .map(catalogMapper::toProductResponse) // Use Mapper
-                .collect(Collectors.toList()));
+            @PathVariable Long categoryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = catalogService.getProductsByStoreAndCategory(storeId, categoryId, pageable);
+        return ResponseEntity.ok(createPagedResponse(productPage));
     }
 
     @GetMapping("/products/store/{storeId}/subcategory/{subCategoryId}")
-    public ResponseEntity<List<ProductResponse>> getProductsByStoreAndSubCategory(
+    public ResponseEntity<PagedResponse<ProductResponse>> getProductsByStoreAndSubCategory(
             @PathVariable Long storeId,
-            @PathVariable Long subCategoryId) {
-        List<Product> products = catalogService.getProductsByStoreAndSubCategory(storeId, subCategoryId);
-        return ResponseEntity.ok(products.stream()
-                .map(catalogMapper::toProductResponse) // Use Mapper
-                .collect(Collectors.toList()));
+            @PathVariable Long subCategoryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = catalogService.getProductsByStoreAndSubCategory(storeId, subCategoryId, pageable);
+        return ResponseEntity.ok(createPagedResponse(productPage));
     }
 
     // Usage: /api/catalog/products/price?max=50
     @GetMapping("/products/price")
-    public ResponseEntity<List<ProductResponse>> getProductsByPrice(@RequestParam Double max) {
-        List<Product> products = catalogService.getProductsUnderPrice(max);
-
-        return ResponseEntity.ok(products.stream()
-                .map(catalogMapper::toProductResponse)
-                .collect(Collectors.toList()));
+    public ResponseEntity<PagedResponse<ProductResponse>> getProductsByPrice(
+            @RequestParam Double max,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = catalogService.getProductsUnderPrice(max, pageable);
+        return ResponseEntity.ok(createPagedResponse(productPage));
     }
 
     // NEW ROUTE: /api/catalog/products/new
     @GetMapping("/products/new")
-    public ResponseEntity<List<ProductResponse>> getNewestProducts() {
-        List<Product> products = catalogService.getNewestProducts();
-
-        return ResponseEntity.ok(products.stream()
-                .map(catalogMapper::toProductResponse)
-                .collect(Collectors.toList()));
+    public ResponseEntity<PagedResponse<ProductResponse>> getNewestProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = catalogService.getNewestProducts(pageable);
+        return ResponseEntity.ok(createPagedResponse(productPage));
     }
 
     // GET Trending Products
     @GetMapping("/products/trending")
-    public ResponseEntity<List<ProductResponse>> getTrendingProducts() {
-        List<Product> products = catalogService.getTrendingProducts();
+    public ResponseEntity<PagedResponse<ProductResponse>> getTrendingProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Product> productPage = catalogService.getTrendingProducts(pageable);
+        return ResponseEntity.ok(createPagedResponse(productPage));
+    }
 
-        return ResponseEntity.ok(products.stream()
+    // --- HELPER METHOD TO CREATE PAGED RESPONSE ---
+    private PagedResponse<ProductResponse> createPagedResponse(Page<Product> productPage) {
+        List<ProductResponse> content = productPage.getContent().stream()
                 .map(catalogMapper::toProductResponse)
-                .collect(Collectors.toList()));
+                .collect(Collectors.toList());
+
+        return new PagedResponse<>(
+                content,
+                productPage.getNumber(),
+                productPage.getSize(),
+                productPage.getTotalElements(),
+                productPage.getTotalPages(),
+                productPage.isLast());
     }
 }

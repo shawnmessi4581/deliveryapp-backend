@@ -10,6 +10,9 @@ import com.deliveryapp.repository.ProductRepository;
 import com.deliveryapp.repository.StoreRepository;
 import com.deliveryapp.repository.SubCategoryRepository;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -67,8 +70,10 @@ public class CatalogService {
 
     // ================= PRODUCTS =================
 
-    public List<Product> getAllProductsRandomly() {
-        return productRepository.findAllActiveProductsRandomly();
+    public Page<Product> getAllProductsRandomly(Pageable pageable) {
+        // Warning: True randomness breaks pagination. We return standard active
+        // products here.
+        return productRepository.findAllActiveProducts(pageable);
     }
 
     public Product getProductById(Long id) {
@@ -76,60 +81,68 @@ public class CatalogService {
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + id));
     }
 
-    public List<Product> getProductsByStore(Long storeId) {
+    public Page<Product> getProductsByStore(Long storeId, Pageable pageable) {
         if (!storeRepository.existsById(storeId)) {
             throw new ResourceNotFoundException("Store not found with id: " + storeId);
         }
-        return productRepository.findByStoreStoreIdAndIsAvailableTrue(storeId);
+        return productRepository.findByStoreStoreIdAndIsAvailableTrue(storeId, pageable);
     }
 
-    public List<Product> getProductsByCategory(Long categoryId) {
-        return productRepository.findByCategoryCategoryIdAndIsAvailableTrue(categoryId);
+    public Page<Product> getProductsByCategory(Long categoryId, Pageable pageable) {
+        if (!categoryRepository.existsById(categoryId)) {
+            throw new ResourceNotFoundException("category not found with id: " + categoryId);
+        }
+        return productRepository.findByCategoryCategoryIdAndIsAvailableTrue(categoryId, pageable);
     }
 
-    public List<Product> getProductsBySubCategory(Long subCategoryId) {
-        return productRepository.findBySubCategorySubcategoryIdAndIsAvailableTrue(subCategoryId);
+    public Page<Product> getProductsBySubCategory(Long subCategoryId, Pageable pageable) {
+        if (!subCategoryRepository.existsById(subCategoryId)) {
+            throw new ResourceNotFoundException("subCategory not found with id: " + subCategoryId);
+        }
+        return productRepository.findBySubCategorySubcategoryIdAndIsAvailableTrue(subCategoryId, pageable);
     }
 
-    public List<Product> searchProducts(String keyword, Long categoryId) {
+    public Page<Product> searchProducts(String keyword, Long categoryId, Pageable pageable) {
         if (keyword == null)
-            keyword = ""; // Safety check
-
-        // Logic: 0 (or null) means "All Categories"
+            keyword = "";
         if (categoryId == null || categoryId == 0) {
-            return productRepository.findByNameContainingIgnoreCaseAndIsAvailableTrue(keyword);
+            return productRepository.findByNameContainingIgnoreCaseAndIsAvailableTrue(keyword, pageable);
         } else {
             return productRepository.findByCategoryCategoryIdAndNameContainingIgnoreCaseAndIsAvailableTrue(categoryId,
-                    keyword);
+                    keyword, pageable);
         }
     }
 
-    public List<Product> searchProductsInStore(String keyword, long storeId) {
-        return productRepository.findByNameContainingIgnoreCaseAndStoreStoreId(keyword, storeId);
+    public Page<Product> searchProductsInStore(String keyword, Long storeId, Pageable pageable) {
+        if (!storeRepository.existsById(storeId)) {
+            throw new ResourceNotFoundException("Store not found with id: " + storeId);
+        }
+        if (keyword == null)
+            keyword = "";
+        return productRepository.findByStoreStoreIdAndNameContainingIgnoreCaseAndIsAvailableTrue(storeId, keyword,
+                pageable);
     }
 
-    // NEW: Filter by Store + Category
-    public List<Product> getProductsByStoreAndCategory(Long storeId, Long categoryId) {
-        return productRepository.findByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(storeId, categoryId);
+    public Page<Product> getProductsByStoreAndCategory(Long storeId, Long categoryId, Pageable pageable) {
+        return productRepository.findByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(storeId, categoryId,
+                pageable);
     }
 
-    // NEW: Filter by Store + SubCategory
-    public List<Product> getProductsByStoreAndSubCategory(Long storeId, Long subCategoryId) {
-        return productRepository.findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(storeId,
-                subCategoryId);
+    public Page<Product> getProductsByStoreAndSubCategory(Long storeId, Long subCategoryId, Pageable pageable) {
+        return productRepository.findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(storeId, subCategoryId,
+                pageable);
     }
 
     //
-    public List<Product> getProductsUnderPrice(Double price) {
-        return productRepository.findByBasePriceLessThanEqualAndIsAvailableTrue(price);
+    public Page<Product> getProductsUnderPrice(Double price, Pageable pageable) {
+        return productRepository.findByBasePriceLessThanEqualAndIsAvailableTrue(price, pageable);
     }
 
-    public List<Product> getNewestProducts() {
-        // Returns the 10 most recently added products
-        return productRepository.findTop10ByIsAvailableTrueOrderByProductIdDesc();
+    public Page<Product> getNewestProducts(Pageable pageable) {
+        return productRepository.findByIsAvailableTrueOrderByProductIdDesc(pageable);
     }
 
-    public List<Product> getTrendingProducts() {
-        return productRepository.findByIsTrendingTrueAndIsAvailableTrue();
+    public Page<Product> getTrendingProducts(Pageable pageable) {
+        return productRepository.findByIsTrendingTrueAndIsAvailableTrue(pageable);
     }
 }
