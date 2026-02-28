@@ -9,7 +9,6 @@ import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -33,7 +32,6 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Arrays;
@@ -48,48 +46,48 @@ public class SecurityConfig {
     private final RSAPrivateKey privateKey;
 
     public SecurityConfig(KeyUtils keyUtils) {
-        // Use the utility to load or generate persistent keys
         KeyPair keyPair = keyUtils.getRsaKeyPair();
         this.publicKey = (RSAPublicKey) keyPair.getPublic();
         this.privateKey = (RSAPrivateKey) keyPair.getPrivate();
     }
 
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // 👇 THIS LINE WAS MISSING. IT IS CRITICAL.
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        // Actuator
+                        .requestMatchers("/actuator/**").permitAll()
+                        // Swagger / OpenAPI
+                        .requestMatchers(
+                                "/v3/api-docs",
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/swagger-resources/**",
+                                "/webjars/**")
+                        .permitAll()
+                        // Auth endpoints
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/uploads/**").permitAll() // Allow access to images
-                        .anyRequest().authenticated()
-                )
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        // Static uploads
+                        .requestMatchers("/uploads/**").permitAll()
+                        // Everything else requires auth
+                        .anyRequest().authenticated())
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                );
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
 
         return http.build();
     }
 
-    // 2. DEFINE THE CORS SOURCE BEAN
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
-        // Allow your Frontend URL
         configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:3000"));
-
-        // Allow all HTTP methods
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-
-        // Allow all headers
         configuration.setAllowedHeaders(List.of("*"));
-
-        // Allow credentials (cookies/auth headers)
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -97,16 +95,13 @@ public class SecurityConfig {
         return source;
     }
 
-
     @Bean
     public AuthenticationManager authenticationManager(
             UserDetailsService userDetailsService,
             PasswordEncoder passwordEncoder) {
-
-        DaoAuthenticationProvider authenticationProvider =
-                new DaoAuthenticationProvider(userDetailsService);
+        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
+        authenticationProvider.setUserDetailsService(userDetailsService); // 👈 set manually
         authenticationProvider.setPasswordEncoder(passwordEncoder);
-
         return new ProviderManager(authenticationProvider);
     }
 
@@ -115,7 +110,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // --- JWT Beans ---
     @Bean
     public JwtDecoder jwtDecoder() {
         return NimbusJwtDecoder.withPublicKey(this.publicKey).build();
@@ -131,11 +125,7 @@ public class SecurityConfig {
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
-
-        // FIXED: Set prefix to empty "" because our DB already has "ROLE_"
         grantedAuthoritiesConverter.setAuthorityPrefix("");
-
-        // This tells Spring to look for the "scope" claim in the JWT
         grantedAuthoritiesConverter.setAuthoritiesClaimName("scope");
 
         JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
