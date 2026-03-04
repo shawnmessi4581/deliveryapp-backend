@@ -11,6 +11,7 @@ public class BannerRequest {
     private String linkType;
     private Long linkId;
     private Integer displayOrder;
+    private String externalUrl; // NEW
 
     // Fix: Add this annotation to handle the String -> LocalDateTime conversion
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)

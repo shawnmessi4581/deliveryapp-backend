@@ -36,6 +36,7 @@ public class BannerService {
         banner.setTitle(request.getTitle());
         banner.setLinkType(request.getLinkType());
         banner.setLinkId(request.getLinkId());
+        banner.setExternalUrl(request.getExternalUrl()); // <-- ADD THIS
         banner.setDisplayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : 0);
         banner.setStartDate(request.getStartDate());
         banner.setEndDate(request.getEndDate());
@@ -56,13 +57,22 @@ public class BannerService {
         Banner banner = bannerRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Banner not found with id: " + id));
 
-        if (request.getTitle() != null) banner.setTitle(request.getTitle());
-        if (request.getLinkType() != null) banner.setLinkType(request.getLinkType());
-        if (request.getLinkId() != null) banner.setLinkId(request.getLinkId());
-        if (request.getDisplayOrder() != null) banner.setDisplayOrder(request.getDisplayOrder());
-        if (request.getStartDate() != null) banner.setStartDate(request.getStartDate());
-        if (request.getEndDate() != null) banner.setEndDate(request.getEndDate());
-        if (request.getIsActive() != null) banner.setIsActive(request.getIsActive());
+        if (request.getTitle() != null)
+            banner.setTitle(request.getTitle());
+        if (request.getLinkType() != null)
+            banner.setLinkType(request.getLinkType());
+        if (request.getLinkId() != null)
+            banner.setLinkId(request.getLinkId());
+        if (request.getExternalUrl() != null)
+            banner.setExternalUrl(request.getExternalUrl()); // <-- ADD THIS
+        if (request.getDisplayOrder() != null)
+            banner.setDisplayOrder(request.getDisplayOrder());
+        if (request.getStartDate() != null)
+            banner.setStartDate(request.getStartDate());
+        if (request.getEndDate() != null)
+            banner.setEndDate(request.getEndDate());
+        if (request.getIsActive() != null)
+            banner.setIsActive(request.getIsActive());
 
         if (image != null && !image.isEmpty()) {
             // Optional: delete old image

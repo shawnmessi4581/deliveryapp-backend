@@ -19,6 +19,7 @@ public class Banner {
     private String linkType; // e.g., "store", "product"
     private Long linkId;
     private Integer displayOrder;
+    private String externalUrl;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
     private Boolean isActive;
