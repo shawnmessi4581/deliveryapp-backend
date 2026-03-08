@@ -3,6 +3,7 @@ package com.deliveryapp.service;
 import com.deliveryapp.dto.user.AddressRequest;
 import com.deliveryapp.entity.User;
 import com.deliveryapp.entity.UserAddress;
+import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.UserAddressRepository;
 import com.deliveryapp.repository.UserRepository;
@@ -34,12 +35,56 @@ public class AddressService {
         address.setAddressLine(request.getAddressLine());
         address.setLatitude(request.getLatitude());
         address.setLongitude(request.getLongitude());
+        if (Boolean.TRUE.equals(request.getIsDefault())) {
+            addressRepository.unsetDefaultAddressesForUser(user.getUserId());
+        }
         address.setIsDefault(request.getIsDefault() != null && request.getIsDefault());
 
         return addressRepository.save(address);
     }
 
+    @Transactional
     public void deleteAddress(Long addressId) {
-        addressRepository.deleteById(addressId);
+        // 1. Find the address
+        UserAddress addressToDelete = addressRepository.findById(addressId)
+                .orElseThrow(() -> new ResourceNotFoundException("Address not found with id: " + addressId));
+
+        Long userId = addressToDelete.getUser().getUserId();
+        boolean wasDefault = Boolean.TRUE.equals(addressToDelete.getIsDefault());
+
+        // 2. Delete the address
+        addressRepository.delete(addressToDelete);
+        addressRepository.flush(); // Ensure it's removed from DB context before querying again
+
+        // 3. Auto-assign a new default if necessary
+        if (wasDefault) {
+            // Fetch remaining addresses for this user
+            List<UserAddress> remainingAddresses = addressRepository.findByUserUserId(userId);
+
+            // If there are other addresses, make the first one the new default
+            if (!remainingAddresses.isEmpty()) {
+                UserAddress newDefault = remainingAddresses.get(0);
+                newDefault.setIsDefault(true);
+                addressRepository.save(newDefault);
+            }
+        }
+    }
+
+    @Transactional
+    public void setDefaultAddress(Long userId, Long addressId) {
+        // 1. Verify the address exists and belongs to the user
+        UserAddress selectedAddress = addressRepository.findById(addressId)
+                .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
+
+        if (!selectedAddress.getUser().getUserId().equals(userId)) {
+            throw new InvalidDataException("This address does not belong to the specified user.");
+        }
+
+        // 2. Set ALL addresses for this user to isDefault = false
+        addressRepository.unsetDefaultAddressesForUser(userId);
+
+        // 3. Set the chosen address to isDefault = true
+        selectedAddress.setIsDefault(true);
+        addressRepository.save(selectedAddress);
     }
 }
