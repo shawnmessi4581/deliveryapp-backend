@@ -82,4 +82,37 @@ public class FileStorageService {
             System.err.println("Could not delete file: " + fileUrl);
         }
     }
+    /**
+     * Stores the APK file as "Allin.apk" so the download link never changes.
+     */
+    public String storeApkFile(MultipartFile file) {
+        try {
+            if (file.isEmpty()) {
+                throw new com.deliveryapp.exception.InvalidDataException("Cannot upload empty APK file");
+            }
+
+            // Ensure it's an APK
+            String originalFilename = file.getOriginalFilename();
+            if (originalFilename == null || !originalFilename.endsWith(".apk")) {
+                throw new com.deliveryapp.exception.InvalidDataException("Only .apk files are allowed");
+            }
+
+            // Target folder: /uploads/app/
+            java.nio.file.Path uploadPath = java.nio.file.Paths.get(rootDir, "app").toAbsolutePath().normalize();
+            if (!java.nio.file.Files.exists(uploadPath)) {
+                java.nio.file.Files.createDirectories(uploadPath);
+            }
+
+            // Target file: /uploads/app/Allin.apk
+            java.nio.file.Path targetLocation = uploadPath.resolve("Allin.apk");
+            
+            // StandardCopyOption.REPLACE_EXISTING ensures the old app is overwritten
+            java.nio.file.Files.copy(file.getInputStream(), targetLocation, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
+            return "/uploads/app/Allin.apk";
+
+        } catch (java.io.IOException ex) {
+            throw new com.deliveryapp.exception.InvalidDataException("Could not store APK file. " + ex.getMessage());
+        }
+    }
 }

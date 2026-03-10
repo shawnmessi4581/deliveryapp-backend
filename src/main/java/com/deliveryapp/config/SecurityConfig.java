@@ -72,6 +72,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         // Static uploads
                         .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/api/app/download", "/api/app/link").permitAll()
                         // Everything else requires auth
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session
