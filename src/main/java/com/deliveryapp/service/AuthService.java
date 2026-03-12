@@ -10,19 +10,22 @@ import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.DuplicateResourceException;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
-import com.deliveryapp.mapper.user.UserMapper; // 1. Import Mapper
+import com.deliveryapp.mapper.user.UserMapper;
 import com.deliveryapp.repository.OtpVerificationRepository;
 import com.deliveryapp.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -32,7 +35,13 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final TokenService tokenService;
     private final OtpVerificationRepository otpVerificationRepository;
-    private final UserMapper userMapper; // 2. Inject Mapper
+    private final UserMapper userMapper;
+    private final SmsService smsService;
+
+    // SecureRandom is thread-safe — safe to reuse as a field
+    private final SecureRandom secureRandom = new SecureRandom();
+
+    // ─── Registration & Login ──────────────────────────────────────────────────
 
     public AuthResponse register(SignupRequest request) {
         if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
@@ -44,37 +53,27 @@ public class AuthService {
         user.setPhoneNumber(request.getPhoneNumber());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setUserType(UserType.CUSTOMER); // Default role
+        user.setUserType(UserType.CUSTOMER);
         user.setIsActive(true);
         user.setCreatedAt(LocalDateTime.now());
-
         userRepository.save(user);
 
-        // Auto-login after registration
         return login(new LoginRequest(request.getPhoneNumber(), request.getPassword()));
     }
 
     public AuthResponse login(LoginRequest request) {
-        // 1. Authenticate
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getPhoneNumber(),
                         request.getPassword()));
 
-        // 2. Fetch User Entity
         User user = userRepository.findByPhoneNumber(request.getPhoneNumber()).orElseThrow();
-
-        // 3. Update Last Login
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
-        // 4. Generate Token
         String token = tokenService.generateToken(authentication, user.getUserId());
-
-        // 5. Map Entity to UserResponse DTO using the shared Mapper
         UserResponse userResponse = userMapper.toUserResponse(user);
 
-        // 6. Return combined response
         return new AuthResponse(token, userResponse);
     }
 
@@ -82,67 +81,108 @@ public class AuthService {
     public void logout(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        // Clear FCM Token to stop notifications for this device
         user.setFcmToken(null);
         userRepository.save(user);
     }
 
+    // ─── Password Reset ────────────────────────────────────────────────────────
+
+    /**
+     * Step 1: Generate a 6-digit OTP and send it via SMS.
+     *
+     * Security: returns the SAME message whether the phone exists or not,
+     * so attackers cannot enumerate valid phone numbers.
+     */
     @Transactional
     public String initiatePasswordReset(String phoneNumber) {
-        User user = userRepository.findByPhoneNumber(phoneNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with this phone number"));
+        userRepository.findByPhoneNumber(phoneNumber).ifPresent(user -> {
+            String otpCode = generateOtp();
 
-        String otpCode = String.valueOf((int) (Math.random() * 9000) + 1000);
+            // Clear any existing OTPs for this number before saving the new one
+            otpVerificationRepository.deleteByPhoneNumber(phoneNumber);
 
-        // Clear existing OTPs for this number to prevent clutter
-        otpVerificationRepository.deleteByPhoneNumber(phoneNumber);
+            OtpVerification otp = new OtpVerification();
+            otp.setPhoneNumber(phoneNumber);
+            otp.setOtpCode(otpCode);
+            otp.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+            otp.setIsVerified(false);
+            otp.setUser(user);
+            otpVerificationRepository.save(otp);
 
-        // Save new OTP
-        OtpVerification otp = new OtpVerification();
-        otp.setPhoneNumber(phoneNumber);
-        otp.setOtpCode(otpCode);
-        otp.setExpiresAt(LocalDateTime.now().plusMinutes(10)); // Valid for 10 mins
-        otp.setUser(user);
-        otpVerificationRepository.save(otp);
+            // Async — BMS latency won't block this HTTP response
+            String smsBody = "Your verification code is: " + otpCode
+                    + ". Valid for 10 minutes. Do not share it with anyone.";
+            smsService.sendSms(phoneNumber, smsBody);
 
-        // MOCK SMS SENDING
-        System.out.println("========================================");
-        System.out.println("🔐 OTP FOR PASSWORD RESET (" + phoneNumber + "): " + otpCode);
-        System.out.println("========================================");
-        // In real life: smsService.send(phoneNumber, "Your code is " + otpCode);
+            log.info("OTP initiated for [...{}]",
+                    phoneNumber.substring(Math.max(0, phoneNumber.length() - 4)));
+        });
 
-        return "OTP sent successfully";
+        // Always the same response — never reveal whether the number is registered
+        return "If this number is registered, an OTP has been sent.";
     }
 
-    // 2. Verify OTP & Reset Password
+    /**
+     * Step 2: Verify OTP and reset the password.
+     *
+     * Security:
+     * - Locked after 3 wrong attempts (brute-force protection)
+     * - OTP deleted immediately on success (no replay attacks)
+     */
     @Transactional
     public String resetPassword(String phoneNumber, String otpCode, String newPassword) {
-        // Find the OTP
-        OtpVerification dbOtp = otpVerificationRepository.findFirstByPhoneNumberOrderByCreatedAtDesc(phoneNumber)
+        OtpVerification dbOtp = otpVerificationRepository
+                .findFirstByPhoneNumberOrderByCreatedAtDesc(phoneNumber)
                 .orElseThrow(() -> new InvalidDataException("Invalid or expired OTP"));
 
-        // Check Expiry
-        if (dbOtp.getExpiresAt().isBefore(LocalDateTime.now())) {
+        // Check brute-force lock
+        if (dbOtp.isLocked()) {
+            throw new InvalidDataException(
+                    "Too many incorrect attempts. Please request a new OTP.");
+        }
+
+        // Check expiry
+        if (dbOtp.isExpired()) {
             throw new InvalidDataException("OTP has expired. Please request a new one.");
         }
 
-        // Check Code Match
+        // Check code — increment counter on every failure
         if (!dbOtp.getOtpCode().equals(otpCode)) {
-            throw new InvalidDataException("Incorrect OTP code");
+            dbOtp.incrementAttempts();
+            otpVerificationRepository.save(dbOtp);
+
+            int remaining = OtpVerification.MAX_ATTEMPTS - dbOtp.getAttemptCount();
+            if (remaining <= 0) {
+                throw new InvalidDataException(
+                        "Too many incorrect attempts. Please request a new OTP.");
+            }
+            throw new InvalidDataException(
+                    "Incorrect OTP. " + remaining + " attempt(s) remaining.");
         }
 
-        // Retrieve User
+        // ✅ OTP is valid — update the password
         User user = userRepository.findByPhoneNumber(phoneNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // Update Password
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
-        // Clean up used OTP
+        // Delete the used OTP — cannot be reused
         otpVerificationRepository.delete(dbOtp);
 
-        return "Password changed successfully. You can now login.";
+        log.info("Password reset successful for [...{}]",
+                phoneNumber.substring(Math.max(0, phoneNumber.length() - 4)));
+
+        return "Password changed successfully. You can now log in.";
+    }
+
+    // ─── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Generates a zero-padded 6-digit OTP using a cryptographically secure RNG.
+     * Range: 000000 – 999999 (1,000,000 combinations vs 10,000 for 4-digit)
+     */
+    private String generateOtp() {
+        return String.format("%06d", secureRandom.nextInt(1_000_000));
     }
 }
