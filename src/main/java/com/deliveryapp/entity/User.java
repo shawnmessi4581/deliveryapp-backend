@@ -4,7 +4,6 @@ import com.deliveryapp.enums.UserType;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Entity
 @Table(name = "users")

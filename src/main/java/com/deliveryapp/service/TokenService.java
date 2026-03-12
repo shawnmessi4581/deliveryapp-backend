@@ -20,10 +20,13 @@ public class TokenService {
         this.jwtEncoder = jwtEncoder;
     }
 
+    /**
+     * Standard token generation — used by login().
+     * Pulls scope from the Authentication object's granted authorities.
+     */
     public String generateToken(Authentication authentication, Long userId) {
         Instant now = Instant.now();
 
-        // Convert authorities (ROLE_CUSTOMER) to a space-separated string
         String scope = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(" "));
@@ -31,10 +34,36 @@ public class TokenService {
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("self")
                 .issuedAt(now)
-                .expiresAt(now.plus(24, ChronoUnit.HOURS)) // 24 hours validity
+                .expiresAt(now.plus(24, ChronoUnit.HOURS))
                 .subject(authentication.getName())
                 .claim("scope", scope)
-                .claim("userId", userId) // Important: Add User ID to token
+                .claim("userId", userId)
+                .build();
+
+        return this.jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+    }
+
+    /**
+     * Token generation after OTP verification — used by verifyAccount().
+     *
+     * We don't have an Authentication object here because the user just verified
+     * their OTP and we can't re-authenticate without the raw password.
+     * We build the claims manually using the same structure as generateToken()
+     * so the token is identical in format and the rest of the app works normally.
+     *
+     * scope is set to "ROLE_CUSTOMER" to match what Spring Security
+     * would assign via the normal login path.
+     */
+    public String generateTokenForUserId(Long userId, String phoneNumber) {
+        Instant now = Instant.now();
+
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("self")
+                .issuedAt(now)
+                .expiresAt(now.plus(24, ChronoUnit.HOURS))
+                .subject(phoneNumber) // matches authentication.getName() from login
+                .claim("scope", "ROLE_CUSTOMER")
+                .claim("userId", userId)
                 .build();
 
         return this.jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
