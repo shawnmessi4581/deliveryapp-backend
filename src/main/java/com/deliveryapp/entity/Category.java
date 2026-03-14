@@ -15,6 +15,7 @@ public class Category {
 
     private String name;
     private String icon;
-    private Integer displayOrder;
     private Boolean isActive;
+    @Column(columnDefinition = "integer default 0")
+    private Integer displayOrder = 0;
 }

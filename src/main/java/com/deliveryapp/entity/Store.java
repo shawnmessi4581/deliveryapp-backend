@@ -41,5 +41,7 @@ public class Store {
     private Boolean isBusy; // NEW: If true, show "Busy" tag or warning
     private LocalTime openingTime; // e.g. 09:00:00
     private LocalTime closingTime; // e.g. 22:00:00
+    @Column(columnDefinition = "integer default 0")
+    private Integer displayOrder = 0;
     private LocalDateTime createdAt;
 }

@@ -28,6 +28,7 @@ public class CatalogService {
 
     // ================= CATEGORIES =================
     public List<Category> getAllActiveCategories() {
+        // ✅ Already perfect
         return categoryRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
     }
 
@@ -38,16 +39,17 @@ public class CatalogService {
 
     // ================= SUBCATEGORIES =================
     public List<SubCategory> getSubCategoriesByCategoryId(Long categoryId) {
-        // Validate category exists first
         if (!categoryRepository.existsById(categoryId)) {
             throw new ResourceNotFoundException("Category not found with id: " + categoryId);
         }
-        return subCategoryRepository.findByCategoryCategoryId(categoryId);
+        // ✅ FIX: Only return Active SubCategories, ordered by Display Order
+        return subCategoryRepository.findByCategoryCategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(categoryId);
     }
 
     // ================= STORES =================
     public List<Store> getAllActiveStores() {
-        return storeRepository.findByIsActiveTrue();
+        // ✅ FIX: Ordered by Display Order
+        return storeRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
     }
 
     public Store getStoreById(Long id) {
@@ -56,23 +58,21 @@ public class CatalogService {
     }
 
     public List<Store> getStoresByCategory(Long categoryId) {
-        return storeRepository.findByCategoryCategoryId(categoryId);
+        // ✅ FIX: Only Active Stores, Ordered
+        return storeRepository.findByCategoryCategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(categoryId);
     }
 
-    // NEW: Get Stores by SubCategory
     public List<Store> getStoresBySubCategory(Long subCategoryId) {
-        // Validate subcategory exists (optional, but good for error messaging)
         if (!subCategoryRepository.existsById(subCategoryId)) {
             throw new ResourceNotFoundException("SubCategory not found with id: " + subCategoryId);
         }
-        return storeRepository.findBySubCategorySubcategoryId(subCategoryId);
+        // ✅ FIX: Only Active Stores, Ordered
+        return storeRepository.findBySubCategorySubcategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(subCategoryId);
     }
 
     // ================= PRODUCTS =================
 
     public Page<Product> getAllProductsRandomly(Pageable pageable) {
-        // Warning: True randomness breaks pagination. We return standard active
-        // products here.
         return productRepository.findAllActiveProducts(pageable);
     }
 
@@ -90,14 +90,14 @@ public class CatalogService {
 
     public Page<Product> getProductsByCategory(Long categoryId, Pageable pageable) {
         if (!categoryRepository.existsById(categoryId)) {
-            throw new ResourceNotFoundException("category not found with id: " + categoryId);
+            throw new ResourceNotFoundException("Category not found with id: " + categoryId);
         }
         return productRepository.findByCategoryCategoryIdAndIsAvailableTrue(categoryId, pageable);
     }
 
     public Page<Product> getProductsBySubCategory(Long subCategoryId, Pageable pageable) {
         if (!subCategoryRepository.existsById(subCategoryId)) {
-            throw new ResourceNotFoundException("subCategory not found with id: " + subCategoryId);
+            throw new ResourceNotFoundException("SubCategory not found with id: " + subCategoryId);
         }
         return productRepository.findBySubCategorySubcategoryIdAndIsAvailableTrue(subCategoryId, pageable);
     }
@@ -133,7 +133,6 @@ public class CatalogService {
                 pageable);
     }
 
-    //
     public Page<Product> getProductsUnderPrice(Double price, Pageable pageable) {
         return productRepository.findByBasePriceLessThanEqualAndIsAvailableTrue(price, pageable);
     }

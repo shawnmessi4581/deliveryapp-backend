@@ -13,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Sort; // Add this import
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -119,7 +120,7 @@ public class CatalogController {
     public ResponseEntity<PagedResponse<ProductResponse>> getAllProductsRandom(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
         Page<Product> productPage = catalogService.getAllProductsRandomly(pageable);
         return ResponseEntity.ok(createPagedResponse(productPage));
     }
@@ -135,7 +136,7 @@ public class CatalogController {
             @PathVariable Long storeId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
         Page<Product> productPage = catalogService.getProductsByStore(storeId, pageable);
         return ResponseEntity.ok(createPagedResponse(productPage));
     }
@@ -146,7 +147,7 @@ public class CatalogController {
             @PathVariable Long categoryId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
         Page<Product> productPage = catalogService.getProductsByCategory(categoryId, pageable);
         return ResponseEntity.ok(createPagedResponse(productPage));
     }
@@ -157,7 +158,7 @@ public class CatalogController {
             @PathVariable Long subCategoryId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
         Page<Product> productPage = catalogService.getProductsBySubCategory(subCategoryId, pageable);
         return ResponseEntity.ok(createPagedResponse(productPage));
     }
@@ -191,7 +192,7 @@ public class CatalogController {
             @PathVariable Long categoryId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
         Page<Product> productPage = catalogService.getProductsByStoreAndCategory(storeId, categoryId, pageable);
         return ResponseEntity.ok(createPagedResponse(productPage));
     }
@@ -202,7 +203,7 @@ public class CatalogController {
             @PathVariable Long subCategoryId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
         Page<Product> productPage = catalogService.getProductsByStoreAndSubCategory(storeId, subCategoryId, pageable);
         return ResponseEntity.ok(createPagedResponse(productPage));
     }
@@ -213,7 +214,7 @@ public class CatalogController {
             @RequestParam Double max,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
         Page<Product> productPage = catalogService.getProductsUnderPrice(max, pageable);
         return ResponseEntity.ok(createPagedResponse(productPage));
     }

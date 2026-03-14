@@ -3,10 +3,8 @@ package com.deliveryapp.dto.catalog;
 import lombok.Data;
 
 @Data
-public class CategoryResponse {
-    private Long categoryId;
+public class CategoryRequest {
     private String name;
-    private String imageUrl;
-    private boolean isActive;
+    private Boolean isActive;
     private Integer displayOrder;
 }

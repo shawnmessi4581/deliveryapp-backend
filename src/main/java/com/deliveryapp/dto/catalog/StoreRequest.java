@@ -25,4 +25,6 @@ public class StoreRequest {
 
     @DateTimeFormat(iso = DateTimeFormat.ISO.TIME)
     private LocalTime closingTime;
+    //
+    private Integer displayOrder;
 }

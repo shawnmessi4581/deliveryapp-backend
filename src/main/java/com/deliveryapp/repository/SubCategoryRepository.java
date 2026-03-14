@@ -9,4 +9,9 @@ import java.util.List;
 @Repository
 public interface SubCategoryRepository extends JpaRepository<SubCategory, Long> {
     List<SubCategory> findByCategoryCategoryId(Long categoryId);
+
+    List<SubCategory> findAllByOrderByDisplayOrderAsc();
+
+    List<SubCategory> findByCategoryCategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(Long categoryId);
+
 }

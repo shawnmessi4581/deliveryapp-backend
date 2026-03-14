@@ -41,4 +41,6 @@ public class StoreResponse {
     private String closingTime;
     private Boolean isOpenNow; // Calculated field for UI
     private Boolean isBusy;
+    //
+    private Integer displayOrder;
 }

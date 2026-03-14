@@ -28,4 +28,5 @@ public class ProductResponse {
     private List<ProductVariantResponse> variants;
     private List<String> images; // Full URLs
     private List<ColorResponse> colors;
+    private Integer displayOrder;
 }

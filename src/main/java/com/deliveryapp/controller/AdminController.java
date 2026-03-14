@@ -6,15 +6,16 @@ import com.deliveryapp.dto.user.CreateDriverRequest;
 import com.deliveryapp.dto.user.CreateUserRequest;
 import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
-import com.deliveryapp.mapper.catalog.CatalogMapper; // Inject
-import com.deliveryapp.mapper.order.OrderMapper; // Inject (Create this one based on previous chat if missing)
-import com.deliveryapp.mapper.user.UserMapper; // Inject
+import com.deliveryapp.mapper.catalog.CatalogMapper;
+import com.deliveryapp.mapper.order.OrderMapper;
+import com.deliveryapp.mapper.user.UserMapper;
 import com.deliveryapp.repository.DeliveryInstructionRepository;
 import com.deliveryapp.service.AdminService;
 import com.deliveryapp.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -24,6 +25,8 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
+// NOTE: We removed the class-level @PreAuthorize so we can control each method
+// individually
 public class AdminController {
 
     private final AdminService adminService;
@@ -35,21 +38,25 @@ public class AdminController {
     private final UserMapper userMapper;
     private final OrderMapper orderMapper;
 
-    // --- USERS ---
+    // ==================== USERS (Strict Security) ====================
+
     @GetMapping("/users")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')") // Employees can view users
     public ResponseEntity<List<UserResponse>> getAllUsers() {
-        return ResponseEntity.ok(adminService.getAllUsers().stream() // Returns Stream<User>
-                .map(userMapper::toUserResponse) // Maps User -> UserResponse
+        return ResponseEntity.ok(adminService.getAllUsers().stream()
+                .map(userMapper::toUserResponse)
                 .collect(Collectors.toList()));
     }
 
     @DeleteMapping("/users/{userId}")
+    @PreAuthorize("hasRole('ADMIN')") // ONLY Admins can delete users
     public ResponseEntity<String> deleteUser(@PathVariable Long userId) {
         adminService.deleteUser(userId);
         return ResponseEntity.ok("User deleted successfully");
     }
 
     @PatchMapping("/users/{userId}/status")
+    @PreAuthorize("hasRole('ADMIN')") // ONLY Admins can ban/unban users
     public ResponseEntity<String> updateUserStatus(
             @PathVariable Long userId,
             @RequestParam Boolean active) {
@@ -58,15 +65,17 @@ public class AdminController {
         return ResponseEntity.ok("User has been " + status);
     }
 
-    // CREATE DASHBOARD USER (Admin/Employee)
     @PostMapping("/users/create")
+    @PreAuthorize("hasRole('ADMIN')") // ONLY Admins can create other Admins/Employees
     public ResponseEntity<UserResponse> createDashboardUser(@RequestBody CreateUserRequest request) {
         User user = adminService.createDashboardUser(request);
-        return ResponseEntity.ok(userMapper.toUserResponse(user)); // Reuse your existing mapper logic (via UserMapper)
+        return ResponseEntity.ok(userMapper.toUserResponse(user));
     }
 
-    // --- DRIVERS ---
+    // ==================== DRIVERS ====================
+
     @GetMapping("/drivers")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<List<UserResponse>> getAllDrivers() {
         return ResponseEntity.ok(adminService.getAllDrivers().stream()
                 .map(userMapper::toUserResponse)
@@ -74,6 +83,7 @@ public class AdminController {
     }
 
     @PatchMapping("/{orderId}/assign/{driverId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')") // Both can assign drivers
     public ResponseEntity<OrderResponse> assignDriver(
             @PathVariable Long orderId,
             @PathVariable Long driverId) {
@@ -82,6 +92,7 @@ public class AdminController {
     }
 
     @PostMapping(value = "/drivers", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')") // Both can register new drivers
     public ResponseEntity<UserResponse> createDriver(
             @ModelAttribute CreateDriverRequest request,
             @RequestParam(value = "image", required = false) MultipartFile image) {
@@ -89,8 +100,11 @@ public class AdminController {
         return ResponseEntity.ok(userMapper.toUserResponse(driver));
     }
 
+    // ==================== CATALOG (Admin + Employee access) ====================
+
     // --- CATEGORIES ---
     @GetMapping("/categories")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<List<CategoryResponse>> getAllCategories() {
         return ResponseEntity.ok(adminService.getAllCategories().stream()
                 .map(catalogMapper::toCategoryResponse)
@@ -98,40 +112,43 @@ public class AdminController {
     }
 
     @PostMapping(value = "/categories", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<CategoryResponse> createCategory(
-            @RequestParam("name") String name,
+            @ModelAttribute CategoryRequest request,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        Category cat = adminService.createCategory(name, image);
+        Category cat = adminService.createCategory(request, image);
         return ResponseEntity.ok(catalogMapper.toCategoryResponse(cat));
     }
 
     @DeleteMapping("/categories/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteCategory(@PathVariable Long id) {
         adminService.deleteCategory(id);
         return ResponseEntity.ok("Category deleted");
     }
 
     @PutMapping(value = "/categories/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<CategoryResponse> updateCategory(
             @PathVariable Long id,
-            @RequestParam(required = false) String name,
-            @RequestParam(required = false) Boolean isActive,
+            @ModelAttribute CategoryRequest request,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        Category cat = adminService.updateCategory(id, name, isActive, image);
+        Category cat = adminService.updateCategory(id, request, image);
         return ResponseEntity.ok(catalogMapper.toCategoryResponse(cat));
     }
 
     // --- SUBCATEGORIES ---
     @PostMapping(value = "/subcategories", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<SubCategoryResponse> createSubCategory(
-            @RequestParam("name") String name,
-            @RequestParam("categoryId") Long categoryId,
+            @ModelAttribute SubCategoryRequest request,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        SubCategory sub = adminService.createSubCategory(name, categoryId, image);
+        SubCategory sub = adminService.createSubCategory(request, image);
         return ResponseEntity.ok(catalogMapper.toSubCategoryResponse(sub));
     }
 
     @GetMapping("/subcategories")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<List<SubCategoryResponse>> getAllSubCategories() {
         return ResponseEntity.ok(adminService.getAllSubCategories().stream()
                 .map(catalogMapper::toSubCategoryResponse)
@@ -139,17 +156,17 @@ public class AdminController {
     }
 
     @PutMapping(value = "/subcategories/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<SubCategoryResponse> updateSubCategory(
             @PathVariable Long id,
-            @RequestParam(required = false) String name,
-            @RequestParam(required = false) Long categoryId,
-            @RequestParam(required = false) Boolean isActive,
+            @ModelAttribute SubCategoryRequest request,
             @RequestParam(value = "image", required = false) MultipartFile image) {
-        SubCategory sub = adminService.updateSubCategory(id, name, categoryId, isActive, image);
+        SubCategory sub = adminService.updateSubCategory(id, request, image);
         return ResponseEntity.ok(catalogMapper.toSubCategoryResponse(sub));
     }
 
     @DeleteMapping("/subcategories/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteSubCategory(@PathVariable Long id) {
         adminService.deleteSubCategory(id);
         return ResponseEntity.ok("SubCategory deleted successfully");
@@ -157,6 +174,7 @@ public class AdminController {
 
     // --- STORES ---
     @GetMapping("/stores")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<List<StoreResponse>> getAllStores() {
         return ResponseEntity.ok(adminService.getAllStores().stream()
                 .map(catalogMapper::toStoreResponse)
@@ -164,6 +182,7 @@ public class AdminController {
     }
 
     @PostMapping(value = "/stores", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<StoreResponse> createStore(
             @ModelAttribute StoreRequest request,
             @RequestParam(value = "logo", required = false) MultipartFile logo,
@@ -173,6 +192,7 @@ public class AdminController {
     }
 
     @PutMapping(value = "/stores/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<StoreResponse> updateStore(
             @PathVariable Long id,
             @ModelAttribute StoreRequest request,
@@ -184,6 +204,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/stores/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteStore(@PathVariable Long id) {
         adminService.deleteStore(id);
         return ResponseEntity.ok("Store deleted");
@@ -191,6 +212,7 @@ public class AdminController {
 
     // --- PRODUCTS ---
     @GetMapping("/products")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<List<ProductResponse>> getAllProducts() {
         return ResponseEntity.ok(adminService.getAllProducts().stream()
                 .map(catalogMapper::toProductResponse)
@@ -198,17 +220,17 @@ public class AdminController {
     }
 
     @PostMapping(value = "/products", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<ProductResponse> createProduct(
             @ModelAttribute ProductRequest request,
             @RequestParam(value = "image", required = false) MultipartFile image,
-            // NEW: Accept List of Files
             @RequestParam(value = "gallery", required = false) List<MultipartFile> gallery) {
-
         Product product = adminService.createProduct(request, image, gallery);
         return ResponseEntity.ok(catalogMapper.toProductResponse(product));
     }
 
     @PutMapping(value = "/products/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<ProductResponse> updateProduct(
             @PathVariable Long id,
             @ModelAttribute ProductRequest request,
@@ -219,6 +241,7 @@ public class AdminController {
     }
 
     @PostMapping("/products/{productId}/variants")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<?> addVariant(
             @PathVariable Long productId,
             @RequestParam("name") String name,
@@ -227,12 +250,14 @@ public class AdminController {
     }
 
     @DeleteMapping("/variants/{variantId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteProductVariant(@PathVariable Long variantId) {
         adminService.deleteProductVariant(variantId);
         return ResponseEntity.ok("Variant deleted successfully");
     }
 
     @DeleteMapping("/products/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteProduct(@PathVariable Long id) {
         adminService.deleteProduct(id);
         return ResponseEntity.ok("Product deleted");
@@ -240,6 +265,7 @@ public class AdminController {
 
     // --- INSTRUCTIONS ---
     @PostMapping("/instructions")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<DeliveryInstruction> createInstruction(@RequestParam String text) {
         DeliveryInstruction instruction = new DeliveryInstruction();
         instruction.setInstruction(text);
@@ -248,20 +274,22 @@ public class AdminController {
     }
 
     @DeleteMapping("/instructions/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteInstruction(@PathVariable Long id) {
         instructionRepository.deleteById(id);
         return ResponseEntity.ok("Instruction deleted");
     }
 
     @GetMapping("/instructions")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<List<DeliveryInstruction>> getAllInstructions() {
         return ResponseEntity.ok(instructionRepository.findAll());
     }
 
     // --- COLORS ---
     @GetMapping("/colors")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<List<ColorResponse>> getAllColors() {
-        // Map entity to DTO (simple mapping)
         List<ColorResponse> response = adminService.getAllColors().stream().map(c -> {
             ColorResponse dto = new ColorResponse();
             dto.setColorId(c.getColorId());
@@ -273,12 +301,14 @@ public class AdminController {
     }
 
     @PostMapping("/colors")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> createColor(@RequestBody ColorRequest request) {
         adminService.createColor(request.getName(), request.getHexCode());
         return ResponseEntity.ok("Color created");
     }
 
     @DeleteMapping("/colors/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteColor(@PathVariable Long id) {
         adminService.deleteColor(id);
         return ResponseEntity.ok("Color deleted");

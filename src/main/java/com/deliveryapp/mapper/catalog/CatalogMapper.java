@@ -24,6 +24,8 @@ public class CatalogMapper {
         dto.setName(category.getName());
         dto.setImageUrl(urlUtil.getFullUrl(category.getIcon())); // Use getIcon() per your entity
         dto.setActive(category.getIsActive());
+        dto.setDisplayOrder(category.getDisplayOrder());
+
         return dto;
     }
 
@@ -34,6 +36,7 @@ public class CatalogMapper {
         dto.setName(subCategory.getName());
         dto.setImageUrl(urlUtil.getFullUrl(subCategory.getIcon())); // Use getIcon()
         dto.setIsActive(subCategory.getIsActive());
+        dto.setDisplayOrder(subCategory.getDisplayOrder());
 
         if (subCategory.getCategory() != null) {
             dto.setParentCategoryId(subCategory.getCategory().getCategoryId());
@@ -79,6 +82,7 @@ public class CatalogMapper {
         // Calculate Open Status
         dto.setIsOpenNow(isStoreOpen(store));
         dto.setIsBusy(store.getIsBusy()); // Map Busy Flag
+        dto.setDisplayOrder(store.getDisplayOrder());
 
         return dto;
     }
@@ -93,6 +97,7 @@ public class CatalogMapper {
         dto.setImageUrl(urlUtil.getFullUrl(product.getImage())); // Main Thumbnail
         dto.setAvailable(product.getIsAvailable());
         dto.setIsTrending(product.getIsTrending() != null ? product.getIsTrending() : false);
+        dto.setDisplayOrder(product.getDisplayOrder());
 
         // --- MAP GALLERY IMAGES (NEW) ---
         if (product.getImages() != null && !product.getImages().isEmpty()) {

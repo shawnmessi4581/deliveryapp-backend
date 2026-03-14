@@ -10,4 +10,7 @@ import java.util.List;
 public interface CategoryRepository extends JpaRepository<Category, Long> {
     // Get only active categories sorted by display order
     List<Category> findByIsActiveTrueOrderByDisplayOrderAsc();
+
+    List<Category> findAllByOrderByDisplayOrderAsc();
+
 }

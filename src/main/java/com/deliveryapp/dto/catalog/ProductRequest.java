@@ -15,5 +15,6 @@ public class ProductRequest {
     private Boolean isAvailable;
     private List<Long> colorIds; // e.g. [1, 5, 8]
     private Boolean isTrending;
+    private Integer displayOrder;
 
 }
