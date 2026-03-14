@@ -123,7 +123,7 @@ public class AdminService {
     // ==================== CATEGORY CRUD ====================
 
     public List<Category> getAllCategories() {
-        return categoryRepository.findAll();
+        return categoryRepository.findAllByOrderByDisplayOrderAsc();
     }
 
     @Transactional
@@ -183,7 +183,7 @@ public class AdminService {
     // ==================== SUBCATEGORY CRUD ====================
 
     public List<SubCategory> getAllSubCategories() {
-        return subCategoryRepository.findAll();
+        return subCategoryRepository.findAllByOrderByDisplayOrderAsc();
     }
 
     @Transactional
@@ -253,7 +253,7 @@ public class AdminService {
     // ==================== STORE CRUD ====================
 
     public List<Store> getAllStores() {
-        return storeRepository.findAll();
+        return storeRepository.findAllByOrderByDisplayOrderAsc();
     }
 
     @Transactional
