@@ -30,18 +30,19 @@ public class SmsService {
     @Value("${bms.api.sender}")
     private String sender;
 
-    /**
-     * Sends an SMS asynchronously via the Syriatel BMS API.
-     * 
-     * @Async means this runs on a background thread — BMS latency won't block the
-     *        HTTP response.
-     */
     @Async("smsTaskExecutor")
     public void sendSms(String toPhoneNumber, String message) {
-        String normalizedNumber = normalizePhoneNumber(toPhoneNumber);
+        String normalizedNumber;
+        try {
+            normalizedNumber = normalizePhoneNumber(toPhoneNumber);
+        } catch (IllegalArgumentException e) {
+            // Don't crash the async thread — log and skip
+            log.error("SMS skipped — could not normalize '{}': {}", toPhoneNumber, e.getMessage());
+            return;
+        }
 
         try {
-            disableSslVerification(); // Required — BMS uses a self-signed certificate
+            disableSslVerification();
 
             String url = apiUrl
                     + "?user_name=" + URLEncoder.encode(username, StandardCharsets.UTF_8)
@@ -57,18 +58,14 @@ public class SmsService {
 
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
-
                 String response = reader.readLine();
-                log.info("BMS SMS response for [...{}]: {}",
+                log.info("BMS response for [...{}]: {}",
                         normalizedNumber.substring(normalizedNumber.length() - 4), response);
-
-                // BMS returns "#JobID" on success (e.g. "#354")
                 if (response == null || !response.startsWith("#")) {
-                    log.error("SMS provider error for [...{}]: {}",
+                    log.error("BMS error for [...{}]: {}",
                             normalizedNumber.substring(normalizedNumber.length() - 4), response);
                 }
             }
-
         } catch (Exception e) {
             log.error("Failed to send SMS to [...{}]: {}",
                     normalizedNumber.substring(Math.max(0, normalizedNumber.length() - 4)),
@@ -77,37 +74,51 @@ public class SmsService {
     }
 
     /**
-     * Normalizes phone numbers to BMS-required format: 963XXXXXXXXX
+     * Normalizes any phone number to BMS-required format: 963XXXXXXXXX (12 digits)
      *
-     * Handles:
-     * +963 993 123 456 → 963993123456
-     * 00963993123456 → 963993123456
-     * 0993123456 → 963993123456 (local Syrian format)
+     * Handles all real-world cases including intl_phone_field output:
+     *
+     * +963993123456 → 963993123456 (standard package output)
      * 963993123456 → 963993123456 (already correct)
+     * +9630993123456 → 963993123456 (package prepended 963 to a 0-prefixed local
+     * number → 13 digits)
+     * 9630993123456 → 963993123456 (same without +)
+     * 0993123456 → 963993123456 (local Syrian format, 10 digits)
+     * 993123456 → 963993123456 (9 digits, no prefix)
      */
     public String normalizePhoneNumber(String raw) {
-        if (raw == null)
-            throw new IllegalArgumentException("Phone number cannot be null");
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalArgumentException("Phone number cannot be null or empty");
+        }
 
         String digits = raw.replaceAll("[^0-9]", "");
 
-        // Local Syrian format: 0XXXXXXXXX (10 digits)
-        if (digits.startsWith("0") && digits.length() == 10) {
-            digits = "963" + digits.substring(1);
+        // intl_phone_field bug: user typed 0993123456, package prepended 963 →
+        // 9630993123456 (13 digits)
+        // Fix: drop the 0 that sits right after 963
+        if (digits.startsWith("9630") && digits.length() == 13) {
+            digits = "963" + digits.substring(4);
         }
 
+        // Already correct
         if (digits.startsWith("963") && digits.length() == 12) {
             return digits;
         }
 
+        // Local format: 0XXXXXXXXX (10 digits)
+        if (digits.startsWith("0") && digits.length() == 10) {
+            return "963" + digits.substring(1);
+        }
+
+        // Bare digits without any prefix (9 digits)
+        if (digits.length() == 9) {
+            return "963" + digits;
+        }
+
         throw new IllegalArgumentException(
-                "Invalid phone number format: " + raw + ". Expected 963XXXXXXXXX");
+                "Invalid phone number format: " + raw + ". Expected 963XXXXXXXXX (got: " + digits + ")");
     }
 
-    /**
-     * BMS uses a self-signed SSL certificate.
-     * Disabling validation is required as per their official documentation.
-     */
     private void disableSslVerification() throws Exception {
         TrustManager[] trustAll = new TrustManager[] {
                 new X509TrustManager() {

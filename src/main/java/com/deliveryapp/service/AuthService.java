@@ -223,6 +223,9 @@ public class AuthService {
         otp.setUser(user);
         otpVerificationRepository.save(otp);
 
+        // ⚠️ TEMP - remove before production
+        log.warn("DEV OTP for {}: {}", phoneNumber, otpCode);
+
         String smsBody = "Your verification code is: " + otpCode
                 + ". Valid for 10 minutes. Do not share it with anyone.";
         smsService.sendSms(phoneNumber, smsBody);
