@@ -238,6 +238,42 @@ public class OrderService {
         return savedOrder;
     }
 
+    @Transactional
+    public void cancelOrder(Long orderId, Long userId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+
+        // 1. Verify Ownership
+        if (!order.getUser().getUserId().equals(userId)) {
+            throw new InvalidDataException("You do not have permission to cancel this order.");
+        }
+
+        // 2. Verify Status
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new InvalidDataException("You can only cancel an order while it is in PENDING status.");
+        }
+
+        // 3. Reverse Coupon Usage
+        if (order.getCouponId() != null) {
+            couponUsageRepository.deleteByOrderId(orderId);
+
+            try {
+                Coupon coupon = couponService.getCouponById(order.getCouponId());
+                if (coupon != null) {
+                    coupon.setCurrentUsageCount(Math.max(0, coupon.getCurrentUsageCount() - 1));
+                    // Depending on your CouponService setup, you may need to save it.
+                    // e.g. couponRepository.save(coupon);
+                }
+            } catch (ResourceNotFoundException e) {
+                // Ignore if the coupon itself was deleted by an admin
+            }
+        }
+
+        // 4. Delete History and Order
+        historyRepository.deleteByOrderOrderId(orderId);
+        orderRepository.delete(order);
+    }
+
     private void logStatusChange(Order order, OrderStatus oldS, OrderStatus newS, String notes) {
         OrderStatusHistory history = new OrderStatusHistory();
         history.setOrder(order);

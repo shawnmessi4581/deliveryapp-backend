@@ -6,6 +6,8 @@ import com.deliveryapp.mapper.order.OrderMapper;
 import com.deliveryapp.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -71,4 +73,13 @@ public class OrderController {
         return ResponseEntity.ok(orderService.trackOrder(orderId));
     }
 
+    // CANCEL / DELETE ORDER (User)
+    @DeleteMapping("/{orderId}")
+    public ResponseEntity<String> cancelOrder(@PathVariable Long orderId) {
+
+        Long userId = ((Jwt) SecurityContextHolder.getContext().getAuthentication().getPrincipal()).getClaim("userId");
+
+        orderService.cancelOrder(orderId, userId);
+        return ResponseEntity.ok("Order cancelled successfully");
+    }
 }
