@@ -56,7 +56,7 @@ public class OrderService {
             throw new InvalidDataException("Delivery Address is required.");
 
         UserAddress userAddress = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Address not found with id: " + addressId));
 
         if (!userAddress.getUser().getUserId().equals(userId)) {
             throw new ResourceNotFoundException("Address does not belong to this user");
@@ -77,7 +77,7 @@ public class OrderService {
 
         for (OrderItemRequest itemReq : itemsRequest) {
             Product product = productRepository.findById(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + itemReq.getProductId()));
 
             Store store = product.getStore();
 
@@ -95,29 +95,32 @@ public class OrderService {
             orderItem.setProductName(product.getName());
             orderItem.setQuantity(itemReq.getQuantity());
             orderItem.setNotes(itemReq.getNotes());
+
+            // Handle Color Selection
             if (itemReq.getColorId() != null) {
-                // We fetch the color from the Product's available list or Repo
                 Color color = colorRepository.findById(itemReq.getColorId())
                         .orElseThrow(() -> new ResourceNotFoundException("Color not found"));
 
-                // Optional: Validate product actually has this color
                 boolean isValidColor = product.getColors().stream()
                         .anyMatch(c -> c.getColorId().equals(color.getColorId()));
 
                 if (!isValidColor)
                     throw new InvalidDataException("Color not available for this product");
 
-                // Save Snapshot
                 orderItem.setSelectedColor(color);
-
             }
+
+            // Calculate Price
             double price = product.getBasePrice();
             if (itemReq.getVariantId() != null && itemReq.getVariantId() != 0) {
                 ProductVariant variant = variantRepository.findById(itemReq.getVariantId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Variant not found"));
+                        .orElseThrow(
+                                () -> new ResourceNotFoundException("Variant not found: " + itemReq.getVariantId()));
+
                 if (!variant.getProduct().getProductId().equals(product.getProductId())) {
-                    throw new InvalidDataException("Variant invalid for product");
+                    throw new InvalidDataException("Variant does not belong to this product");
                 }
+
                 orderItem.setVariant(variant);
                 orderItem.setVariantDetails(variant.getVariantValue());
                 price += variant.getPriceAdjustment();
@@ -131,7 +134,6 @@ public class OrderService {
         }
 
         // 3. Set Relationships
-        // Convert Set to List for the Entity
         order.setStores(new ArrayList<>(uniqueStores));
         order.setOrderItems(orderItems);
         order.setSubtotal(subtotal);
@@ -147,52 +149,64 @@ public class OrderService {
         // ============================================================
         // 5. CALCULATE BEST ROUTE FEE
         // ============================================================
-
-        // A. Find highest fee per KM among all stores involved
         double maxFeePerKm = uniqueStores.stream()
                 .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
                 .max().orElse(0.0);
 
-        // B. Calculate Optimized Total Distance (Store A -> Store B -> User)
         double totalDistanceKm = calculateOptimizedDistance(
                 new ArrayList<>(uniqueStores),
                 userAddress.getLatitude(),
                 userAddress.getLongitude());
 
-        // C. Final Fee
         double deliveryFee = Math.round(totalDistanceKm * maxFeePerKm * 100.0) / 100.0;
-        order.setDeliveryFee(deliveryFee);
 
         // ============================================================
-
-        // 6. Handle Coupon
+        // 6. Handle Coupon Logic
+        // ============================================================
         double discountAmount = 0.0;
         Coupon validCoupon = null;
 
         if (couponCode != null && !couponCode.trim().isEmpty()) {
-            // Pass the first store for basic validation context
             Store primaryStore = uniqueStores.iterator().next();
             validCoupon = couponService.validateCouponForOrder(couponCode, userId, orderItems, primaryStore);
             discountAmount = couponService.calculateDiscount(validCoupon, subtotal, deliveryFee);
+
+            // 👉 NEW: Handle Free Delivery specifically
+            if (validCoupon.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY) {
+                discountAmount = deliveryFee; // The amount we saved
+                deliveryFee = 0.0; // The invoice shows 0 for shipping
+            }
 
             order.setCouponId(validCoupon.getCouponId());
             order.setDiscountAmount(discountAmount);
         }
 
-        // 7. Total & Save
-        double finalTotal = (subtotal + deliveryFee) - discountAmount;
+        order.setDeliveryFee(deliveryFee); // Save the fee (which is 0.0 if Free Delivery)
+
+        // 7. Final Total
+        double finalTotal;
+        if (validCoupon != null && validCoupon.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY) {
+            finalTotal = subtotal; // Delivery is free, discount doesn't apply to subtotal
+        } else {
+            finalTotal = (subtotal + deliveryFee) - discountAmount;
+        }
+
         order.setTotalAmount(Math.max(finalTotal, 0.0));
 
+        // 8. Save
         Order savedOrder = orderRepository.save(order);
 
+        // 9. Record Coupon Usage
         if (validCoupon != null) {
             couponService.recordUsage(validCoupon, userId, savedOrder.getOrderId(), discountAmount);
         }
 
+        // 10. Log History
         logStatusChange(savedOrder, null, OrderStatus.PENDING, "Order Placed");
 
         return savedOrder;
     }
+
     // =================================================================================
     // ORDER MANAGEMENT
     // =================================================================================
@@ -385,8 +399,8 @@ public class OrderService {
                 tempItems,
                 store);
 
-        // Assuming delivery fee is needed for Free Shipping logic, but simple calc for
-        // now
+        // Simple calc, assuming 0 delivery fee for pure verification (unless we pass
+        // address here too)
         double discount = couponService.calculateDiscount(coupon, subtotal, 0.0);
 
         return new CouponCheckResponse(
@@ -394,8 +408,7 @@ public class OrderService {
                 coupon.getCode(),
                 discount,
                 "Coupon Applied Successfully",
-                coupon.getDiscountType().name() // <--- ADD THIS LINE
-        );
+                coupon.getDiscountType().name());
     }
 
     // =================================================================================
@@ -410,10 +423,6 @@ public class OrderService {
         response.setOrderId(order.getOrderId());
         response.setStatus(order.getStatus());
 
-        // if (order.getStore() != null) {
-        // response.setEstimatedTime(order.getStore().getEstimatedDeliveryTime());
-        // }
-
         response.setDeliveryAddress(order.getDeliveryAddress());
         response.setDeliveryLatitude(order.getDeliveryLatitude());
         response.setDeliveryLongitude(order.getDeliveryLongitude());
@@ -424,7 +433,6 @@ public class OrderService {
             response.setDriverName(driver.getName());
             response.setDriverPhone(driver.getPhoneNumber());
 
-            // Full URL for Driver Image (as requested)
             response.setDriverImage(urlUtil.getFullUrl(driver.getProfileImage()));
 
             response.setDriverVehicle(driver.getVehicleNumber());
@@ -461,28 +469,22 @@ public class OrderService {
             throw new InvalidDataException("No stores provided for fee calculation");
         }
 
-        // 1. Fetch Stores
         List<Store> stores = storeRepository.findAllById(storeIds);
         if (stores.isEmpty()) {
             throw new ResourceNotFoundException("No valid stores found");
         }
 
-        // 2. Fetch User Address
         UserAddress address = addressRepository.findById(addressId)
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
 
-        // 3. Find Max Fee Per KM among selected stores
         double maxFeePerKm = stores.stream()
                 .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
                 .max().orElse(0.0);
 
-        // 4. Calculate Optimized Distance (Best Route)
         double totalDistanceKm = calculateOptimizedDistance(stores, address.getLatitude(), address.getLongitude());
 
-        // 5. Calculate Final Fee
         double deliveryFee = Math.round(totalDistanceKm * maxFeePerKm * 100.0) / 100.0;
 
-        // Estimated Time: Pick the longest estimate (simple logic)
         String estimatedTime = stores.get(0).getEstimatedDeliveryTime();
 
         return new DeliveryFeeResponse(deliveryFee, estimatedTime);
@@ -491,8 +493,6 @@ public class OrderService {
     // =================================================================================
     // ALGORITHM: NEAREST NEIGHBOR (Route Optimization)
     // =================================================================================
-    // Logic: User -> Closest Store -> Next Closest Store...
-    // We work backward from the user's location to find the total travel path.
     private double calculateOptimizedDistance(List<Store> stores, double userLat, double userLng) {
         if (stores.isEmpty())
             return 0.0;
@@ -523,7 +523,7 @@ public class OrderService {
                 currentLng = closestStore.getLongitude();
                 unvisited.remove(closestStore);
             } else {
-                break; // Should happen only if coordinates are missing
+                break;
             }
         }
 
