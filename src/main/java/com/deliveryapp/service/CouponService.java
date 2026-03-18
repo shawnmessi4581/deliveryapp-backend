@@ -90,20 +90,39 @@ public class CouponService {
 
     // Helper to map DTO to Entity (Used by Create and Update)
     private void mapRequestToEntity(Coupon coupon, CouponRequest request) {
-        if (request.getCode() != null) coupon.setCode(request.getCode().toUpperCase());
-        if (request.getTitle() != null) coupon.setTitle(request.getTitle());
-        if (request.getDescription() != null) coupon.setDescription(request.getDescription());
-        if (request.getDiscountType() != null) coupon.setDiscountType(request.getDiscountType());
-        if (request.getDiscountValue() != null) coupon.setDiscountValue(request.getDiscountValue());
-        if (request.getMinOrderAmount() != null) coupon.setMinOrderAmount(request.getMinOrderAmount());
-        if (request.getMaxDiscountAmount() != null) coupon.setMaxDiscountAmount(request.getMaxDiscountAmount());
-        if (request.getApplicableTo() != null) coupon.setApplicableTo(request.getApplicableTo());
-        if (request.getApplicableId() != null) coupon.setApplicableId(request.getApplicableId());
-        if (request.getIsFirstOrderOnly() != null) coupon.setIsFirstOrderOnly(request.getIsFirstOrderOnly());
-        if (request.getMaxUsagePerUser() != null) coupon.setMaxUsagePerUser(request.getMaxUsagePerUser());
-        if (request.getTotalUsageLimit() != null) coupon.setTotalUsageLimit(request.getTotalUsageLimit());
-        if (request.getStartDate() != null) coupon.setStartDate(request.getStartDate());
-        if (request.getEndDate() != null) coupon.setEndDate(request.getEndDate());
+        if (request.getCode() != null)
+            coupon.setCode(request.getCode().toUpperCase());
+        if (request.getTitle() != null)
+            coupon.setTitle(request.getTitle());
+        if (request.getDescription() != null)
+            coupon.setDescription(request.getDescription());
+        if (request.getDiscountType() != null)
+            coupon.setDiscountType(request.getDiscountType());
+        // To this:
+        if (request.getDiscountValue() != null) {
+            coupon.setDiscountValue(request.getDiscountValue());
+        } else if (request.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY) {
+            // Force it to zero to satisfy the database NOT NULL constraint
+            coupon.setDiscountValue(BigDecimal.ZERO);
+        }
+        if (request.getMinOrderAmount() != null)
+            coupon.setMinOrderAmount(request.getMinOrderAmount());
+        if (request.getMaxDiscountAmount() != null)
+            coupon.setMaxDiscountAmount(request.getMaxDiscountAmount());
+        if (request.getApplicableTo() != null)
+            coupon.setApplicableTo(request.getApplicableTo());
+        if (request.getApplicableId() != null)
+            coupon.setApplicableId(request.getApplicableId());
+        if (request.getIsFirstOrderOnly() != null)
+            coupon.setIsFirstOrderOnly(request.getIsFirstOrderOnly());
+        if (request.getMaxUsagePerUser() != null)
+            coupon.setMaxUsagePerUser(request.getMaxUsagePerUser());
+        if (request.getTotalUsageLimit() != null)
+            coupon.setTotalUsageLimit(request.getTotalUsageLimit());
+        if (request.getStartDate() != null)
+            coupon.setStartDate(request.getStartDate());
+        if (request.getEndDate() != null)
+            coupon.setEndDate(request.getEndDate());
     }
 
     // =================================================================================
@@ -138,7 +157,8 @@ public class CouponService {
 
         // 5. First Order Check
         if (Boolean.TRUE.equals(coupon.getIsFirstOrderOnly())) {
-            // Check if user has ever used a coupon OR placed an order (depending on strictness)
+            // Check if user has ever used a coupon OR placed an order (depending on
+            // strictness)
             // Here checking if they have a coupon usage record
             if (usageRepository.existsByUserId(userId)) {
                 throw new InvalidDataException("This coupon is valid for first orders only");
@@ -167,7 +187,8 @@ public class CouponService {
 
                 case CATEGORY:
                     boolean hasCategory = items.stream()
-                            .anyMatch(item -> item.getProduct().getCategory().getCategoryId().equals(coupon.getApplicableId()));
+                            .anyMatch(item -> item.getProduct().getCategory().getCategoryId()
+                                    .equals(coupon.getApplicableId()));
                     if (!hasCategory) {
                         throw new InvalidDataException("Coupon requires items from a specific category");
                     }

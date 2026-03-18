@@ -393,7 +393,9 @@ public class OrderService {
                 coupon.getCouponId(),
                 coupon.getCode(),
                 discount,
-                "Coupon Applied Successfully");
+                "Coupon Applied Successfully",
+                coupon.getDiscountType().name() // <--- ADD THIS LINE
+        );
     }
 
     // =================================================================================
