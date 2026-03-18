@@ -307,6 +307,23 @@ public class AdminController {
         return ResponseEntity.ok("Color created");
     }
 
+    @PutMapping("/colors/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<ColorResponse> updateColor(
+            @PathVariable Long id,
+            @RequestBody ColorRequest request) {
+
+        Color updatedColor = adminService.updateColor(id, request.getName(), request.getHexCode());
+
+        // Map to DTO
+        ColorResponse dto = new ColorResponse();
+        dto.setColorId(updatedColor.getColorId());
+        dto.setName(updatedColor.getName());
+        dto.setHexCode(updatedColor.getHexCode());
+
+        return ResponseEntity.ok(dto);
+    }
+
     @DeleteMapping("/colors/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteColor(@PathVariable Long id) {

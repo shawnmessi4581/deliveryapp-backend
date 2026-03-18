@@ -542,6 +542,23 @@ public class AdminService {
         return colorRepository.save(color);
     }
 
+    // 4. Update Color
+    @Transactional
+    public Color updateColor(Long id, String name, String hexCode) {
+        Color color = colorRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Color not found with id: " + id));
+
+        if (name != null && !name.trim().isEmpty()) {
+            color.setName(name);
+        }
+        if (hexCode != null && !hexCode.trim().isEmpty()) {
+            // Optional: You can add validation here to ensure it starts with '#'
+            color.setHexCode(hexCode);
+        }
+
+        return colorRepository.save(color);
+    }
+
     public List<Color> getAllColors() {
         return colorRepository.findAll();
     }
