@@ -8,50 +8,62 @@ import org.springframework.stereotype.Service;
 @Service
 public class FCMService {
 
-    // 1. Send to a Specific Device (User)
     public void sendToToken(String token, String title, String body, String imageUrl, String type, String referenceId) {
-        if (token == null || token.isEmpty()) return;
+        if (token == null || token.isEmpty()) {
+            System.err.println("⚠️ Warning: Cannot send FCM. Token is null or empty.");
+            return;
+        }
 
+        System.out.println("🛠️ Building FCM Message for Token...");
         Message message = buildMessage(title, body, imageUrl, type, referenceId)
-                .setToken(token) // <--- Targets specific device
+                .setToken(token)
                 .build();
 
         send(message);
     }
 
-    // 2. Send to a Topic (e.g., "all_users", "promo")
     public void sendToTopic(String topic, String title, String body, String imageUrl, String type, String referenceId) {
-        if (topic == null || topic.isEmpty()) return;
+        if (topic == null || topic.isEmpty()) {
+            System.err.println("⚠️ Warning: Cannot send FCM. Topic is null or empty.");
+            return;
+        }
+
+        System.out.println("🛠️ Building FCM Message for Topic: " + topic);
+        // Firebase topics cannot have spaces or special characters
+        String safeTopic = topic.replaceAll("[^a-zA-Z0-9-_.~%]+", "_");
 
         Message message = buildMessage(title, body, imageUrl, type, referenceId)
-                .setTopic(topic) // <--- Targets all subscribers of this topic
+                .setTopic(safeTopic)
                 .build();
 
         send(message);
     }
 
-    // Helper to build the common message structure
     private Message.Builder buildMessage(String title, String body, String imageUrl, String type, String referenceId) {
         Notification.Builder notificationBuilder = Notification.builder()
                 .setTitle(title)
                 .setBody(body);
 
         if (imageUrl != null && !imageUrl.isEmpty()) {
+            System.out.println("📎 Attaching Image URL to Payload: " + imageUrl);
             notificationBuilder.setImage(imageUrl);
         }
 
         return Message.builder()
                 .setNotification(notificationBuilder.build())
-                .putData("type", type)
+                .putData("type", type != null ? type : "GENERAL")
                 .putData("referenceId", referenceId != null ? referenceId : "");
     }
 
     private void send(Message message) {
         try {
+            System.out.println("📡 Dispatching message to Firebase Servers...");
             String response = FirebaseMessaging.getInstance().send(message);
-            System.out.println("✅ FCM Sent: " + response);
+            System.out.println("✅ FCM Success Response: " + response);
         } catch (Exception e) {
-            System.err.println("❌ FCM Error: " + e.getMessage());
+            System.err.println("❌ CRITICAL FCM ERROR: Failed to send message.");
+            System.err.println("❌ Reason: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
