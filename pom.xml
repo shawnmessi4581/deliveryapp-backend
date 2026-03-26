@@ -8,7 +8,7 @@
         <version>3.4.3</version>
         <relativePath/>
     </parent>
-    <groupId>com.example</groupId>
+    <groupId>com.vexa</groupId>
     <artifactId>deliveryapp</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>deliveryapp</name>
