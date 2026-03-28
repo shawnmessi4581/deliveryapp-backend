@@ -135,14 +135,26 @@ public class AuthService {
                     "UNVERIFIED: Phone number not verified. Please complete OTP verification.");
         }
 
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getPhoneNumber(),
-                        request.getPassword()));
+        // 1. Authenticate with Try/Catch for better error handling
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getPhoneNumber(),
+                            request.getPassword()));
+        } catch (org.springframework.security.authentication.BadCredentialsException e) {
+            // This catches wrong passwords
+            throw new InvalidDataException("Incorrect password. Please try again.");
+        } catch (Exception e) {
+            // Catch any other auth-related errors (e.g. locked accounts in Spring Security)
+            throw new InvalidDataException("Authentication failed: " + e.getMessage());
+        }
 
+        // 2. Update Last Login
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
+        // 3. Generate Token and Response
         String token = tokenService.generateToken(authentication, user.getUserId());
         UserResponse userResponse = userMapper.toUserResponse(user);
 
