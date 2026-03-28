@@ -2,6 +2,7 @@ package com.deliveryapp.controller;
 
 import com.deliveryapp.dto.auth.AuthResponse;
 import com.deliveryapp.dto.auth.LoginRequest;
+import com.deliveryapp.dto.auth.ResendOtpRequest;
 import com.deliveryapp.dto.auth.SignupRequest;
 import com.deliveryapp.dto.user.ForgotPasswordRequest;
 import com.deliveryapp.dto.user.ResetPasswordRequest;
@@ -68,5 +69,11 @@ public class AuthController {
                 request.getPhoneNumber(),
                 request.getOtp(),
                 request.getNewPassword()));
+    }
+
+    @PostMapping("/resend-otp")
+    public ResponseEntity<String> resendOtp(@RequestBody ResendOtpRequest request) {
+        String response = authService.resendOtp(request.getPhoneNumber());
+        return ResponseEntity.ok(response);
     }
 }

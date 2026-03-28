@@ -28,7 +28,7 @@ public class SmsService {
 
             // 1. Prepare the message text
             String messageText = "Your All In verification code is: " + otpCode
-                    + ". Valid for 10 minutes. Do not share it with anyone.";
+                    + ". Valid for 30 minutes. Do not share it with anyone.";
 
             // 2. Format the phone number (Ensure it's just the numbers, no '+')
             String formattedPhone = phoneNumber.replace("+", "");

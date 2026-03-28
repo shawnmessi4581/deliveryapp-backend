@@ -205,6 +205,34 @@ public class AuthService {
         return "Password changed successfully. You can now log in.";
     }
 
+    /**
+     * Universal Resend OTP method.
+     * Works for both inactive (registering) and active (password reset) users.
+     * Includes a 1-minute cooldown to prevent SMS spam / abuse.
+     */
+    @Transactional
+    public String resendOtp(String phoneNumber) {
+        User user = userRepository.findByPhoneNumber(phoneNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("No account found with this phone number."));
+
+        // Anti-Spam / Cooldown Check: Look for the most recent OTP
+        otpVerificationRepository.findFirstByPhoneNumberOrderByCreatedAtDesc(phoneNumber)
+                .ifPresent(lastOtp -> {
+                    // If the last OTP was created less than 1 minute ago, block the request
+                    if (lastOtp.getCreatedAt().plusMinutes(1).isAfter(LocalDateTime.now())) {
+                        throw new InvalidDataException("Please wait at least 1 minute before requesting a new OTP.");
+                    }
+                });
+
+        // Reuse your existing helper method (clears old OTPs, generates new, sends SMS)
+        sendOtp(phoneNumber, user);
+
+        log.info("OTP resent to: [...{}]",
+                phoneNumber.substring(Math.max(0, phoneNumber.length() - 4)));
+
+        return "A new OTP has been sent to your phone.";
+    }
+
     // ─── Shared Helpers ────────────────────────────────────────────────────────
 
     /**
@@ -218,7 +246,7 @@ public class AuthService {
         OtpVerification otp = new OtpVerification();
         otp.setPhoneNumber(phoneNumber);
         otp.setOtpCode(otpCode);
-        otp.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+        otp.setExpiresAt(LocalDateTime.now().plusMinutes(30));
         otp.setIsVerified(false);
         otp.setUser(user);
         otpVerificationRepository.save(otp);
