@@ -31,3 +31,5 @@ build/
 
 ### VS Code ###
 .vscode/
+*.json # or be more specific
+.env
