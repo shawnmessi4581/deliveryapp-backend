@@ -36,11 +36,11 @@ public class NotificationController {
         return ResponseEntity.ok("Notification marked as read");
     }
 
-    // 4. Send Notification (Updated for Multipart/File Upload)
+    // 4. Send Notification (Updated for Multipart/File Upload & Target Group)
     @PostMapping(value = "/send", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> sendNotification(
             @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) String topic,
+            @RequestParam(required = false) String targetGroup, // CHANGED from topic
             @RequestParam String title,
             @RequestParam String message,
             @RequestParam(required = false) String type,
@@ -50,18 +50,16 @@ public class NotificationController {
         if (userId != null) {
             // Send to Specific User
             notificationService.sendNotification(
-                    userId, title, message, image, type, referenceId
-            );
+                    userId, title, message, image, type, referenceId);
             return ResponseEntity.ok("Sent to User " + userId);
-        }
-        else if (topic != null && !topic.isEmpty()) {
-            // Send to Topic
-            notificationService.sendGlobalNotification(
-                    topic, title, message, image, type, referenceId
-            );
-            return ResponseEntity.ok("Sent to Topic: " + topic);
+        } else if (targetGroup != null && !targetGroup.isEmpty()) {
+            // Send to Group (e.g. "CUSTOMER", "DRIVER", "all_users")
+            // This loops through all users in that group, saves to DB, and sends Multicast
+            notificationService.sendGroupNotification(
+                    targetGroup, title, message, image, type, referenceId);
+            return ResponseEntity.ok("Sent to Target Group: " + targetGroup);
         }
 
-        return ResponseEntity.badRequest().body("Please provide either userId or topic");
+        return ResponseEntity.badRequest().body("Please provide either userId or targetGroup");
     }
 }

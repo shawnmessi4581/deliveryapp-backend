@@ -25,7 +25,7 @@ public class CouponService {
     // --- Admin: Create Coupon ---
     public Coupon createCoupon(CouponRequest request) {
         if (couponRepository.existsByCode(request.getCode())) {
-            throw new DuplicateResourceException("Coupon code already exists");
+            throw new DuplicateResourceException("رمز القسيمة موجود مسبقاً");
         }
         Coupon coupon = new Coupon();
         mapRequestToEntity(coupon, request); // Helper method used here
@@ -49,7 +49,7 @@ public class CouponService {
     // 2. Get Coupon By ID
     public Coupon getCouponById(Long id) {
         return couponRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("القسيمة غير موجودة برقم: " + id));
     }
 
     // 3. Update Coupon
@@ -60,7 +60,7 @@ public class CouponService {
         // Check if code is being changed and if new code already exists
         if (!coupon.getCode().equalsIgnoreCase(request.getCode()) &&
                 couponRepository.existsByCode(request.getCode())) {
-            throw new DuplicateResourceException("Coupon code " + request.getCode() + " already exists");
+            throw new DuplicateResourceException("رمز القسيمة " + request.getCode() + " موجود مسبقاً");
         }
 
         // Update fields
@@ -73,7 +73,7 @@ public class CouponService {
     // 4. Delete Coupon
     public void deleteCoupon(Long id) {
         if (!couponRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Coupon not found with id: " + id);
+            throw new ResourceNotFoundException("القسيمة غير موجودة برقم: " + id);
         }
         // Note: You might want to prevent deletion if the coupon has usage history
         // or just use soft delete (isActive = false). For now, standard delete:
@@ -132,27 +132,27 @@ public class CouponService {
     public Coupon validateCouponForOrder(String code, Long userId, List<OrderItem> items, Store store) {
         // 1. Fetch Coupon
         Coupon coupon = couponRepository.findByCode(code)
-                .orElseThrow(() -> new ResourceNotFoundException("Invalid coupon code"));
+                .orElseThrow(() -> new ResourceNotFoundException("رمز قسيمة غير صالح"));
 
         // 2. Basic Status Checks
         if (Boolean.FALSE.equals(coupon.getIsActive())) {
-            throw new InvalidDataException("Coupon is inactive");
+            throw new InvalidDataException("القسيمة غير فعالة");
         }
         LocalDateTime now = LocalDateTime.now();
         if (now.isBefore(coupon.getStartDate()) || now.isAfter(coupon.getEndDate())) {
-            throw new InvalidDataException("Coupon is expired or not started yet");
+            throw new InvalidDataException("مدة القسيمة انتهت أو لم تبدأ بعد");
         }
 
         // 3. Global Usage Limit
         if (coupon.getTotalUsageLimit() != null &&
                 coupon.getCurrentUsageCount() >= coupon.getTotalUsageLimit()) {
-            throw new InvalidDataException("Coupon usage limit reached");
+            throw new InvalidDataException("تم الوصول إلى الحد الأقصى لاستخدام القسيمة");
         }
 
         // 4. Per User Usage Limit
         Integer userUsage = usageRepository.countByCouponIdAndUserId(coupon.getCouponId(), userId);
         if (userUsage >= coupon.getMaxUsagePerUser()) {
-            throw new InvalidDataException("You have already used this coupon the maximum number of times");
+            throw new InvalidDataException("لقد استخدمت هذه القسيمة الحد الأقصى من المرات");
         }
 
         // 5. First Order Check
@@ -161,7 +161,7 @@ public class CouponService {
             // strictness)
             // Here checking if they have a coupon usage record
             if (usageRepository.existsByUserId(userId)) {
-                throw new InvalidDataException("This coupon is valid for first orders only");
+                throw new InvalidDataException("هذه القسيمة صالحة للطلبات الأولى فقط");
             }
         }
 
@@ -173,7 +173,7 @@ public class CouponService {
 
         if (coupon.getMinOrderAmount() != null &&
                 BigDecimal.valueOf(itemsSubtotal).compareTo(coupon.getMinOrderAmount()) < 0) {
-            throw new InvalidDataException("Minimum order amount of " + coupon.getMinOrderAmount() + " not met");
+            throw new InvalidDataException("لم يتم الوصول للحد الأدنى للطلب " + coupon.getMinOrderAmount());
         }
 
         // 7. Applicability Check (Scope)
@@ -181,7 +181,7 @@ public class CouponService {
             switch (coupon.getApplicableTo()) {
                 case STORE:
                     if (!store.getStoreId().equals(coupon.getApplicableId())) {
-                        throw new InvalidDataException("Coupon is not valid for this store");
+                        throw new InvalidDataException("القسيمة غير صالحة لهذا المتجر");
                     }
                     break;
 
@@ -190,7 +190,7 @@ public class CouponService {
                             .anyMatch(item -> item.getProduct().getCategory().getCategoryId()
                                     .equals(coupon.getApplicableId()));
                     if (!hasCategory) {
-                        throw new InvalidDataException("Coupon requires items from a specific category");
+                        throw new InvalidDataException("تتطلب القسيمة عناصر من فئة معينة");
                     }
                     break;
 
@@ -198,7 +198,7 @@ public class CouponService {
                     boolean hasProduct = items.stream()
                             .anyMatch(item -> item.getProduct().getProductId().equals(coupon.getApplicableId()));
                     if (!hasProduct) {
-                        throw new InvalidDataException("Coupon requires a specific product in cart");
+                        throw new InvalidDataException("تتطلب القسيمة منتجاً معيناً في سلة التسوق");
                     }
                     break;
 

@@ -56,7 +56,7 @@ public class AuthService {
     public String register(SignupRequest request) {
         userRepository.findByPhoneNumber(request.getPhoneNumber()).ifPresent(existingUser -> {
             if (Boolean.TRUE.equals(existingUser.getIsActive())) {
-                throw new DuplicateResourceException("Phone number already registered.");
+                throw new DuplicateResourceException("رقم الهاتف مسجل مسبقاً.");
             }
             // Unverified leftover — clean up so they can try again
             otpVerificationRepository.deleteByPhoneNumber(request.getPhoneNumber());
@@ -78,7 +78,7 @@ public class AuthService {
                 request.getPhoneNumber().substring(
                         Math.max(0, request.getPhoneNumber().length() - 4)));
 
-        return "Registration successful. Please verify your phone number with the OTP we sent.";
+        return "تم التسجيل بنجاح. يرجى التحقق من رقم هاتفك باستخدام رمز التحقق المرسل.";
     }
 
     // ─── Account Verification (after registration) ─────────────────────────────
@@ -93,12 +93,12 @@ public class AuthService {
     public AuthResponse verifyAccount(String phoneNumber, String otpCode) {
         OtpVerification dbOtp = otpVerificationRepository
                 .findFirstByPhoneNumberOrderByCreatedAtDesc(phoneNumber)
-                .orElseThrow(() -> new InvalidDataException("Invalid or expired OTP."));
+                .orElseThrow(() -> new InvalidDataException("رمز التحقق غير صالح أو منتهي الصلاحية."));
 
         validateOtp(dbOtp, otpCode);
 
         User user = userRepository.findByPhoneNumber(phoneNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود."));
 
         // Activate the account
         user.setIsActive(true);
@@ -128,11 +128,11 @@ public class AuthService {
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByPhoneNumber(request.getPhoneNumber())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "No account found with this phone number."));
+                        "لم يتم العثور على حساب بهذا الرقم."));
 
         if (Boolean.FALSE.equals(user.getIsActive())) {
             throw new InvalidDataException(
-                    "UNVERIFIED: Phone number not verified. Please complete OTP verification.");
+                    "غير موثق: رقم الهاتف غير موثق. يرجى إكمال عملية التحقق.");
         }
 
         // 1. Authenticate with Try/Catch for better error handling
@@ -144,10 +144,10 @@ public class AuthService {
                             request.getPassword()));
         } catch (org.springframework.security.authentication.BadCredentialsException e) {
             // This catches wrong passwords
-            throw new InvalidDataException("Incorrect password. Please try again.");
+            throw new InvalidDataException("كلمة المرور غير صحيحة. يرجى المحاولة مرة أخرى.");
         } catch (Exception e) {
             // Catch any other auth-related errors (e.g. locked accounts in Spring Security)
-            throw new InvalidDataException("Authentication failed: " + e.getMessage());
+            throw new InvalidDataException("فشل المصادقة: " + e.getMessage());
         }
 
         // 2. Update Last Login
@@ -166,7 +166,7 @@ public class AuthService {
     @Transactional
     public void logout(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود."));
         user.setFcmToken(null);
         userRepository.save(user);
     }
@@ -189,7 +189,7 @@ public class AuthService {
                     phoneNumber.substring(Math.max(0, phoneNumber.length() - 4)));
         });
 
-        return "If this number is registered, an OTP has been sent.";
+        return "إذا كان هذا الرقم مسجلاً، فقد تم إرسال رمز التحقق.";
     }
 
     /**
@@ -199,12 +199,12 @@ public class AuthService {
     public String resetPassword(String phoneNumber, String otpCode, String newPassword) {
         OtpVerification dbOtp = otpVerificationRepository
                 .findFirstByPhoneNumberOrderByCreatedAtDesc(phoneNumber)
-                .orElseThrow(() -> new InvalidDataException("Invalid or expired OTP."));
+                .orElseThrow(() -> new InvalidDataException("رمز التحقق غير صالح أو منتهي الصلاحية."));
 
         validateOtp(dbOtp, otpCode);
 
         User user = userRepository.findByPhoneNumber(phoneNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود."));
 
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
@@ -214,7 +214,7 @@ public class AuthService {
         log.info("Password reset successful: [...{}]",
                 phoneNumber.substring(Math.max(0, phoneNumber.length() - 4)));
 
-        return "Password changed successfully. You can now log in.";
+        return "تم تغيير كلمة المرور بنجاح. يمكنك الآن تسجيل الدخول.";
     }
 
     /**
@@ -225,14 +225,14 @@ public class AuthService {
     @Transactional
     public String resendOtp(String phoneNumber) {
         User user = userRepository.findByPhoneNumber(phoneNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("No account found with this phone number."));
+                .orElseThrow(() -> new ResourceNotFoundException("لم يتم العثور على حساب بهذا الرقم."));
 
         // Anti-Spam / Cooldown Check: Look for the most recent OTP
         otpVerificationRepository.findFirstByPhoneNumberOrderByCreatedAtDesc(phoneNumber)
                 .ifPresent(lastOtp -> {
                     // If the last OTP was created less than 1 minute ago, block the request
                     if (lastOtp.getCreatedAt().plusMinutes(1).isAfter(LocalDateTime.now())) {
-                        throw new InvalidDataException("Please wait at least 1 minute before requesting a new OTP.");
+                        throw new InvalidDataException("يرجى الانتظار دقيقة واحدة على الأقل قبل طلب رمز جديد.");
                     }
                 });
 
@@ -242,7 +242,7 @@ public class AuthService {
         log.info("OTP resent to: [...{}]",
                 phoneNumber.substring(Math.max(0, phoneNumber.length() - 4)));
 
-        return "A new OTP has been sent to your phone.";
+        return "تم إرسال رمز تحقق جديد إلى هاتفك.";
     }
 
     // ─── Shared Helpers ────────────────────────────────────────────────────────
@@ -276,10 +276,10 @@ public class AuthService {
     private void validateOtp(OtpVerification dbOtp, String submittedCode) {
         if (dbOtp.isLocked()) {
             throw new InvalidDataException(
-                    "Too many incorrect attempts. Please request a new OTP.");
+                    "محاولات خاطئة كثيرة. يرجى طلب رمز جديد.");
         }
         if (dbOtp.isExpired()) {
-            throw new InvalidDataException("OTP has expired. Please request a new one.");
+            throw new InvalidDataException("انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد.");
         }
         if (!dbOtp.getOtpCode().equals(submittedCode)) {
             dbOtp.incrementAttempts();
@@ -287,10 +287,10 @@ public class AuthService {
             int remaining = OtpVerification.MAX_ATTEMPTS - dbOtp.getAttemptCount();
             if (remaining <= 0) {
                 throw new InvalidDataException(
-                        "Too many incorrect attempts. Please request a new OTP.");
+                        "محاولات خاطئة كثيرة. يرجى طلب رمز جديد.");
             }
             throw new InvalidDataException(
-                    "Incorrect OTP. " + remaining + " attempt(s) remaining.");
+                    "رمز غير صحيح. تبقى " + remaining + " محاولة (محاولات).");
         }
     }
 

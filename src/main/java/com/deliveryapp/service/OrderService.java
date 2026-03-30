@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -51,19 +52,19 @@ public class OrderService {
 
         // 1. Basic Validation
         if (itemsRequest == null || itemsRequest.isEmpty())
-            throw new InvalidDataException("No items provided.");
+            throw new InvalidDataException("لم يتم تحديد أي عناصر.");
         if (addressId == null)
-            throw new InvalidDataException("Delivery Address is required.");
+            throw new InvalidDataException("عنوان التوصيل مطلوب.");
 
         UserAddress userAddress = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("Address not found with id: " + addressId));
+                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود برقم: " + addressId));
 
         if (!userAddress.getUser().getUserId().equals(userId)) {
-            throw new ResourceNotFoundException("Address does not belong to this user");
+            throw new ResourceNotFoundException("العنوان لا يخص هذا المستخدم");
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود"));
 
         // 2. Process Items & Identify Stores
         Order order = new Order();
@@ -77,13 +78,13 @@ public class OrderService {
 
         for (OrderItemRequest itemReq : itemsRequest) {
             Product product = productRepository.findById(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + itemReq.getProductId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود: " + itemReq.getProductId()));
 
             Store store = product.getStore();
 
             // Check Store Hours
             if (!isStoreOpen(store)) {
-                throw new InvalidDataException("Store '" + store.getName() + "' is currently closed.");
+                throw new InvalidDataException("المتجر '" + store.getName() + "' مغلق حالياً.");
             }
 
             uniqueStores.add(store);
@@ -99,14 +100,15 @@ public class OrderService {
             // Handle Color Selection
             if (itemReq.getColorId() != null) {
                 Color color = colorRepository.findById(itemReq.getColorId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Color not found"));
+                        .orElseThrow(() -> new ResourceNotFoundException("اللون غير موجود"));
 
                 boolean isValidColor = product.getColors().stream()
                         .anyMatch(c -> c.getColorId().equals(color.getColorId()));
 
                 if (!isValidColor)
-                    throw new InvalidDataException("Color not available for this product");
+                    throw new InvalidDataException("اللون غير متوفر لهذا المنتج");
 
+                // Save Snapshot
                 orderItem.setSelectedColor(color);
             }
 
@@ -115,10 +117,10 @@ public class OrderService {
             if (itemReq.getVariantId() != null && itemReq.getVariantId() != 0) {
                 ProductVariant variant = variantRepository.findById(itemReq.getVariantId())
                         .orElseThrow(
-                                () -> new ResourceNotFoundException("Variant not found: " + itemReq.getVariantId()));
+                                () -> new ResourceNotFoundException("النوع غير موجود: " + itemReq.getVariantId()));
 
                 if (!variant.getProduct().getProductId().equals(product.getProductId())) {
-                    throw new InvalidDataException("Variant does not belong to this product");
+                    throw new InvalidDataException("هذا النوع لا ينتمي لهذا المنتج");
                 }
 
                 orderItem.setVariant(variant);
@@ -204,6 +206,13 @@ public class OrderService {
         // 10. Log History
         logStatusChange(savedOrder, null, OrderStatus.PENDING, "Order Placed");
 
+        // 🚨 NEW: Notify Admins and Employees that a new order has arrived!
+        try {
+            notificationService.notifyStaffOfNewOrder(savedOrder.getOrderNumber(), savedOrder.getOrderId());
+        } catch (Exception e) {
+            System.err.println("Failed to notify staff: " + e.getMessage());
+        }
+
         return savedOrder;
     }
 
@@ -214,7 +223,7 @@ public class OrderService {
     @Transactional
     public Order updateOrderStatus(Long orderId, OrderStatus newStatus, Long userId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
 
         OrderStatus oldStatus = order.getStatus();
         order.setStatus(newStatus);
@@ -241,16 +250,16 @@ public class OrderService {
     @Transactional
     public void cancelOrder(Long orderId, Long userId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
 
         // 1. Verify Ownership
         if (!order.getUser().getUserId().equals(userId)) {
-            throw new InvalidDataException("You do not have permission to cancel this order.");
+            throw new InvalidDataException("ليس لديك إذن لإلغاء هذا الطلب.");
         }
 
         // 2. Verify Status
         if (order.getStatus() != OrderStatus.PENDING) {
-            throw new InvalidDataException("You can only cancel an order while it is in PENDING status.");
+            throw new InvalidDataException("يمكنك فقط إلغاء الطلب عندما يكون قيد الانتظار.");
         }
 
         // 3. Reverse Coupon Usage
@@ -261,8 +270,6 @@ public class OrderService {
                 Coupon coupon = couponService.getCouponById(order.getCouponId());
                 if (coupon != null) {
                     coupon.setCurrentUsageCount(Math.max(0, coupon.getCurrentUsageCount() - 1));
-                    // Depending on your CouponService setup, you may need to save it.
-                    // e.g. couponRepository.save(coupon);
                 }
             } catch (ResourceNotFoundException e) {
                 // Ignore if the coupon itself was deleted by an admin
@@ -294,7 +301,7 @@ public class OrderService {
 
     public Order getOrderById(Long orderId) {
         return orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
     }
 
     // ADMIN: Filtered List
@@ -319,7 +326,7 @@ public class OrderService {
     @Transactional
     public void deleteOrder(Long orderId) {
         if (!orderRepository.existsById(orderId)) {
-            throw new ResourceNotFoundException("Order not found with id: " + orderId);
+            throw new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId);
         }
         historyRepository.deleteByOrderOrderId(orderId);
         couponUsageRepository.deleteByOrderId(orderId);
@@ -334,13 +341,13 @@ public class OrderService {
     @Transactional
     public Order assignDriver(Long orderId, Long driverId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
 
         User driver = userRepository.findById(driverId)
-                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + driverId));
+                .orElseThrow(() -> new ResourceNotFoundException("السائق غير موجود برقم: " + driverId));
 
         if (driver.getUserType() != UserType.DRIVER) {
-            throw new InvalidDataException("The selected user is not a Driver");
+            throw new InvalidDataException("المستخدم المحدد ليس سائقاً");
         }
 
         order.setDriver(driver);
@@ -355,8 +362,8 @@ public class OrderService {
         try {
             notificationService.sendNotification(
                     driverId,
-                    "New Order Assigned",
-                    "You have been assigned to Order #" + order.getOrderNumber(),
+                    "تم تعيين طلب جديد",
+                    "تم تعيينك للطلب رقم " + order.getOrderNumber(),
                     null,
                     "DRIVER_ASSIGNMENT",
                     orderId);
@@ -385,10 +392,10 @@ public class OrderService {
 
     public DeliveryFeeResponse calculateDeliveryFee(Long storeId, Long addressId) {
         Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود"));
 
         UserAddress address = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود"));
 
         double distance = distanceUtil.calculateDistance(
                 address.getLatitude(), address.getLongitude(),
@@ -403,19 +410,19 @@ public class OrderService {
 
     public CouponCheckResponse verifyCoupon(CouponCheckRequest request) {
         Store store = storeRepository.findById(request.getStoreId())
-                .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود"));
 
         List<OrderItem> tempItems = new ArrayList<>();
         double subtotal = 0.0;
 
         for (OrderItemRequest itemReq : request.getItems()) {
             Product product = productRepository.findById(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود"));
 
             double price = product.getBasePrice();
             if (itemReq.getVariantId() != null) {
                 ProductVariant variant = variantRepository.findById(itemReq.getVariantId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Variant not found"));
+                        .orElseThrow(() -> new ResourceNotFoundException("النوع غير موجود"));
                 price += variant.getPriceAdjustment();
             }
 
@@ -443,7 +450,7 @@ public class OrderService {
                 coupon.getCouponId(),
                 coupon.getCode(),
                 discount,
-                "Coupon Applied Successfully",
+                "تم تطبيق القسيمة بنجاح",
                 coupon.getDiscountType().name());
     }
 
@@ -453,7 +460,7 @@ public class OrderService {
 
     public OrderTrackingResponse trackOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
 
         OrderTrackingResponse response = new OrderTrackingResponse();
         response.setOrderId(order.getOrderId());
@@ -502,16 +509,16 @@ public class OrderService {
 
     public DeliveryFeeResponse calculateMultiStoreFee(List<Long> storeIds, Long addressId) {
         if (storeIds == null || storeIds.isEmpty()) {
-            throw new InvalidDataException("No stores provided for fee calculation");
+            throw new InvalidDataException("لم يتم توفير متاجر لحساب الرسوم");
         }
 
         List<Store> stores = storeRepository.findAllById(storeIds);
         if (stores.isEmpty()) {
-            throw new ResourceNotFoundException("No valid stores found");
+            throw new ResourceNotFoundException("لم يتم العثور على متاجر صالحة");
         }
 
         UserAddress address = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود"));
 
         double maxFeePerKm = stores.stream()
                 .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)

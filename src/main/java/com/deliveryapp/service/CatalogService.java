@@ -34,13 +34,13 @@ public class CatalogService {
 
     public Category getCategoryById(Long id) {
         return categoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("الفئة غير موجودة برقم: " + id));
     }
 
     // ================= SUBCATEGORIES =================
     public List<SubCategory> getSubCategoriesByCategoryId(Long categoryId) {
         if (!categoryRepository.existsById(categoryId)) {
-            throw new ResourceNotFoundException("Category not found with id: " + categoryId);
+            throw new ResourceNotFoundException("الفئة غير موجودة برقم: " + categoryId);
         }
         // ✅ FIX: Only return Active SubCategories, ordered by Display Order
         return subCategoryRepository.findByCategoryCategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(categoryId);
@@ -54,7 +54,7 @@ public class CatalogService {
 
     public Store getStoreById(Long id) {
         return storeRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Store not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود برقم: " + id));
     }
 
     public List<Store> getStoresByCategory(Long categoryId) {
@@ -64,7 +64,7 @@ public class CatalogService {
 
     public List<Store> getStoresBySubCategory(Long subCategoryId) {
         if (!subCategoryRepository.existsById(subCategoryId)) {
-            throw new ResourceNotFoundException("SubCategory not found with id: " + subCategoryId);
+            throw new ResourceNotFoundException("الفئة الفرعية غير موجودة برقم: " + subCategoryId);
         }
         // ✅ FIX: Only Active Stores, Ordered
         return storeRepository.findBySubCategorySubcategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(subCategoryId);
@@ -78,26 +78,26 @@ public class CatalogService {
 
     public Product getProductById(Long id) {
         return productRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود برقم: " + id));
     }
 
     public Page<Product> getProductsByStore(Long storeId, Pageable pageable) {
         if (!storeRepository.existsById(storeId)) {
-            throw new ResourceNotFoundException("Store not found with id: " + storeId);
+            throw new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId);
         }
         return productRepository.findByStoreStoreIdAndIsAvailableTrue(storeId, pageable);
     }
 
     public Page<Product> getProductsByCategory(Long categoryId, Pageable pageable) {
         if (!categoryRepository.existsById(categoryId)) {
-            throw new ResourceNotFoundException("Category not found with id: " + categoryId);
+            throw new ResourceNotFoundException("الفئة غير موجودة برقم: " + categoryId);
         }
         return productRepository.findByCategoryCategoryIdAndIsAvailableTrue(categoryId, pageable);
     }
 
     public Page<Product> getProductsBySubCategory(Long subCategoryId, Pageable pageable) {
         if (!subCategoryRepository.existsById(subCategoryId)) {
-            throw new ResourceNotFoundException("SubCategory not found with id: " + subCategoryId);
+            throw new ResourceNotFoundException("الفئة الفرعية غير موجودة برقم: " + subCategoryId);
         }
         return productRepository.findBySubCategorySubcategoryIdAndIsAvailableTrue(subCategoryId, pageable);
     }
@@ -115,7 +115,7 @@ public class CatalogService {
 
     public Page<Product> searchProductsInStore(String keyword, Long storeId, Pageable pageable) {
         if (!storeRepository.existsById(storeId)) {
-            throw new ResourceNotFoundException("Store not found with id: " + storeId);
+            throw new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId);
         }
         if (keyword == null)
             keyword = "";

@@ -19,23 +19,23 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleResourceNotFoundException(
             ResourceNotFoundException ex, WebRequest request) {
-        return buildResponse(HttpStatus.NOT_FOUND, "Not Found", ex.getMessage(), request);
+        return buildResponse(HttpStatus.NOT_FOUND, "غير موجود", ex.getMessage(), request);
     }
 
     @ExceptionHandler(InvalidDataException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidDataException(
             InvalidDataException ex, WebRequest request) {
-        return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage(), request);
+        return buildResponse(HttpStatus.BAD_REQUEST, "طلب غير صالح", ex.getMessage(), request);
     }
 
     @ExceptionHandler(DuplicateResourceException.class)
     public ResponseEntity<Map<String, Object>> handleDuplicateResourceException(
             DuplicateResourceException ex, WebRequest request) {
-        return buildResponse(HttpStatus.CONFLICT, "Conflict", ex.getMessage(), request);
+        return buildResponse(HttpStatus.CONFLICT, "تعارض", ex.getMessage(), request);
     }
     @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
     public ResponseEntity<Map<String, Object>> handleAccessDeniedException(Exception ex,WebRequest request) {
-        return buildResponse(HttpStatus.FORBIDDEN, "forbidden", ex.getMessage(), request);
+        return buildResponse(HttpStatus.FORBIDDEN, "مرفوض", ex.getMessage(), request);
     }
     // ADD THIS METHOD
     @ExceptionHandler(MultipartException.class)
@@ -48,7 +48,7 @@ public class GlobalExceptionHandler {
         } else {
             ex.printStackTrace();
         }
-        return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage(), request);
+        return buildResponse(HttpStatus.BAD_REQUEST, "طلب غير صالح", ex.getMessage(), request);
 
     }
 
@@ -56,7 +56,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleGlobalException(
             Exception ex, WebRequest request) {
         // Log the actual error here (ex.printStackTrace()) in a real app
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", "An unexpected error occurred", request);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "خطأ داخلي في الخادم", "حدث خطأ غير متوقع", request);
     }
 
 
