@@ -66,7 +66,7 @@ public class AuthService {
         User user = new User();
         user.setName(request.getName());
         user.setPhoneNumber(request.getPhoneNumber());
-        user.setEmail(request.getEmail());
+        // user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setUserType(UserType.CUSTOMER);
         user.setIsActive(false); // ← Inactive until phone is verified
