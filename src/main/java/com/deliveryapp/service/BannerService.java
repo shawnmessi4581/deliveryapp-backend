@@ -55,7 +55,7 @@ public class BannerService {
     @Transactional
     public Banner updateBanner(Long id, BannerRequest request, MultipartFile image) {
         Banner banner = bannerRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Banner not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("اللوحة الإعلانية غير موجودة برقم: " + id));
 
         if (request.getTitle() != null)
             banner.setTitle(request.getTitle());
@@ -86,7 +86,7 @@ public class BannerService {
     // --- ADMIN: Delete Banner ---
     public void deleteBanner(Long id) {
         if (!bannerRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Banner not found with id: " + id);
+            throw new ResourceNotFoundException("اللوحة الإعلانية غير موجودة برقم: " + id);
         }
         bannerRepository.deleteById(id);
     }

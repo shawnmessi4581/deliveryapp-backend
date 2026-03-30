@@ -53,7 +53,7 @@ public class AuthController {
     public ResponseEntity<String> logout(@AuthenticationPrincipal Jwt jwt) {
         Long userId = jwt.getClaim("userId");
         authService.logout(userId);
-        return ResponseEntity.ok("Logged out successfully");
+        return ResponseEntity.ok("تم تسجيل الخروج بنجاح");
     }
 
     /** Step 1 of password reset — sends OTP to phone. */

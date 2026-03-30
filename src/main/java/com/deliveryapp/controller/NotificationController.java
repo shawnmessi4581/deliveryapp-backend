@@ -33,7 +33,7 @@ public class NotificationController {
     @PatchMapping("/{notificationId}/read")
     public ResponseEntity<String> markAsRead(@PathVariable Long notificationId) {
         notificationService.markAsRead(notificationId);
-        return ResponseEntity.ok("Notification marked as read");
+        return ResponseEntity.ok("تم تمييز الإشعار كمقروء");
     }
 
     // 4. Send Notification (Updated for Multipart/File Upload & Target Group)
@@ -51,15 +51,15 @@ public class NotificationController {
             // Send to Specific User
             notificationService.sendNotification(
                     userId, title, message, image, type, referenceId);
-            return ResponseEntity.ok("Sent to User " + userId);
+            return ResponseEntity.ok("تم الإرسال للمستخدم " + userId);
         } else if (targetGroup != null && !targetGroup.isEmpty()) {
             // Send to Group (e.g. "CUSTOMER", "DRIVER", "all_users")
             // This loops through all users in that group, saves to DB, and sends Multicast
             notificationService.sendGroupNotification(
                     targetGroup, title, message, image, type, referenceId);
-            return ResponseEntity.ok("Sent to Target Group: " + targetGroup);
+            return ResponseEntity.ok("تم الإرسال للمجموعة المستهدفة: " + targetGroup);
         }
 
-        return ResponseEntity.badRequest().body("Please provide either userId or targetGroup");
+        return ResponseEntity.badRequest().body("يرجى توفير إما userId أو targetGroup");
     }
 }

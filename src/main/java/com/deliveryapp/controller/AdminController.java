@@ -52,7 +52,7 @@ public class AdminController {
     @PreAuthorize("hasRole('ADMIN')") // ONLY Admins can delete users
     public ResponseEntity<String> deleteUser(@PathVariable Long userId) {
         adminService.deleteUser(userId);
-        return ResponseEntity.ok("User deleted successfully");
+        return ResponseEntity.ok("تم حذف المستخدم بنجاح");
     }
 
     @PatchMapping("/users/{userId}/status")
@@ -61,8 +61,8 @@ public class AdminController {
             @PathVariable Long userId,
             @RequestParam Boolean active) {
         adminService.updateUserStatus(userId, active);
-        String status = active ? "activated" : "deactivated";
-        return ResponseEntity.ok("User has been " + status);
+        String status = active ? "تم تفعيل المستخدم" : "تم تعطيل المستخدم";
+        return ResponseEntity.ok(status);
     }
 
     @PostMapping("/users/create")
@@ -124,7 +124,7 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteCategory(@PathVariable Long id) {
         adminService.deleteCategory(id);
-        return ResponseEntity.ok("Category deleted");
+        return ResponseEntity.ok("تم حذف الفئة");
     }
 
     @PutMapping(value = "/categories/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -169,7 +169,7 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteSubCategory(@PathVariable Long id) {
         adminService.deleteSubCategory(id);
-        return ResponseEntity.ok("SubCategory deleted successfully");
+        return ResponseEntity.ok("تم حذف الفئة الفرعية بنجاح");
     }
 
     // --- STORES ---
@@ -207,7 +207,7 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteStore(@PathVariable Long id) {
         adminService.deleteStore(id);
-        return ResponseEntity.ok("Store deleted");
+        return ResponseEntity.ok("تم حذف المتجر");
     }
 
     // --- PRODUCTS ---
@@ -253,14 +253,14 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteProductVariant(@PathVariable Long variantId) {
         adminService.deleteProductVariant(variantId);
-        return ResponseEntity.ok("Variant deleted successfully");
+        return ResponseEntity.ok("تم حذف النوع بنجاح");
     }
 
     @DeleteMapping("/products/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteProduct(@PathVariable Long id) {
         adminService.deleteProduct(id);
-        return ResponseEntity.ok("Product deleted");
+        return ResponseEntity.ok("تم حذف المنتج");
     }
 
     // --- INSTRUCTIONS ---
@@ -277,7 +277,7 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteInstruction(@PathVariable Long id) {
         instructionRepository.deleteById(id);
-        return ResponseEntity.ok("Instruction deleted");
+        return ResponseEntity.ok("تم حذف التعليمات");
     }
 
     @GetMapping("/instructions")
@@ -304,7 +304,7 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> createColor(@RequestBody ColorRequest request) {
         adminService.createColor(request.getName(), request.getHexCode());
-        return ResponseEntity.ok("Color created");
+        return ResponseEntity.ok("تمت إضافة اللون");
     }
 
     @PutMapping("/colors/{id}")
@@ -328,6 +328,6 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<String> deleteColor(@PathVariable Long id) {
         adminService.deleteColor(id);
-        return ResponseEntity.ok("Color deleted");
+        return ResponseEntity.ok("تم حذف اللون");
     }
 }

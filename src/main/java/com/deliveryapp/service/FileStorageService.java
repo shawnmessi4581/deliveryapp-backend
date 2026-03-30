@@ -28,13 +28,13 @@ public class FileStorageService {
         try {
             // 1. Validate file
             if (file.isEmpty()) {
-                throw new InvalidDataException("Cannot upload empty file");
+                throw new InvalidDataException("لا يمكن رفع ملف فارغ");
             }
 
             // 2. Validate file type (Images only)
             String contentType = file.getContentType();
             if (contentType == null || !contentType.startsWith("image/")) {
-                throw new InvalidDataException("Only image files are allowed");
+                throw new InvalidDataException("يُسمح برفع ملفات الصور فقط");
             }
 
             // 3. Prepare Paths
@@ -63,7 +63,7 @@ public class FileStorageService {
             return "/uploads/" + subDirectory + "/" + newFilename;
 
         } catch (IOException ex) {
-            throw new InvalidDataException("Could not store file. Please try again! Error: " + ex.getMessage());
+            throw new InvalidDataException("تعذر تخزين الملف. يرجى المحاولة مرة أخرى! الخطأ: " + ex.getMessage());
         }
     }
 
@@ -88,13 +88,13 @@ public class FileStorageService {
     public String storeApkFile(MultipartFile file) {
         try {
             if (file.isEmpty()) {
-                throw new com.deliveryapp.exception.InvalidDataException("Cannot upload empty APK file");
+                throw new com.deliveryapp.exception.InvalidDataException("لا يمكن رفع ملف APK فارغ");
             }
 
             // Ensure it's an APK
             String originalFilename = file.getOriginalFilename();
             if (originalFilename == null || !originalFilename.endsWith(".apk")) {
-                throw new com.deliveryapp.exception.InvalidDataException("Only .apk files are allowed");
+                throw new com.deliveryapp.exception.InvalidDataException("يُسمح برفع ملفات .apk فقط");
             }
 
             // Target folder: /uploads/app/
@@ -112,7 +112,7 @@ public class FileStorageService {
             return "/uploads/app/Allin.apk";
 
         } catch (java.io.IOException ex) {
-            throw new com.deliveryapp.exception.InvalidDataException("Could not store APK file. " + ex.getMessage());
+            throw new com.deliveryapp.exception.InvalidDataException("تعذر تخزين ملف APK. " + ex.getMessage());
         }
     }
 }

@@ -79,6 +79,6 @@ public class UserController {
             @RequestBody FcmTokenRequest request) {
 
         userService.updateFcmToken(userId, request.getFcmToken());
-        return ResponseEntity.ok("FCM Token updated successfully");
+        return ResponseEntity.ok("تم تحديث رمز FCM بنجاح");
     }
 }

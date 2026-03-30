@@ -80,6 +80,6 @@ public class OrderController {
         Long userId = ((Jwt) SecurityContextHolder.getContext().getAuthentication().getPrincipal()).getClaim("userId");
 
         orderService.cancelOrder(orderId, userId);
-        return ResponseEntity.ok("Order cancelled successfully");
+        return ResponseEntity.ok("تم إلغاء الطلب بنجاح");
     }
 }

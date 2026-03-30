@@ -27,7 +27,7 @@ public class AddressService {
     @Transactional
     public UserAddress addAddress(Long userId, AddressRequest request) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود"));
 
         UserAddress address = new UserAddress();
         address.setUser(user);
@@ -47,7 +47,7 @@ public class AddressService {
     public void deleteAddress(Long addressId) {
         // 1. Find the address
         UserAddress addressToDelete = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("Address not found with id: " + addressId));
+                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود برقم: " + addressId));
 
         Long userId = addressToDelete.getUser().getUserId();
         boolean wasDefault = Boolean.TRUE.equals(addressToDelete.getIsDefault());
@@ -74,10 +74,10 @@ public class AddressService {
     public void setDefaultAddress(Long userId, Long addressId) {
         // 1. Verify the address exists and belongs to the user
         UserAddress selectedAddress = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود"));
 
         if (!selectedAddress.getUser().getUserId().equals(userId)) {
-            throw new InvalidDataException("This address does not belong to the specified user.");
+            throw new InvalidDataException("هذا العنوان لا يخص المستخدم المحدد.");
         }
 
         // 2. Set ALL addresses for this user to isDefault = false

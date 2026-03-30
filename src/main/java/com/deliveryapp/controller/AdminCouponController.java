@@ -52,6 +52,6 @@ public class AdminCouponController {
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteCoupon(@PathVariable Long id) {
         couponService.deleteCoupon(id);
-        return ResponseEntity.ok("Coupon deleted successfully");
+        return ResponseEntity.ok("تم حذف القسيمة بنجاح");
     }
 }

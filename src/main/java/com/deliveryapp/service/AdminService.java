@@ -44,7 +44,7 @@ public class AdminService {
 
     public void deleteUser(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود برقم: " + userId));
 
         // 🧹 Cleanup: Delete profile image if exists
         if (user.getProfileImage() != null) {
@@ -57,7 +57,7 @@ public class AdminService {
     @Transactional
     public void updateUserStatus(Long userId, Boolean isActive) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود برقم: " + userId));
 
         user.setIsActive(isActive);
         userRepository.save(user);
@@ -66,7 +66,7 @@ public class AdminService {
     @Transactional
     public User createDriver(CreateDriverRequest request, MultipartFile image) {
         if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
-            throw new DuplicateResourceException("Phone number already registered");
+            throw new DuplicateResourceException("رقم الهاتف مسجل بالفعل");
         }
 
         User driver = new User();
@@ -99,7 +99,7 @@ public class AdminService {
     @Transactional
     public User createDashboardUser(CreateUserRequest request) {
         if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
-            throw new DuplicateResourceException("Phone number already exists");
+            throw new DuplicateResourceException("رقم الهاتف موجود بالفعل");
         }
 
         User user = new User();
@@ -111,7 +111,7 @@ public class AdminService {
         if (request.getRole() == UserType.ADMIN || request.getRole() == UserType.EMPLOYEE) {
             user.setUserType(request.getRole());
         } else {
-            throw new InvalidDataException("Invalid role. Use ADMIN or EMPLOYEE.");
+            throw new InvalidDataException("دور غير صالح. استخدم ADMIN أو EMPLOYEE.");
         }
 
         user.setIsActive(true);
@@ -144,7 +144,7 @@ public class AdminService {
     @Transactional
     public Category updateCategory(Long id, CategoryRequest request, MultipartFile image) {
         Category category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("الفئة غير موجودة برقم: " + id));
 
         if (request.getName() != null && !request.getName().trim().isEmpty()) {
             category.setName(request.getName());
@@ -170,7 +170,7 @@ public class AdminService {
 
     public void deleteCategory(Long id) {
         Category category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("الفئة غير موجودة"));
 
         // 🧹 Cleanup: Delete category icon
         if (category.getIcon() != null) {
@@ -189,7 +189,7 @@ public class AdminService {
     @Transactional
     public SubCategory createSubCategory(SubCategoryRequest request, MultipartFile image) {
         Category parent = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new ResourceNotFoundException("Parent Category not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("الفئة الأصلية غير موجودة"));
 
         SubCategory sub = new SubCategory();
         sub.setName(request.getName());
@@ -208,7 +208,7 @@ public class AdminService {
     @Transactional
     public SubCategory updateSubCategory(Long id, SubCategoryRequest request, MultipartFile image) {
         SubCategory subCategory = subCategoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("SubCategory not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("الفئة الفرعية غير موجودة برقم: " + id));
 
         if (request.getName() != null && !request.getName().trim().isEmpty()) {
             subCategory.setName(request.getName());
@@ -216,7 +216,7 @@ public class AdminService {
         if (request.getCategoryId() != null) {
             Category newParent = categoryRepository.findById(request.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "Category not found with id: " + request.getCategoryId()));
+                            "الفئة غير موجودة برقم: " + request.getCategoryId()));
             subCategory.setCategory(newParent);
         }
         if (request.getIsActive() != null) {
@@ -240,7 +240,7 @@ public class AdminService {
 
     public void deleteSubCategory(Long id) {
         SubCategory subCategory = subCategoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("SubCategory not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("الفئة الفرعية غير موجودة برقم: " + id));
 
         // 🧹 Cleanup: Delete icon
         if (subCategory.getIcon() != null) {
@@ -299,7 +299,7 @@ public class AdminService {
     @Transactional
     public Store updateStore(Long id, StoreRequest request, Boolean isActive, MultipartFile logo, MultipartFile cover) {
         Store store = storeRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Store not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود برقم: " + id));
 
         if (request.getName() != null)
             store.setName(request.getName());
@@ -334,12 +334,12 @@ public class AdminService {
 
         if (request.getCategoryId() != null) {
             Category cat = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("الفئة غير موجودة"));
             store.setCategory(cat);
         }
         if (request.getSubCategoryId() != null) {
             SubCategory sub = subCategoryRepository.findById(request.getSubCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("SubCategory not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("الفئة الفرعية غير موجودة"));
             store.setSubCategory(sub);
         }
 
@@ -361,7 +361,7 @@ public class AdminService {
 
     public void deleteStore(Long id) {
         Store store = storeRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود"));
 
         // 🧹 Cleanup: Delete store images
         if (store.getLogo() != null)
@@ -381,7 +381,7 @@ public class AdminService {
     @Transactional
     public Product createProduct(ProductRequest request, MultipartFile mainImage, List<MultipartFile> galleryImages) {
         Store store = storeRepository.findById(request.getStoreId())
-                .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود"));
 
         Product product = new Product();
         product.setName(request.getName());
@@ -428,7 +428,7 @@ public class AdminService {
     public Product updateProduct(Long id, ProductRequest request, MultipartFile mainImage,
             List<MultipartFile> galleryImages) {
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود برقم: " + id));
 
         if (request.getName() != null)
             product.setName(request.getName());
@@ -450,12 +450,12 @@ public class AdminService {
         }
         if (request.getCategoryId() != null) {
             Category cat = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("الفئة غير موجودة"));
             product.setCategory(cat);
         }
         if (request.getSubCategoryId() != null) {
             SubCategory sub = subCategoryRepository.findById(request.getSubCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("SubCategory not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("الفئة الفرعية غير موجودة"));
             product.setSubCategory(sub);
         }
 
@@ -497,7 +497,7 @@ public class AdminService {
 
     public void deleteProduct(Long id) {
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود"));
 
         // 🧹 Cleanup: Delete main image
         if (product.getImage() != null) {
@@ -516,7 +516,7 @@ public class AdminService {
 
     public ProductVariant addProductVariant(Long productId, String name, Double priceAdjustment) {
         Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود"));
 
         ProductVariant variant = new ProductVariant();
         variant.setProduct(product);
@@ -528,7 +528,7 @@ public class AdminService {
 
     public void deleteProductVariant(Long variantId) {
         if (!variantRepository.existsById(variantId)) {
-            throw new ResourceNotFoundException("Variant not found with id: " + variantId);
+            throw new ResourceNotFoundException("النوع غير موجود برقم: " + variantId);
         }
         variantRepository.deleteById(variantId);
     }
@@ -546,7 +546,7 @@ public class AdminService {
     @Transactional
     public Color updateColor(Long id, String name, String hexCode) {
         Color color = colorRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Color not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("اللون غير موجود برقم: " + id));
 
         if (name != null && !name.trim().isEmpty()) {
             color.setName(name);

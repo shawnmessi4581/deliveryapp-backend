@@ -53,6 +53,6 @@ public class AdminBannerController {
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteBanner(@PathVariable Long id) {
         bannerService.deleteBanner(id);
-        return ResponseEntity.ok("Banner deleted successfully");
+        return ResponseEntity.ok("تم حذف اللوحة الإعلانية بنجاح");
     }
 }

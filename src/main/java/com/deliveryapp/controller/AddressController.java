@@ -40,12 +40,12 @@ public class AddressController {
             @PathVariable Long addressId) {
 
         addressService.setDefaultAddress(userId, addressId);
-        return ResponseEntity.ok("Default address updated successfully");
+        return ResponseEntity.ok("تم تحديث العنوان الافتراضي بنجاح");
     }
 
     @DeleteMapping("/{addressId}")
     public ResponseEntity<String> deleteAddress(@PathVariable Long addressId) {
         addressService.deleteAddress(addressId);
-        return ResponseEntity.ok("Address deleted");
+        return ResponseEntity.ok("تم حذف العنوان");
     }
 }

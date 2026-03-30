@@ -48,7 +48,7 @@ public class NotificationService {
     @Transactional
     public void markAsRead(Long notificationId) {
         Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Notification not found with id: " + notificationId));
+                .orElseThrow(() -> new ResourceNotFoundException("الإشعار غير موجود برقم: " + notificationId));
 
         notification.setIsRead(true);
         notificationRepository.save(notification);
@@ -65,7 +65,7 @@ public class NotificationService {
         System.out.println("🔔 Attempting to send notification to User ID: " + userId);
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود"));
 
         // Save Image
         String imageUrl = null;
@@ -155,8 +155,8 @@ public class NotificationService {
     public void notifyStaffOfNewOrder(String orderNumber, Long orderId) {
         System.out.println("🔔 Notifying staff of new Order #" + orderNumber);
 
-        String title = "New Order Received! 🛒";
-        String message = "Order #" + orderNumber + " has been placed and requires confirmation.";
+        String title = "طلب جديد! 🛒";
+        String message = "تم استلام الطلب رقم " + orderNumber + " وهو بانتظار التأكيد.";
 
         // Find Admins and Employees
         List<User> staff = new ArrayList<>();

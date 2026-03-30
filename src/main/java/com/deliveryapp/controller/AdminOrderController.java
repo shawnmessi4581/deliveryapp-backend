@@ -61,6 +61,6 @@ public class AdminOrderController {
     @DeleteMapping("/{orderId}")
     public ResponseEntity<String> deleteOrder(@PathVariable Long orderId) {
         orderService.deleteOrder(orderId);
-        return ResponseEntity.ok("Order deleted successfully");
+        return ResponseEntity.ok("تم حذف الطلب بنجاح");
     }
 }

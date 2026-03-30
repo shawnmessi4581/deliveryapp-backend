@@ -75,24 +75,24 @@ public class FavoriteService {
     @Transactional
     public void addFavorite(Long userId, String type, Long itemId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود"));
 
         String itemType = type.toUpperCase();
 
         // 1. Validate Target Exists
         if (itemType.equals("STORE")) {
             if (!storeRepository.existsById(itemId))
-                throw new ResourceNotFoundException("Store not found with id: " + itemId);
+                throw new ResourceNotFoundException("المتجر غير موجود برقم: " + itemId);
         } else if (itemType.equals("PRODUCT")) {
             if (!productRepository.existsById(itemId))
-                throw new ResourceNotFoundException("Product not found with id: " + itemId);
+                throw new ResourceNotFoundException("المنتج غير موجود برقم: " + itemId);
         } else {
-            throw new InvalidDataException("Invalid favorite type. Use STORE or PRODUCT");
+            throw new InvalidDataException("نوع المفضلة غير صالح. استخدم STORE أو PRODUCT");
         }
 
         // 2. Check Duplicate
         if (favoriteRepository.existsByUserUserIdAndFavoritableTypeAndFavoritableId(userId, itemType, itemId)) {
-            throw new DuplicateResourceException("This item is already in your favorites");
+            throw new DuplicateResourceException("هذا العنصر موجود بالفعل في المفضلة");
         }
 
         // 3. Save
@@ -110,7 +110,7 @@ public class FavoriteService {
     public void removeFavorite(Long userId, String type, Long itemId) {
         Favorite favorite = favoriteRepository.findByUserUserIdAndFavoritableTypeAndFavoritableId(
                 userId, type.toUpperCase(), itemId
-        ).orElseThrow(() -> new ResourceNotFoundException("Favorite not found"));
+        ).orElseThrow(() -> new ResourceNotFoundException("المفضلة غير موجودة"));
 
         favoriteRepository.delete(favorite);
     }

@@ -24,7 +24,7 @@ public class FavoriteController {
     @PostMapping
     public ResponseEntity<String> addFavorite(@RequestBody FavoriteRequest request) {
         favoriteService.addFavorite(request.getUserId(), request.getType(), request.getItemId());
-        return ResponseEntity.ok("Added to favorites");
+        return ResponseEntity.ok("تمت الإضافة إلى المفضلة");
     }
 
     // 3. REMOVE Favorite (Using Query Params is cleaner here)
@@ -36,6 +36,6 @@ public class FavoriteController {
             @RequestParam Long itemId) {
 
         favoriteService.removeFavorite(userId, type, itemId);
-        return ResponseEntity.ok("Removed from favorites");
+        return ResponseEntity.ok("تمت الإزالة من المفضلة");
     }
 }
