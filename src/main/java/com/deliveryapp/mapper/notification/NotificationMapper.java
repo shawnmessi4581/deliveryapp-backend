@@ -34,14 +34,31 @@ public class NotificationMapper {
         // --- FETCH RICH DATA BASED ON REFERENCE TYPE ---
         if (notification.getReferenceType() != null && notification.getReferenceId() != null) {
 
-            if (notification.getReferenceType().equalsIgnoreCase("store")) {
-                storeRepository.findById(notification.getReferenceId()).ifPresent(store -> {
-                    dto.setStore(catalogMapper.toStoreResponse(store));
-                });
-            } else if (notification.getReferenceType().equalsIgnoreCase("product")) {
-                productRepository.findById(notification.getReferenceId()).ifPresent(product -> {
-                    dto.setProduct(catalogMapper.toProductResponse(product));
-                });
+            // Clean the string just in case it has spaces
+            String refType = notification.getReferenceType().trim().toLowerCase();
+
+            if (refType.equals("store")) {
+                storeRepository.findById(notification.getReferenceId()).ifPresentOrElse(
+                        store -> {
+                            // Success: Map the store
+                            dto.setStore(catalogMapper.toStoreResponse(store));
+                        },
+                        () -> {
+                            // Debugging: If it fails, print why
+                            System.err.println("Notification linked to Store ID " + notification.getReferenceId()
+                                    + ", but store was not found in DB.");
+                        });
+            } else if (refType.equals("product")) {
+                productRepository.findById(notification.getReferenceId()).ifPresentOrElse(
+                        product -> {
+                            // Success: Map the product
+                            dto.setProduct(catalogMapper.toProductResponse(product));
+                        },
+                        () -> {
+                            // Debugging: If it fails, print why
+                            System.err.println("Notification linked to Product ID " + notification.getReferenceId()
+                                    + ", but product was not found in DB.");
+                        });
             }
         }
 

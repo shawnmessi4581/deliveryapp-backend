@@ -328,6 +328,19 @@ public class OrderService {
         order.setDriver(driver);
 
         if (order.getStatus() == OrderStatus.PENDING) {
+            try {
+                notificationService.sendNotification(
+                        order.getUser().getUserId(),
+                        "تم تأكيد طلبك! ✅",
+                        "طلبك رقم " + order.getOrderNumber() + " قيد التجهيز الآن.",
+                        null,
+                        "ORDER_UPDATE",
+                        "order",
+                        order.getOrderId(),
+                        null);
+            } catch (Exception e) {
+                System.err.println("Failed to notify customer: " + e.getMessage());
+            }
             order.setStatus(OrderStatus.CONFIRMED);
         }
 
