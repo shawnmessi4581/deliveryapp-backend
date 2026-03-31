@@ -5,6 +5,7 @@ import com.deliveryapp.entity.Notification;
 import com.deliveryapp.entity.User;
 import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.ResourceNotFoundException;
+import com.deliveryapp.mapper.notification.NotificationMapper;
 import com.deliveryapp.repository.NotificationRepository;
 import com.deliveryapp.repository.UserRepository;
 import com.deliveryapp.util.UrlUtil;
@@ -28,11 +29,12 @@ public class NotificationService {
     private final FCMService fcmService;
     private final UrlUtil urlUtil;
     private final FileStorageService fileStorageService;
+    private final NotificationMapper notificationMapper;
 
     public List<NotificationResponse> getUserNotifications(Long userId) {
         List<Notification> notifications = notificationRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
         return notifications.stream()
-                .map(this::mapToResponse)
+                .map(notificationMapper::toNotificationResponse)
                 .collect(Collectors.toList());
     }
 
@@ -158,22 +160,5 @@ public class NotificationService {
         n.setIsRead(false);
         n.setCreatedAt(LocalDateTime.now());
         return n;
-    }
-
-    private NotificationResponse mapToResponse(Notification notification) {
-        NotificationResponse dto = new NotificationResponse();
-        dto.setNotificationId(notification.getNotificationId());
-        dto.setTitle(notification.getTitle());
-        dto.setMessage(notification.getMessage());
-        dto.setImageUrl(urlUtil.getFullUrl(notification.getImageUrl()));
-        dto.setType(notification.getType());
-
-        dto.setReferenceType(notification.getReferenceType());
-        dto.setReferenceId(notification.getReferenceId());
-        dto.setExternalUrl(notification.getExternalUrl());
-
-        dto.setIsRead(notification.getIsRead());
-        dto.setCreatedAt(notification.getCreatedAt());
-        return dto;
     }
 }
