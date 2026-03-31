@@ -2,12 +2,16 @@ package com.deliveryapp.mapper.notification;
 
 import com.deliveryapp.dto.notification.NotificationResponse;
 import com.deliveryapp.entity.Notification;
+import com.deliveryapp.entity.Product;
+import com.deliveryapp.entity.Store;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.repository.ProductRepository;
 import com.deliveryapp.repository.StoreRepository;
 import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -34,31 +38,30 @@ public class NotificationMapper {
         // --- FETCH RICH DATA BASED ON REFERENCE TYPE ---
         if (notification.getReferenceType() != null && notification.getReferenceId() != null) {
 
-            // Clean the string just in case it has spaces
             String refType = notification.getReferenceType().trim().toLowerCase();
 
             if (refType.equals("store")) {
-                storeRepository.findById(notification.getReferenceId()).ifPresentOrElse(
-                        store -> {
-                            // Success: Map the store
-                            dto.setStore(catalogMapper.toStoreResponse(store));
-                        },
-                        () -> {
-                            // Debugging: If it fails, print why
-                            System.err.println("Notification linked to Store ID " + notification.getReferenceId()
-                                    + ", but store was not found in DB.");
-                        });
+                // Fetch the store
+                Optional<Store> storeOpt = storeRepository.findById(notification.getReferenceId());
+
+                if (storeOpt.isPresent()) {
+                    dto.setStore(catalogMapper.toStoreResponse(storeOpt.get()));
+                } else {
+                    System.err.println("❌ ERROR: Notification references Store ID " + notification.getReferenceId()
+                            + ", but it does not exist.");
+                }
             } else if (refType.equals("product")) {
-                productRepository.findById(notification.getReferenceId()).ifPresentOrElse(
-                        product -> {
-                            // Success: Map the product
-                            dto.setProduct(catalogMapper.toProductResponse(product));
-                        },
-                        () -> {
-                            // Debugging: If it fails, print why
-                            System.err.println("Notification linked to Product ID " + notification.getReferenceId()
-                                    + ", but product was not found in DB.");
-                        });
+                // Fetch the product
+                Optional<Product> productOpt = productRepository.findById(notification.getReferenceId());
+
+                if (productOpt.isPresent()) {
+                    dto.setProduct(catalogMapper.toProductResponse(productOpt.get()));
+                } else {
+                    System.err.println("❌ ERROR: Notification references Product ID " + notification.getReferenceId()
+                            + ", but it does not exist.");
+                }
+            } else {
+                System.out.println("⚠️ Unknown referenceType: " + refType);
             }
         }
 
