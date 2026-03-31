@@ -27,8 +27,7 @@ public class SmsService {
             System.out.println("📡 Preparing to send SMS via Syrian Relay to: " + phoneNumber);
 
             // 1. Prepare the message text
-            String messageText = "Your All In verification code is: " + otpCode
-                    + ". Valid for 30 minutes. Do not share it with anyone.";
+            String messageText = "رمز التعريف الخاص بك هو : " + otpCode + "\nالكود صالح لمدة 30 دقيقة";
 
             // 2. Format the phone number (Ensure it's just the numbers, no '+')
             String formattedPhone = phoneNumber.replace("+", "");
