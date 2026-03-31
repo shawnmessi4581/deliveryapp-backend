@@ -9,6 +9,8 @@ import com.deliveryapp.mapper.notification.NotificationMapper;
 import com.deliveryapp.repository.NotificationRepository;
 import com.deliveryapp.repository.UserRepository;
 import com.deliveryapp.util.UrlUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ public class NotificationService {
     private final UrlUtil urlUtil;
     private final FileStorageService fileStorageService;
     private final NotificationMapper notificationMapper;
+    private final ObjectMapper objectMapper;
 
     public List<NotificationResponse> getUserNotifications(Long userId) {
         List<Notification> notifications = notificationRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
@@ -67,11 +70,26 @@ public class NotificationService {
         Notification notification = createNotificationObj(user, title, message, imageUrl, type, referenceType,
                 referenceId, externalUrl);
         notificationRepository.save(notification);
+        // 👉 NEW: Generate the Rich Payload for Firebase
+        NotificationResponse richResponse = notificationMapper.toNotificationResponse(notification);
+        String richDataJson = "";
+        try {
+            richDataJson = objectMapper.writeValueAsString(richResponse);
+        } catch (Exception e) {
+            System.err.println("Failed to serialize NotificationResponse for FCM: " + e.getMessage());
+        }
 
         String fullImageUrl = urlUtil.getFullUrl(imageUrl);
-
+        // Send FCM
         if (user.getFcmToken() != null && !user.getFcmToken().isEmpty()) {
-            fcmService.sendToToken(user.getFcmToken(), title, message, fullImageUrl, type, String.valueOf(referenceId));
+            fcmService.sendToToken(
+                    user.getFcmToken(),
+                    title,
+                    message,
+                    fullImageUrl,
+                    type,
+                    richDataJson // Pass the JSON string
+            );
         }
     }
 
@@ -113,9 +131,23 @@ public class NotificationService {
             }
         }
 
-        notificationRepository.saveAll(notificationsToSave);
+        List<Notification> savedNotifications = notificationRepository.saveAll(notificationsToSave);
+        // 👉 NEW: Generate the Rich Payload for Firebase (We only need to map one of
+        // them since the data is identical)
+        String richDataJson = "";
+        if (!savedNotifications.isEmpty()) {
+            NotificationResponse richResponse = notificationMapper.toNotificationResponse(savedNotifications.get(0));
+            try {
+                richDataJson = objectMapper.writeValueAsString(richResponse);
+            } catch (Exception e) {
+                System.err.println("Failed to serialize NotificationResponse for FCM: " + e.getMessage());
+            }
+        }
         String fullImageUrl = urlUtil.getFullUrl(imageUrl);
-        fcmService.sendToManyTokens(tokens, title, message, fullImageUrl, type, String.valueOf(referenceId));
+        // Send Multicast
+        if (!tokens.isEmpty()) {
+            fcmService.sendToManyTokens(tokens, title, message, fullImageUrl, type, richDataJson);
+        }
     }
 
     // 3. AUTO-NOTIFY STAFF ON NEW ORDER
@@ -146,6 +178,7 @@ public class NotificationService {
         fcmService.sendToManyTokens(tokens, title, message, null, "NEW_ORDER", String.valueOf(orderId));
     }
 
+    // --- Helpers ---
     private Notification createNotificationObj(User user, String title, String msg, String img, String type,
             String refType, Long refId, String extUrl) {
         Notification n = new Notification();
@@ -156,7 +189,7 @@ public class NotificationService {
         n.setType(type);
         n.setReferenceType(refType);
         n.setReferenceId(refId);
-        n.setExternalUrl(extUrl); // Save external link if present
+        n.setExternalUrl(extUrl);
         n.setIsRead(false);
         n.setCreatedAt(LocalDateTime.now());
         return n;

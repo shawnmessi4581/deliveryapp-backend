@@ -13,14 +13,15 @@ import java.util.List;
 public class FCMService {
 
     // 1. Send to a Specific Device (User)
-    public void sendToToken(String token, String title, String body, String imageUrl, String type, String referenceId) {
+    public void sendToToken(String token, String title, String body, String imageUrl, String type,
+            String richDataJson) {
         if (token == null || token.isEmpty()) {
             System.err.println("⚠️ Warning: Cannot send FCM. Token is null or empty.");
             return;
         }
 
         System.out.println("🛠️ Building FCM Message for Single Token...");
-        Message message = buildMessage(title, body, imageUrl, type, referenceId)
+        Message message = buildMessage(title, body, imageUrl, type, richDataJson)
                 .setToken(token)
                 .build();
 
@@ -36,7 +37,7 @@ public class FCMService {
 
     // 2. Send to Multiple Devices Efficiently (Max 500 per batch)
     public void sendToManyTokens(List<String> tokens, String title, String body, String imageUrl, String type,
-            String referenceId) {
+            String richDataJson) {
         if (tokens == null || tokens.isEmpty()) {
             System.err.println("⚠️ Warning: Cannot send FCM Multicast. Token list is empty.");
             return;
@@ -49,7 +50,7 @@ public class FCMService {
         for (int i = 0; i < tokens.size(); i += partitionSize) {
             List<String> batch = tokens.subList(i, Math.min(i + partitionSize, tokens.size()));
 
-            MulticastMessage message = buildMulticastMessage(title, body, imageUrl, type, referenceId)
+            MulticastMessage message = buildMulticastMessage(title, body, imageUrl, type, richDataJson)
                     .addAllTokens(batch)
                     .build();
 
@@ -67,7 +68,7 @@ public class FCMService {
 
     // --- Helpers to build payloads ---
 
-    private Message.Builder buildMessage(String title, String body, String imageUrl, String type, String referenceId) {
+    private Message.Builder buildMessage(String title, String body, String imageUrl, String type, String richDataJson) {
         Notification.Builder notificationBuilder = Notification.builder()
                 .setTitle(title)
                 .setBody(body);
@@ -80,11 +81,12 @@ public class FCMService {
         return Message.builder()
                 .setNotification(notificationBuilder.build())
                 .putData("type", type != null ? type : "GENERAL")
-                .putData("referenceId", referenceId != null ? referenceId : "");
+                // Store the complete JSON string in the 'payload' key
+                .putData("payload", richDataJson != null ? richDataJson : "{}");
     }
 
     private MulticastMessage.Builder buildMulticastMessage(String title, String body, String imageUrl, String type,
-            String referenceId) {
+            String richDataJson) {
         Notification.Builder notificationBuilder = Notification.builder()
                 .setTitle(title)
                 .setBody(body);
@@ -96,6 +98,7 @@ public class FCMService {
         return MulticastMessage.builder()
                 .setNotification(notificationBuilder.build())
                 .putData("type", type != null ? type : "GENERAL")
-                .putData("referenceId", referenceId != null ? referenceId : "");
+                // Store the complete JSON string in the 'payload' key
+                .putData("payload", richDataJson != null ? richDataJson : "{}");
     }
 }
