@@ -1,5 +1,6 @@
 package com.deliveryapp.controller;
 
+import com.deliveryapp.dto.notification.NotificationRequest;
 import com.deliveryapp.dto.notification.NotificationResponse;
 import com.deliveryapp.service.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -39,25 +40,34 @@ public class NotificationController {
     // 4. Send Notification (Updated for Multipart/File Upload & Target Group)
     @PostMapping(value = "/send", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> sendNotification(
-            @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) String targetGroup, // CHANGED from topic
-            @RequestParam String title,
-            @RequestParam String message,
-            @RequestParam(required = false) String type,
-            @RequestParam(required = false) Long referenceId,
+            @ModelAttribute NotificationRequest request,
             @RequestParam(value = "image", required = false) MultipartFile image) {
 
-        if (userId != null) {
+        if (request.getUserId() != null) {
             // Send to Specific User
             notificationService.sendNotification(
-                    userId, title, message, image, type, referenceId);
-            return ResponseEntity.ok("تم الإرسال للمستخدم " + userId);
-        } else if (targetGroup != null && !targetGroup.isEmpty()) {
+                    request.getUserId(),
+                    request.getTitle(),
+                    request.getMessage(),
+                    image,
+                    request.getType(),
+                    request.getReferenceType(),
+                    request.getReferenceId(),
+                    request.getExternalUrl());
+            return ResponseEntity.ok("تم الإرسال للمستخدم " + request.getUserId());
+        } else if (request.getTargetGroup() != null && !request.getTargetGroup().isEmpty()) {
             // Send to Group (e.g. "CUSTOMER", "DRIVER", "all_users")
             // This loops through all users in that group, saves to DB, and sends Multicast
             notificationService.sendGroupNotification(
-                    targetGroup, title, message, image, type, referenceId);
-            return ResponseEntity.ok("تم الإرسال للمجموعة المستهدفة: " + targetGroup);
+                    request.getTargetGroup(),
+                    request.getTitle(),
+                    request.getMessage(),
+                    image,
+                    request.getType(),
+                    request.getReferenceType(),
+                    request.getReferenceId(),
+                    request.getExternalUrl());
+            return ResponseEntity.ok("تم الإرسال للمجموعة المستهدفة: " + request.getTargetGroup());
         }
 
         return ResponseEntity.badRequest().body("يرجى توفير إما userId أو targetGroup");

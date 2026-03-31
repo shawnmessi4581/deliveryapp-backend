@@ -26,7 +26,10 @@ public class Notification {
 
     private String type; // e.g., "ORDER_UPDATE", "PROMO"
     private String referenceType; // e.g., "order"
-    private Long referenceId;     // e.g., Order ID
+    private Long referenceId; // e.g., Order ID
     private Boolean isRead;
     private LocalDateTime createdAt;
+
+    // NEW: For external website links (like Banners)
+    private String externalUrl;
 }
