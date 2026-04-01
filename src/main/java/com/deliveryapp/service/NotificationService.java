@@ -176,6 +176,39 @@ public class NotificationService {
 
         notificationRepository.saveAll(dbNotifications);
         fcmService.sendToManyTokens(tokens, title, message, null, "NEW_ORDER", String.valueOf(orderId));
+    } // 4. AUTO-NOTIFY STAFF ON ORDER CANCELLATION
+    @Async 
+    @Transactional
+    public void notifyStaffOfCancelledOrder(String orderNumber, Long orderId) {
+        System.out.println("🔔 Notifying staff of Cancelled Order #" + orderNumber);
+
+        // 🔴 Arabic text for cancellation
+        String title = "تم إلغاء طلب! ❌";
+        String message = "قام العميل بإلغاء الطلب رقم " + orderNumber + ".";
+        
+        // Find Admins and Employees
+        List<User> staff = new ArrayList<>();
+        staff.addAll(userRepository.findByUserType(UserType.ADMIN));
+        staff.addAll(userRepository.findByUserType(UserType.EMPLOYEE));
+
+        if (staff.isEmpty()) return;
+
+        List<Notification> dbNotifications = new ArrayList<>();
+        List<String> tokens = new ArrayList<>();
+
+        for (User user : staff) {
+            dbNotifications.add(createNotificationObj(user, title, message, null, "ORDER_CANCELLED", "order", orderId, null));
+            if (user.getFcmToken() != null && !user.getFcmToken().isEmpty()) {
+                tokens.add(user.getFcmToken());
+            }
+        }
+        
+        notificationRepository.saveAll(dbNotifications);
+
+        // Create an empty rich payload for the cancellation (since we only need the orderId)
+        String richDataJson = "{\"orderId\": " + orderId + "}";
+
+        fcmService.sendToManyTokens(tokens, title, message, null, "ORDER_CANCELLED", richDataJson);
     }
 
     // --- Helpers ---

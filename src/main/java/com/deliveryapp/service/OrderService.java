@@ -13,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -242,14 +241,17 @@ public class OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
 
+        // 1. Verify Ownership
         if (!order.getUser().getUserId().equals(userId)) {
             throw new InvalidDataException("ليس لديك إذن لإلغاء هذا الطلب.");
         }
 
+        // 2. Verify Status
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new InvalidDataException("يمكنك فقط إلغاء الطلب عندما يكون قيد الانتظار.");
         }
 
+        // 3. Reverse Coupon Usage
         if (order.getCouponId() != null) {
             couponUsageRepository.deleteByOrderId(orderId);
             try {
@@ -262,6 +264,14 @@ public class OrderService {
             }
         }
 
+        // 🚨 NEW: Notify Staff BEFORE deleting the order so we have the orderNumber
+        try {
+            notificationService.notifyStaffOfCancelledOrder(order.getOrderNumber(), orderId);
+        } catch (Exception e) {
+            System.err.println("Failed to notify staff of cancellation: " + e.getMessage());
+        }
+
+        // 4. Delete History and Order
         historyRepository.deleteByOrderOrderId(orderId);
         orderRepository.delete(order);
     }
