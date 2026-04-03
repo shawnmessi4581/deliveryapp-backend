@@ -8,25 +8,20 @@ public class ProductResponse {
     private Long productId;
     private String name;
     private String description;
-    private Double basePrice;
     private String imageUrl;
-    private boolean isAvailable; // Crucial for toggling availability
-    private Boolean isTrending; // <--- Add this
+    private boolean isAvailable;
+    private Boolean isTrending;
+    private Integer displayOrder;
 
-    // --- UPDATED: Full Store Details Object ---
+    // --- SECURITY RULE: ONLY EXPOSE THE CALCULATED SYP PRICE ---
+    private Double calculatedPrice; // e.g. 135000.0 (No raw USD or Base prices exposed)
+
     private StoreResponse store;
-    // Relationships (IDs and Names for Admin Display)
-    private Long storeId;
-    private String storeName;
-
     private Long categoryId;
     private String categoryName;
-
     private Long subCategoryId;
     private String subCategoryName;
-
-    private List<ProductVariantResponse> variants;
-    private List<String> images; // Full URLs
+    private List<String> images;
     private List<ColorResponse> colors;
-    private Integer displayOrder;
+    private List<ProductVariantResponse> variants;
 }

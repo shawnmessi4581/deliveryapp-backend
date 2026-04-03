@@ -386,7 +386,16 @@ public class AdminService {
         Product product = new Product();
         product.setName(request.getName());
         product.setDescription(request.getDescription());
-        product.setBasePrice(request.getBasePrice());
+        if (request.getIsUsd() != null) {
+            product.setIsUsd(request.getIsUsd());
+            if (request.getIsUsd()) {
+                product.setUsdPrice(request.getUsdPrice());
+                product.setBasePrice(0.0); // Clear SYP if USD is active
+            } else {
+                product.setBasePrice(request.getBasePrice());
+                product.setUsdPrice(0.0); // Clear USD if SYP is active
+            }
+        }
         product.setIsAvailable(true);
         product.setStore(store);
         product.setDisplayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : 0);
@@ -434,8 +443,16 @@ public class AdminService {
             product.setName(request.getName());
         if (request.getDescription() != null)
             product.setDescription(request.getDescription());
-        if (request.getBasePrice() != null)
-            product.setBasePrice(request.getBasePrice());
+        if (request.getIsUsd() != null) {
+            product.setIsUsd(request.getIsUsd());
+            if (request.getIsUsd()) {
+                product.setUsdPrice(request.getUsdPrice());
+                product.setBasePrice(0.0); // Clear SYP if USD is active
+            } else {
+                product.setBasePrice(request.getBasePrice());
+                product.setUsdPrice(0.0); // Clear USD if SYP is active
+            }
+        }
         if (request.getIsAvailable() != null)
             product.setIsAvailable(request.getIsAvailable());
         if (request.getDisplayOrder() != null)

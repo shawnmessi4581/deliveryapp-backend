@@ -31,6 +31,13 @@ public class Product {
     private String name;
     private String description;
     private Double basePrice;
+    //
+    private Double usdPrice;
+
+    // true = priced in USD. false = priced in SYP.
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private Boolean isUsd = false;
+    //
     private String image;
     private Boolean isAvailable;
     private LocalDateTime createdAt;

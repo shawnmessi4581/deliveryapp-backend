@@ -8,7 +8,6 @@ import lombok.Data;
 public class ProductRequest {
     private String name;
     private String description;
-    private Double basePrice;
     private Long storeId;
     private Long categoryId;
     private Long subCategoryId; // Optional
@@ -16,5 +15,7 @@ public class ProductRequest {
     private List<Long> colorIds; // e.g. [1, 5, 8]
     private Boolean isTrending;
     private Integer displayOrder;
-
+    private Double basePrice; // SYP
+    private Double usdPrice; // USD
+    private Boolean isUsd;
 }

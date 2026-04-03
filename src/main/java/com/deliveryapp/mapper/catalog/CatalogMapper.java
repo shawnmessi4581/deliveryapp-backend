@@ -2,6 +2,7 @@ package com.deliveryapp.mapper.catalog;
 
 import com.deliveryapp.dto.catalog.*;
 import com.deliveryapp.entity.*;
+import com.deliveryapp.service.PricingService;
 import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -16,6 +17,7 @@ import java.util.stream.Collectors;
 public class CatalogMapper {
 
     private final UrlUtil urlUtil;
+    private final PricingService pricingService;
 
     // --- CATEGORY ---
     public CategoryResponse toCategoryResponse(Category category) {
@@ -93,7 +95,7 @@ public class CatalogMapper {
         dto.setProductId(product.getProductId());
         dto.setName(product.getName());
         dto.setDescription(product.getDescription());
-        dto.setBasePrice(product.getBasePrice());
+        dto.setCalculatedPrice(pricingService.getFinalPriceInSYP(product));
         dto.setImageUrl(urlUtil.getFullUrl(product.getImage())); // Main Thumbnail
         dto.setAvailable(product.getIsAvailable());
         dto.setIsTrending(product.getIsTrending() != null ? product.getIsTrending() : false);
@@ -126,8 +128,8 @@ public class CatalogMapper {
         if (product.getStore() != null) {
             StoreResponse storeDto = toStoreResponse(product.getStore());
             dto.setStore(storeDto);
-            dto.setStoreId(product.getStore().getStoreId());
-            dto.setStoreName(product.getStore().getName());
+            // dto.setStoreId(product.getStore().getStoreId());
+            // dto.setStoreName(product.getStore().getName());
         }
 
         // --- Category Info ---
@@ -146,7 +148,7 @@ public class CatalogMapper {
                 ProductVariantResponse vDto = new ProductVariantResponse();
                 vDto.setVariantId(v.getVariantId());
                 vDto.setVariantName(v.getVariantValue());
-                vDto.setPriceAdjustment(v.getPriceAdjustment());
+                vDto.setCalculatedPriceAdjustment(pricingService.getVariantFinalPriceInSYP(v));
                 return vDto;
             }).collect(Collectors.toList()));
         } else {

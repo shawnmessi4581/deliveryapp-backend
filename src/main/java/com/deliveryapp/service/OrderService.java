@@ -38,6 +38,7 @@ public class OrderService {
 
     private final CouponService couponService;
     private final NotificationService notificationService;
+    private final PricingService pricingService;
 
     private final DistanceUtil distanceUtil;
     private final UrlUtil urlUtil;
@@ -101,7 +102,7 @@ public class OrderService {
                 orderItem.setSelectedColor(color);
             }
 
-            double price = product.getBasePrice();
+            double price = pricingService.getFinalPriceInSYP(product);
             if (itemReq.getVariantId() != null && itemReq.getVariantId() != 0) {
                 ProductVariant variant = variantRepository.findById(itemReq.getVariantId())
                         .orElseThrow(() -> new ResourceNotFoundException("النوع غير موجود: " + itemReq.getVariantId()));
@@ -112,7 +113,7 @@ public class OrderService {
 
                 orderItem.setVariant(variant);
                 orderItem.setVariantDetails(variant.getVariantValue());
-                price += variant.getPriceAdjustment();
+                price += pricingService.getVariantFinalPriceInSYP(variant);
             }
 
             orderItem.setUnitPrice(price);
@@ -415,11 +416,11 @@ public class OrderService {
             Product product = productRepository.findById(itemReq.getProductId())
                     .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود"));
 
-            double price = product.getBasePrice();
+            double price = pricingService.getFinalPriceInSYP(product);
             if (itemReq.getVariantId() != null) {
                 ProductVariant variant = variantRepository.findById(itemReq.getVariantId())
                         .orElseThrow(() -> new ResourceNotFoundException("النوع غير موجود"));
-                price += variant.getPriceAdjustment();
+                price += pricingService.getVariantFinalPriceInSYP(variant);
             }
 
             OrderItem tempItem = new OrderItem();
