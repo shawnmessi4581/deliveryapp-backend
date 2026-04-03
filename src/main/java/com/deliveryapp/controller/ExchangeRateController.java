@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/admin/exchange-rate")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN','EMPLOYEE')")
+@PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
 public class ExchangeRateController {
 
     private final ExchangeRateService exchangeRateService;
