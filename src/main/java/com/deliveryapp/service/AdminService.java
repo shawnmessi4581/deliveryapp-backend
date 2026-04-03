@@ -17,6 +17,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -374,8 +376,8 @@ public class AdminService {
 
     // ==================== PRODUCT CRUD ====================
 
-    public List<Product> getAllProducts() {
-        return productRepository.findAll();
+    public Page<Product> getAllProducts(Pageable pageable) {
+        return productRepository.findAll(pageable);
     }
 
     @Transactional
@@ -395,6 +397,10 @@ public class AdminService {
                 product.setBasePrice(request.getBasePrice());
                 product.setUsdPrice(0.0); // Clear USD if SYP is active
             }
+        } else {
+            product.setIsUsd(false);
+            product.setBasePrice(request.getBasePrice() != null ? request.getBasePrice() : 0.0);
+            product.setUsdPrice(0.0);
         }
         product.setIsAvailable(true);
         product.setStore(store);
@@ -446,11 +452,13 @@ public class AdminService {
         if (request.getIsUsd() != null) {
             product.setIsUsd(request.getIsUsd());
             if (request.getIsUsd()) {
-                product.setUsdPrice(request.getUsdPrice());
-                product.setBasePrice(0.0); // Clear SYP if USD is active
+                if (request.getUsdPrice() != null)
+                    product.setUsdPrice(request.getUsdPrice());
+                product.setBasePrice(0.0); // Clear SYP
             } else {
-                product.setBasePrice(request.getBasePrice());
-                product.setUsdPrice(0.0); // Clear USD if SYP is active
+                if (request.getBasePrice() != null)
+                    product.setBasePrice(request.getBasePrice());
+                product.setUsdPrice(0.0); // Clear USD
             }
         }
         if (request.getIsAvailable() != null)

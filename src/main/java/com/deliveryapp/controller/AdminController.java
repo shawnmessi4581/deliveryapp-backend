@@ -1,11 +1,13 @@
 package com.deliveryapp.controller;
 
+import com.deliveryapp.dto.PagedResponse;
 import com.deliveryapp.dto.catalog.*;
 import com.deliveryapp.dto.order.OrderResponse;
 import com.deliveryapp.dto.user.CreateDriverRequest;
 import com.deliveryapp.dto.user.CreateUserRequest;
 import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.*;
+import com.deliveryapp.mapper.catalog.AdminCatalogMapper;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.mapper.order.OrderMapper;
 import com.deliveryapp.mapper.user.UserMapper;
@@ -13,6 +15,11 @@ import com.deliveryapp.repository.DeliveryInstructionRepository;
 import com.deliveryapp.service.AdminService;
 import com.deliveryapp.service.OrderService;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,6 +44,7 @@ public class AdminController {
     private final CatalogMapper catalogMapper;
     private final UserMapper userMapper;
     private final OrderMapper orderMapper;
+    private final AdminCatalogMapper adminCatalogMapper;
 
     // ==================== USERS (Strict Security) ====================
 
@@ -210,34 +218,50 @@ public class AdminController {
         return ResponseEntity.ok("تم حذف المتجر");
     }
 
-    // --- PRODUCTS ---
+    // 1. GET ALL PRODUCTS (Admin View)
     @GetMapping("/products")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
-    public ResponseEntity<List<ProductResponse>> getAllProducts() {
-        return ResponseEntity.ok(adminService.getAllProducts().stream()
-                .map(catalogMapper::toProductResponse)
-                .collect(Collectors.toList()));
+    public ResponseEntity<PagedResponse<AdminProductResponse>> getAllProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
+        Page<Product> productPage = adminService.getAllProducts(pageable);
+
+        List<AdminProductResponse> content = productPage.getContent().stream()
+                .map(adminCatalogMapper::toAdminProductResponse) // <--- USE ADMIN MAPPER
+                .collect(Collectors.toList());
+
+        PagedResponse<AdminProductResponse> response = new PagedResponse<>(
+                content, productPage.getNumber(), productPage.getSize(),
+                productPage.getTotalElements(), productPage.getTotalPages(), productPage.isLast());
+
+        return ResponseEntity.ok(response);
     }
 
+    // 2. CREATE PRODUCT (Admin View)
     @PostMapping(value = "/products", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
-    public ResponseEntity<ProductResponse> createProduct(
+    public ResponseEntity<AdminProductResponse> createProduct(
             @ModelAttribute ProductRequest request,
             @RequestParam(value = "image", required = false) MultipartFile image,
             @RequestParam(value = "gallery", required = false) List<MultipartFile> gallery) {
+
         Product product = adminService.createProduct(request, image, gallery);
-        return ResponseEntity.ok(catalogMapper.toProductResponse(product));
+        return ResponseEntity.ok(adminCatalogMapper.toAdminProductResponse(product)); // <--- USE ADMIN MAPPER
     }
 
+    // 3. UPDATE PRODUCT (Admin View)
     @PutMapping(value = "/products/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
-    public ResponseEntity<ProductResponse> updateProduct(
+    public ResponseEntity<AdminProductResponse> updateProduct(
             @PathVariable Long id,
             @ModelAttribute ProductRequest request,
             @RequestParam(value = "image", required = false) MultipartFile image,
             @RequestParam(value = "gallery", required = false) List<MultipartFile> gallery) {
+
         Product product = adminService.updateProduct(id, request, image, gallery);
-        return ResponseEntity.ok(catalogMapper.toProductResponse(product));
+        return ResponseEntity.ok(adminCatalogMapper.toAdminProductResponse(product)); // <--- USE ADMIN MAPPER
     }
 
     @PostMapping("/products/{productId}/variants")
