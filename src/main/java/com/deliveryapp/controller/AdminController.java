@@ -222,14 +222,19 @@ public class AdminController {
     @GetMapping("/products")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<PagedResponse<AdminProductResponse>> getAllProducts(
+            @RequestParam(required = false) Long storeId,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long subCategoryId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
-        Page<Product> productPage = adminService.getAllProducts(pageable);
+
+        // Pass the filters to the service
+        Page<Product> productPage = adminService.getAllProducts(storeId, categoryId, subCategoryId, pageable);
 
         List<AdminProductResponse> content = productPage.getContent().stream()
-                .map(adminCatalogMapper::toAdminProductResponse) // <--- USE ADMIN MAPPER
+                .map(adminCatalogMapper::toAdminProductResponse)
                 .collect(Collectors.toList());
 
         PagedResponse<AdminProductResponse> response = new PagedResponse<>(

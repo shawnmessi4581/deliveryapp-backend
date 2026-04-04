@@ -376,8 +376,8 @@ public class AdminService {
 
     // ==================== PRODUCT CRUD ====================
 
-    public Page<Product> getAllProducts(Pageable pageable) {
-        return productRepository.findAll(pageable);
+    public Page<Product> getAllProducts(Long storeId, Long categoryId, Long subCategoryId, Pageable pageable) {
+        return productRepository.findAdminFilteredProducts(storeId, categoryId, subCategoryId, pageable);
     }
 
     @Transactional
