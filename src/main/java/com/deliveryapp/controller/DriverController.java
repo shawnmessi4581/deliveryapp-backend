@@ -4,6 +4,8 @@ import com.deliveryapp.dto.order.OrderResponse;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.mapper.order.OrderMapper; // Import the Mapper
 import com.deliveryapp.service.OrderService;
+import com.deliveryapp.service.UserService;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,6 +22,7 @@ public class DriverController {
 
     private final OrderService orderService;
     private final OrderMapper orderMapper; // Inject Mapper
+    private final UserService userService; // 👉 Inject this
 
     // GET ASSIGNED ORDERS
     // Usage: /api/driver/{driverId}/orders?active=true (Current Tasks)
@@ -36,5 +39,36 @@ public class DriverController {
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{driverId}/orders/{orderId}/respond")
+    public ResponseEntity<OrderResponse> respondToOrder(
+            @PathVariable Long driverId,
+            @PathVariable Long orderId,
+            @RequestParam Boolean accept) {
+
+        Order order = orderService.driverRespondToOrder(orderId, driverId, accept);
+        return ResponseEntity.ok(orderMapper.toOrderResponse(order));
+    }
+    // 2. TOGGLE AVAILABILITY (ONLINE / OFFLINE)
+
+    @PatchMapping("/{driverId}/availability")
+    public ResponseEntity<String> updateAvailability(
+            @PathVariable Long driverId,
+            @RequestParam Boolean isAvailable) {
+
+        userService.updateDriverAvailability(driverId, isAvailable);
+        String status = isAvailable ? "Online" : "Offline";
+        return ResponseEntity.ok("تم تحديث الحالة إلى " + status);
+    }
+
+    @PatchMapping("/{driverId}/location")
+    public ResponseEntity<String> updateLocation(
+            @PathVariable Long driverId,
+            @RequestParam Double lat,
+            @RequestParam Double lng) {
+
+        userService.updateDriverLocation(driverId, lat, lng);
+        return ResponseEntity.ok("تم تحديث الموقع");
     }
 }

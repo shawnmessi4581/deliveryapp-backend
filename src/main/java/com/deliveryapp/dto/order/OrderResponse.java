@@ -1,6 +1,7 @@
 package com.deliveryapp.dto.order;
 
 import com.deliveryapp.dto.catalog.StoreResponse; // Import the Store DTO
+import com.deliveryapp.enums.DriverOrderStatus;
 import com.deliveryapp.enums.OrderStatus;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -21,6 +22,7 @@ public class OrderResponse {
     private Long driverId;
     private String driverName;
     private String driverPhone;
+    private DriverOrderStatus driverOrderStatus;
 
     // Delivery Info
     private String deliveryAddress;

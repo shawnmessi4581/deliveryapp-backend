@@ -1,5 +1,6 @@
 package com.deliveryapp.entity;
 
+import com.deliveryapp.enums.DriverOrderStatus;
 import com.deliveryapp.enums.OrderStatus;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -38,6 +39,8 @@ public class Order {
 
     @Enumerated(EnumType.STRING)
     private OrderStatus status;
+    @Enumerated(EnumType.STRING)
+    private DriverOrderStatus driverOrderStatus;
 
     // Financials
     private Double subtotal;

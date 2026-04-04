@@ -2,6 +2,7 @@ package com.deliveryapp.service;
 
 import com.deliveryapp.dto.order.*;
 import com.deliveryapp.entity.*;
+import com.deliveryapp.enums.DriverOrderStatus;
 import com.deliveryapp.enums.OrderStatus;
 import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.InvalidDataException;
@@ -337,6 +338,7 @@ public class OrderService {
         }
 
         order.setDriver(driver);
+        order.setDriverOrderStatus(DriverOrderStatus.PENDING);
 
         if (order.getStatus() == OrderStatus.PENDING) {
             try {
@@ -372,6 +374,38 @@ public class OrderService {
         }
 
         return savedOrder;
+    }
+
+    // 2. ADD NEW METHOD FOR DRIVER RESPONSE
+    @Transactional
+    public Order driverRespondToOrder(Long orderId, Long driverId, boolean isAccepted) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود"));
+
+        if (order.getDriver() == null || !order.getDriver().getUserId().equals(driverId)) {
+            throw new InvalidDataException("ليس لديك إذن للوصول إلى هذا الطلب.");
+        }
+
+        if (isAccepted) {
+            order.setDriverOrderStatus(DriverOrderStatus.ACCEPTED);
+            // Optional: You can auto-update the main status to PREPARING here if you want
+            notificationService.notifyAllStaff(
+                    "تم قبول الطلب! ✅",
+                    "السائق " + order.getDriver().getName() + " وافق على توصيل الطلب رقم " + order.getOrderNumber(),
+                    "DRIVER_ACCEPTED",
+                    orderId);
+        } else {
+            order.setDriverOrderStatus(DriverOrderStatus.REJECTED);
+
+            // Notify Admins that the driver rejected the order!
+            notificationService.notifyAllStaff(
+                    "تم رفض الطلب! 🚨",
+                    "السائق " + order.getDriver().getName() + " رفض توصيل الطلب رقم " + order.getOrderNumber(),
+                    "DRIVER_REJECTED",
+                    orderId);
+        }
+
+        return orderRepository.save(order);
     }
 
     public List<Order> getDriverOrders(Long driverId, Boolean activeOnly) {

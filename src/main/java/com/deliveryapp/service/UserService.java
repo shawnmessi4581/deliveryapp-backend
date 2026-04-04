@@ -51,7 +51,7 @@ public class UserService {
         userRepository.findByPhoneNumber(phoneNumber).ifPresent(otp::setUser);
 
         otpRepository.save(otp);
-// reals sms otp
+        // reals sms otp
         System.out.println("SENDING OTP TO " + phoneNumber + ": " + otpCode);
         return otpCode;
     }
@@ -76,10 +76,10 @@ public class UserService {
 
     public User updateDriverLocation(Long driverId, Double lat, Double lng) {
         User driver = userRepository.findById(driverId)
-                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + driverId));
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود"));
 
         if (driver.getUserType() != UserType.DRIVER) {
-            throw new InvalidDataException("User is not a driver");
+            throw new InvalidDataException("المستخدم ليس سائق");
         }
 
         driver.setCurrentLocationLat(lat);
@@ -105,8 +105,10 @@ public class UserService {
         // 2. Update Primary Address
         if (request.getAddress() != null && !request.getAddress().trim().isEmpty()) {
             user.setAddress(request.getAddress());
-            if (request.getLatitude() != null) user.setLatitude(request.getLatitude());
-            if (request.getLongitude() != null) user.setLongitude(request.getLongitude());
+            if (request.getLatitude() != null)
+                user.setLatitude(request.getLatitude());
+            if (request.getLongitude() != null)
+                user.setLongitude(request.getLongitude());
         }
 
         // 3. Update Driver Specifics (Only if user is a DRIVER)
@@ -130,10 +132,12 @@ public class UserService {
 
         return userRepository.save(user);
     }
+
     public User getUserById(Long id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
     }
+
     @Transactional
     public void updateFcmToken(Long userId, String fcmToken) {
         User user = userRepository.findById(userId)
@@ -142,4 +146,20 @@ public class UserService {
         user.setFcmToken(fcmToken);
         userRepository.save(user);
     }
+
+    //
+
+    @Transactional
+    public void updateDriverAvailability(Long driverId, Boolean isAvailable) {
+        User driver = userRepository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود"));
+
+        if (driver.getUserType() != UserType.DRIVER) {
+            throw new InvalidDataException("المستخدم ليس سائق");
+        }
+
+        driver.setIsAvailable(isAvailable);
+        userRepository.save(driver);
+    }
+
 }

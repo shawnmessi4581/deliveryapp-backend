@@ -42,6 +42,7 @@ public class OrderMapper {
             response.setDriverName(order.getDriver().getName());
             response.setDriverPhone(order.getDriver().getPhoneNumber());
         }
+        response.setDriverOrderStatus(order.getDriverOrderStatus());
 
         // --- Customer Info (Reusing UserMapper) ---
         if (order.getUser() != null) {
