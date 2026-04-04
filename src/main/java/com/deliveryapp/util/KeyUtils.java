@@ -4,7 +4,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.security.*;
 import java.security.interfaces.RSAPrivateKey;
@@ -15,11 +14,12 @@ import java.security.spec.X509EncodedKeySpec;
 @Component
 public class KeyUtils {
 
-    private static final String PRIVATE_KEY_FILE = "app.key";
-    private static final String PUBLIC_KEY_FILE = "app.pub";
+    private static final String PRIVATE_KEY_FILE = "/app/keys/app.key";
+    private static final String PUBLIC_KEY_FILE = "/app/keys/app.pub";
 
     public KeyPair getRsaKeyPair() {
         try {
+            new File("/app/keys").mkdirs();
             File privateKeyFile = new File(PRIVATE_KEY_FILE);
             File publicKeyFile = new File(PUBLIC_KEY_FILE);
 
