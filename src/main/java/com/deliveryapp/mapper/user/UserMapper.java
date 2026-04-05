@@ -1,12 +1,16 @@
 package com.deliveryapp.mapper.user;
 
 import com.deliveryapp.dto.order.OrderCustomerResponse;
+import com.deliveryapp.dto.user.UserProfileResponse;
 import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.User;
+import com.deliveryapp.entity.UserAddress;
 import com.deliveryapp.enums.UserType;
 import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -42,6 +46,32 @@ public class UserMapper {
         dto.setName(user.getName());
         dto.setPhoneNumber(user.getPhoneNumber());
         dto.setProfileAddress(user.getAddress());
+        return dto;
+    }
+
+    // --- NEW: Map User Profile (App View) ---
+    public UserProfileResponse toUserProfileResponse(User user, List<UserAddress> addresses) {
+        UserProfileResponse dto = new UserProfileResponse();
+        dto.setUserId(user.getUserId());
+        dto.setName(user.getName());
+        dto.setEmail(user.getEmail());
+        dto.setPhoneNumber(user.getPhoneNumber());
+        dto.setUserType(user.getUserType().name());
+
+        // Use UrlUtil to get full image link
+        dto.setProfileImage(urlUtil.getFullUrl(user.getProfileImage()));
+
+        dto.setPrimaryAddress(user.getAddress());
+        dto.setSavedAddresses(addresses);
+
+        // Driver Fields
+        if (user.getUserType() == UserType.DRIVER) {
+            dto.setIsAvailable(user.getIsAvailable());
+            dto.setTotalDeliveries(user.getTotalDeliveries());
+            dto.setVehicleType(user.getVehicleType());
+            dto.setRating(user.getRating());
+        }
+
         return dto;
     }
 }

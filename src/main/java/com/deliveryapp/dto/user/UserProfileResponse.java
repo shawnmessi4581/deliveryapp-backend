@@ -11,7 +11,7 @@ public class UserProfileResponse {
     private String email;
     private String phoneNumber;
     private String profileImage; // Full URL
-
+    private Boolean isAvailable;
     // Primary Profile Address (Stored on User table)
     private String primaryAddress;
 
@@ -22,5 +22,5 @@ public class UserProfileResponse {
     private String userType;
     private String vehicleType;
     private Double rating;
-    private  Integer totalDeliveries;
+    private Integer totalDeliveries;
 }
