@@ -1,5 +1,6 @@
 package com.deliveryapp.service;
 
+import com.deliveryapp.dto.user.DriverLocationResponse;
 import com.deliveryapp.dto.user.UserUpdateRequest;
 import com.deliveryapp.entity.OtpVerification;
 import com.deliveryapp.entity.User;
@@ -162,4 +163,20 @@ public class UserService {
         userRepository.save(driver);
     }
 
+    public DriverLocationResponse getDriverLocation(Long driverId) {
+        User driver = userRepository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود"));
+
+        if (driver.getUserType() != UserType.DRIVER) {
+            throw new InvalidDataException("المستخدم ليس سائق");
+        }
+
+        return new DriverLocationResponse(
+                driver.getUserId(),
+                driver.getCurrentLocationLat(),
+                driver.getCurrentLocationLng(),
+                driver.getIsAvailable(),
+                driver.getVehicleType(),
+                driver.getVehicleNumber());
+    }
 }

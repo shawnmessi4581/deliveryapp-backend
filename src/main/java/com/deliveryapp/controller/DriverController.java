@@ -1,6 +1,7 @@
 package com.deliveryapp.controller;
 
 import com.deliveryapp.dto.order.OrderResponse;
+import com.deliveryapp.dto.user.DriverLocationResponse;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.mapper.order.OrderMapper; // Import the Mapper
 import com.deliveryapp.service.OrderService;
@@ -70,5 +71,10 @@ public class DriverController {
 
         userService.updateDriverLocation(driverId, lat, lng);
         return ResponseEntity.ok("تم تحديث الموقع");
+    }
+
+    @GetMapping("/{driverId}/location")
+    public ResponseEntity<DriverLocationResponse> getDriverLocation(@PathVariable Long driverId) {
+        return ResponseEntity.ok(userService.getDriverLocation(driverId));
     }
 }
