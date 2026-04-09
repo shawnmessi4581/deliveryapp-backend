@@ -27,7 +27,7 @@ public class SmsService {
             System.out.println("📡 Preparing to send SMS via Syrian Relay to: " + phoneNumber);
 
             // 1. Prepare the message text
-            String messageText = "\nالكود صالح لمدة 30 دقيقة" + otpCode + "رمز التعريف الخاص بك هو : ";
+            String messageText = "الكود صالح لمدة 30 دقيقة" + otpCode + "رمز التعريف الخاص بك هو : ";
 
             // 2. Format the phone number (Ensure it's just the numbers, no '+')
             String formattedPhone = phoneNumber.replace("+", "");
