@@ -85,7 +85,7 @@ public class CatalogMapper {
         dto.setIsOpenNow(isStoreOpen(store));
         dto.setIsBusy(store.getIsBusy()); // Map Busy Flag
         dto.setDisplayOrder(store.getDisplayOrder());
-
+        dto.setCommissionPercentage(store.getCommissionPercentage() != null ? store.getCommissionPercentage() : 0.0);
         return dto;
     }
 

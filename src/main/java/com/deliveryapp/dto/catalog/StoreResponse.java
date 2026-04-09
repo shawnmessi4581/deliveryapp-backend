@@ -43,4 +43,7 @@ public class StoreResponse {
     private Boolean isBusy;
     //
     private Integer displayOrder;
+    //
+    private Double commissionPercentage;
+
 }

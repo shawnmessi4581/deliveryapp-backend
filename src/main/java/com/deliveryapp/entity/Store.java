@@ -43,5 +43,7 @@ public class Store {
     private LocalTime closingTime; // e.g. 22:00:00
     @Column(columnDefinition = "integer default 0")
     private Integer displayOrder = 0;
+    @Column(columnDefinition = "numeric(5,2) default 0.0")
+    private Double commissionPercentage = 0.0;
     private LocalDateTime createdAt;
 }

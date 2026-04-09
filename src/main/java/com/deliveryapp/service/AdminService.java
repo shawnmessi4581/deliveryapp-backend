@@ -294,7 +294,8 @@ public class AdminService {
 
         store.setOpeningTime(request.getOpeningTime());
         store.setClosingTime(request.getClosingTime());
-
+        store.setCommissionPercentage(
+                request.getCommissionPercentage() != null ? request.getCommissionPercentage() : 0.0);
         return storeRepository.save(store);
     }
 
@@ -356,6 +357,9 @@ public class AdminService {
             if (store.getCoverImage() != null)
                 fileStorageService.deleteFile(store.getCoverImage());
             store.setCoverImage(fileStorageService.storeFile(cover, "stores"));
+        }
+        if (request.getCommissionPercentage() != null) {
+            store.setCommissionPercentage(request.getCommissionPercentage());
         }
 
         return storeRepository.save(store);

@@ -27,4 +27,7 @@ public class StoreRequest {
     private LocalTime closingTime;
     //
     private Integer displayOrder;
+    //
+    private Double commissionPercentage;
+
 }
