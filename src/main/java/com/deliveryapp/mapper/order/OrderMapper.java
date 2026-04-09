@@ -69,6 +69,8 @@ public class OrderMapper {
         if (order.getOrderItems() != null) {
             response.setItems(order.getOrderItems().stream().map(item -> {
                 OrderItemResponse r = new OrderItemResponse();
+
+                // Map Product details
                 r.setProductName(item.getProductName());
                 r.setVariantDetails(item.getVariantDetails());
                 r.setQuantity(item.getQuantity());
@@ -76,6 +78,17 @@ public class OrderMapper {
                 r.setTotalPrice(item.getTotalPrice());
                 r.setNotes(item.getNotes());
                 r.setSelectedColor(item.getSelectedColor());
+
+                // 👉 Map Store details for grouping and payout math
+                if (item.getProduct() != null && item.getProduct().getStore() != null) {
+                    r.setStoreId(item.getProduct().getStore().getStoreId());
+                    r.setStoreName(item.getProduct().getStore().getName());
+
+                    // Safely get commission (default to 0.0 if null)
+                    Double commission = item.getProduct().getStore().getCommissionPercentage();
+                    r.setStoreCommissionPercentage(commission != null ? commission : 0.0);
+                }
+
                 return r;
             }).collect(Collectors.toList()));
         } else {
