@@ -2,6 +2,7 @@ package com.deliveryapp.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.BatchSize;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,12 +46,15 @@ public class Product {
     @ElementCollection
     @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
     @Column(name = "image_url")
+    @BatchSize(size = 50)
     private List<String> images = new ArrayList<>();
     @ManyToMany
     @JoinTable(name = "product_colors", joinColumns = @JoinColumn(name = "product_id"), inverseJoinColumns = @JoinColumn(name = "color_id"))
-    private List<Color> colors; // List of available colors for this product
+    @BatchSize(size = 50)
+    private List<Color> colors;
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
+    @BatchSize(size = 50)
     private List<ProductVariant> variants;
     private Boolean isTrending = false; // Default to false
     @Column(columnDefinition = "integer default 0")

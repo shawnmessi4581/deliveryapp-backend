@@ -11,71 +11,90 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
-        // Note: True random sorting is generally not compatible with standard
-        // pagination,
-        // because page 2 might show items from page 1 as the random order reshuffles.
-        // If you need random products, it's often better to just return a standard Page
-        // or use a custom native query that doesn't use Pageable.
-        // For now, replacing the random query with a standard paged query for active
-        // products:
-        @Query("SELECT p FROM Product p WHERE p.isAvailable = true")
+        // ── All active products ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.isAvailable = true", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.isAvailable = true")
         Page<Product> findAllActiveProducts(Pageable pageable);
 
-        // 1. Existing: Get menu for a specific store
-        Page<Product> findByStoreStoreIdAndIsAvailableTrue(Long storeId, Pageable pageable);
+        // ── By store ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.store.storeId = :storeId AND p.isAvailable = true", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.store.storeId = :storeId AND p.isAvailable = true")
+        Page<Product> findByStoreStoreIdAndIsAvailableTrue(@Param("storeId") Long storeId, Pageable pageable);
 
-        // 1. Search Global (Category ID = 0)
-        Page<Product> findByNameContainingIgnoreCaseAndIsAvailableTrue(String keyword, Pageable pageable);
-
-        // 2. Search Specific Category
-        Page<Product> findByCategoryCategoryIdAndNameContainingIgnoreCaseAndIsAvailableTrue(Long categoryId,
-                        String keyword,
+        // ── Search global (no category filter) ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) AND p.isAvailable = true", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) AND p.isAvailable = true")
+        Page<Product> findByNameContainingIgnoreCaseAndIsAvailableTrue(@Param("keyword") String keyword,
                         Pageable pageable);
 
-        // Search in Store
-        // 6. Search inside specific Store (THIS FIXES YOUR ERROR)
-        Page<Product> findByStoreStoreIdAndNameContainingIgnoreCaseAndIsAvailableTrue(Long storeId, String keyword,
-                        Pageable pageable);
-        // --- NEW METHODS ADDED BELOW ---
-
-        // 3. Find by Category
-        Page<Product> findByCategoryCategoryId(Long categoryId, Pageable pageable);
-
-        // Variation: Find by Category only if available
-        Page<Product> findByCategoryCategoryIdAndIsAvailableTrue(Long categoryId, Pageable pageable);
-
-        // 4. Find by SubCategory
-        Page<Product> findBySubCategorySubcategoryId(Long subcategoryId, Pageable pageable);
-
-        // Variation: Find by SubCategory only if available
-        Page<Product> findBySubCategorySubcategoryIdAndIsAvailableTrue(Long subcategoryId, Pageable pageable);
-
-        // 5. Find by Store AND Category (Useful for filtering a specific restaurant's
-        // menu)
-        Page<Product> findByStoreStoreIdAndCategoryCategoryId(Long storeId, Long categoryId, Pageable pageable);
-
-        // Get products belonging to a specific Store AND specific Category
-        Page<Product> findByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(Long storeId, Long categoryId,
+        // ── Search with category filter ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.category.categoryId = :categoryId AND LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) AND p.isAvailable = true", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.category.categoryId = :categoryId AND LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) AND p.isAvailable = true")
+        Page<Product> findByCategoryCategoryIdAndNameContainingIgnoreCaseAndIsAvailableTrue(
+                        @Param("categoryId") Long categoryId,
+                        @Param("keyword") String keyword,
                         Pageable pageable);
 
-        // Get products belonging to a specific Store AND specific SubCategory
-        Page<Product> findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(Long storeId, Long subCategoryId,
+        // ── Search inside a specific store ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.store.storeId = :storeId AND LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) AND p.isAvailable = true", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.store.storeId = :storeId AND LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) AND p.isAvailable = true")
+        Page<Product> findByStoreStoreIdAndNameContainingIgnoreCaseAndIsAvailableTrue(
+                        @Param("storeId") Long storeId,
+                        @Param("keyword") String keyword,
                         Pageable pageable);
 
-        // Under Price
-        Page<Product> findByBasePriceLessThanEqualAndIsAvailableTrue(Double price, Pageable pageable);
+        // ── By category ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.category.categoryId = :categoryId", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.category.categoryId = :categoryId")
+        Page<Product> findByCategoryCategoryId(@Param("categoryId") Long categoryId, Pageable pageable);
 
-        // Newest Products (Order by Product ID Descending)
-        // Note: Instead of Top10, we use Pageable to control the limit dynamically
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.category.categoryId = :categoryId AND p.isAvailable = true", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.category.categoryId = :categoryId AND p.isAvailable = true")
+        Page<Product> findByCategoryCategoryIdAndIsAvailableTrue(@Param("categoryId") Long categoryId,
+                        Pageable pageable);
+
+        // ── By subcategory ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.subCategory.subcategoryId = :subCategoryId", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.subCategory.subcategoryId = :subCategoryId")
+        Page<Product> findBySubCategorySubcategoryId(@Param("subCategoryId") Long subcategoryId, Pageable pageable);
+
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.subCategory.subcategoryId = :subCategoryId AND p.isAvailable = true", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.subCategory.subcategoryId = :subCategoryId AND p.isAvailable = true")
+        Page<Product> findBySubCategorySubcategoryIdAndIsAvailableTrue(@Param("subCategoryId") Long subcategoryId,
+                        Pageable pageable);
+
+        // ── By store + category ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.store.storeId = :storeId AND p.category.categoryId = :categoryId", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.store.storeId = :storeId AND p.category.categoryId = :categoryId")
+        Page<Product> findByStoreStoreIdAndCategoryCategoryId(
+                        @Param("storeId") Long storeId,
+                        @Param("categoryId") Long categoryId,
+                        Pageable pageable);
+
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.store.storeId = :storeId AND p.category.categoryId = :categoryId AND p.isAvailable = true", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.store.storeId = :storeId AND p.category.categoryId = :categoryId AND p.isAvailable = true")
+        Page<Product> findByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(
+                        @Param("storeId") Long storeId,
+                        @Param("categoryId") Long categoryId,
+                        Pageable pageable);
+
+        // ── By store + subcategory ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.store.storeId = :storeId AND p.subCategory.subcategoryId = :subCategoryId AND p.isAvailable = true", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.store.storeId = :storeId AND p.subCategory.subcategoryId = :subCategoryId AND p.isAvailable = true")
+        Page<Product> findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(
+                        @Param("storeId") Long storeId,
+                        @Param("subCategoryId") Long subCategoryId,
+                        Pageable pageable);
+
+        // ── Under price ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.basePrice <= :price AND p.isAvailable = true", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.basePrice <= :price AND p.isAvailable = true")
+        Page<Product> findByBasePriceLessThanEqualAndIsAvailableTrue(@Param("price") Double price, Pageable pageable);
+
+        // ── Newest products ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.isAvailable = true ORDER BY p.productId DESC", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.isAvailable = true")
         Page<Product> findByIsAvailableTrueOrderByProductIdDesc(Pageable pageable);
 
-        // Trending
+        // ── Trending ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE p.isTrending = true AND p.isAvailable = true", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE p.isTrending = true AND p.isAvailable = true")
         Page<Product> findByIsTrendingTrueAndIsAvailableTrue(Pageable pageable);
 
-        @Query("SELECT p FROM Product p WHERE " +
+        // ── Admin filtered ──
+        @Query(value = "SELECT DISTINCT p FROM Product p WHERE " +
                         "(:storeId IS NULL OR p.store.storeId = :storeId) AND " +
                         "(:categoryId IS NULL OR p.category.categoryId = :categoryId) AND " +
-                        "(:subCategoryId IS NULL OR p.subCategory.subcategoryId = :subCategoryId)")
+                        "(:subCategoryId IS NULL OR p.subCategory.subcategoryId = :subCategoryId)", countQuery = "SELECT COUNT(DISTINCT p) FROM Product p WHERE "
+                                        +
+                                        "(:storeId IS NULL OR p.store.storeId = :storeId) AND " +
+                                        "(:categoryId IS NULL OR p.category.categoryId = :categoryId) AND " +
+                                        "(:subCategoryId IS NULL OR p.subCategory.subcategoryId = :subCategoryId)")
         Page<Product> findAdminFilteredProducts(
                         @Param("storeId") Long storeId,
                         @Param("categoryId") Long categoryId,
