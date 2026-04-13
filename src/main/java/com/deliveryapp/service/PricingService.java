@@ -17,25 +17,44 @@ public class PricingService {
             Double rate = exchangeRateService.getCurrentRate();
             double convertedPrice = product.getUsdPrice() * rate;
 
-            // 🟢 NEW: Round UP to the nearest integer
-            return Math.ceil(convertedPrice);
+            // 🟢 NEW: Round UP to the nearest 10 SYP
+            return roundUpToNearestTen(convertedPrice);
         }
 
-        // Even for base SYP prices, it's good practice to ensure it's a clean integer
-        return product.getBasePrice() != null ? Math.ceil(product.getBasePrice()) : 0.0;
+        // Even for base SYP prices, ensure it's rounded up to the nearest 10
+        return product.getBasePrice() != null ? roundUpToNearestTen(product.getBasePrice()) : 0.0;
     }
 
     // --- Calculate Final Variant Price in SYP ---
-    // Variants inherit the currency type (isUsd) from their parent product
     public Double getVariantFinalPriceInSYP(ProductVariant variant) {
         if (Boolean.TRUE.equals(variant.getProduct().getIsUsd())) {
             Double rate = exchangeRateService.getCurrentRate();
             double convertedPrice = variant.getPriceAdjustment() * rate;
 
-            // 🟢 NEW: Round UP to the nearest integer
-            return Math.ceil(convertedPrice);
+            // 🟢 NEW: Round UP to the nearest 10 SYP
+            return roundUpToNearestTen(convertedPrice);
         }
 
-        return variant.getPriceAdjustment() != null ? Math.ceil(variant.getPriceAdjustment()) : 0.0;
+        return variant.getPriceAdjustment() != null ? roundUpToNearestTen(variant.getPriceAdjustment()) : 0.0;
+    }
+
+    // =================================================================================
+    // HELPER: ROUND UP TO NEAREST 10
+    // =================================================================================
+    /**
+     * Rounds any double up to the next multiple of 10.
+     * Examples:
+     * 23.0 -> 30.0
+     * 4728.0 -> 4730.0
+     * 4730.0 -> 4730.0 (Already a multiple of 10, stays the same)
+     */
+    private Double roundUpToNearestTen(double amount) {
+        if (amount == 0.0)
+            return 0.0;
+
+        // 1. Divide by 10.0 (e.g., 4728.0 / 10 = 472.8)
+        // 2. Math.ceil rounds it up to the nearest whole number (e.g., 473.0)
+        // 3. Multiply by 10.0 to get it back to the right scale (e.g., 4730.0)
+        return Math.ceil(amount / 10.0) * 10.0;
     }
 }
