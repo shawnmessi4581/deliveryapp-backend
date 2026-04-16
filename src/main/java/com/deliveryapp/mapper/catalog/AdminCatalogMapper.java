@@ -30,19 +30,20 @@ public class AdminCatalogMapper {
         dto.setDisplayOrder(publicDto.getDisplayOrder());
         dto.setImages(publicDto.getImages());
         dto.setColors(publicDto.getColors());
-        dto.setStore(publicDto.getStore());
+        dto.setStore(publicDto.getStore()); // Contains full store object
         dto.setCategoryId(publicDto.getCategoryId());
+        dto.setCategoryName(publicDto.getCategoryName()); // Make sure this is mapped
         dto.setSubCategoryId(publicDto.getSubCategoryId());
+        dto.setSubCategoryName(publicDto.getSubCategoryName()); // Make sure this is mapped
 
-        // We set the public variants list just in case it's needed
-        dto.setVariants(publicDto.getVariants());
+        // ❌ NO LONGER MAPPING flat storeId / storeName
 
         // 2. Admin Raw Pricing
         dto.setBasePrice(product.getBasePrice());
         dto.setUsdPrice(product.getUsdPrice());
         dto.setIsUsd(product.getIsUsd());
 
-        // 3. MAP ADMIN VARIANTS (Type-Safe Fix)
+        // 3. MAP ADMIN VARIANTS
         if (product.getVariants() != null && !product.getVariants().isEmpty()) {
 
             List<AdminProductVariantResponse> adminVariantsList = product.getVariants().stream().map(v -> {
@@ -51,7 +52,7 @@ public class AdminCatalogMapper {
                 vDto.setVariantId(v.getVariantId());
                 vDto.setVariantName(v.getVariantValue());
 
-                // Retrieve the calculated price from the public DTO
+                // Retrieve calculated price from public DTO
                 var publicVariant = publicDto.getVariants().stream()
                         .filter(pv -> pv.getVariantId().equals(v.getVariantId()))
                         .findFirst()
@@ -61,14 +62,17 @@ public class AdminCatalogMapper {
                     vDto.setCalculatedPriceAdjustment(publicVariant.getCalculatedPriceAdjustment());
                 }
 
-                // Set the raw price adjustment from the database
+                // Set the raw price adjustment
                 vDto.setPriceAdjustment(v.getPriceAdjustment());
 
                 return vDto;
             }).collect(Collectors.toList());
 
-            // 🟢 FIX: Set the dedicated admin list
             dto.setAdminVariants(adminVariantsList);
+        } else {
+            // Keep it clean if there are no variants
+            dto.setVariants(java.util.Collections.emptyList());
+            dto.setAdminVariants(java.util.Collections.emptyList());
         }
 
         return dto;

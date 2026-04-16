@@ -90,21 +90,24 @@ public class CatalogMapper {
     }
 
     // --- PRODUCT ---
+
     public ProductResponse toProductResponse(Product product) {
         ProductResponse dto = new ProductResponse();
         dto.setProductId(product.getProductId());
         dto.setName(product.getName());
         dto.setDescription(product.getDescription());
-        dto.setCalculatedPrice(pricingService.getFinalPriceInSYP(product));
-        dto.setImageUrl(urlUtil.getFullUrl(product.getImage())); // Main Thumbnail
+        dto.setImageUrl(urlUtil.getFullUrl(product.getImage()));
         dto.setAvailable(product.getIsAvailable());
         dto.setIsTrending(product.getIsTrending() != null ? product.getIsTrending() : false);
         dto.setDisplayOrder(product.getDisplayOrder());
 
-        // --- MAP GALLERY IMAGES (NEW) ---
+        // 🔴 Calculate SYP price using today's exchange rate
+        dto.setCalculatedPrice(pricingService.getFinalPriceInSYP(product));
+
+        // --- MAP GALLERY IMAGES ---
         if (product.getImages() != null && !product.getImages().isEmpty()) {
             dto.setImages(product.getImages().stream()
-                    .map(urlUtil::getFullUrl) // Convert each relative path to Full URL
+                    .map(urlUtil::getFullUrl)
                     .collect(Collectors.toList()));
         } else {
             dto.setImages(Collections.emptyList());
@@ -124,15 +127,15 @@ public class CatalogMapper {
             dto.setColors(Collections.emptyList());
         }
 
-        // --- Store Info ---
+        // --- MAP STORE (Updated) ---
         if (product.getStore() != null) {
             StoreResponse storeDto = toStoreResponse(product.getStore());
             dto.setStore(storeDto);
-            // dto.setStoreId(product.getStore().getStoreId());
-            // dto.setStoreName(product.getStore().getName());
+
+            // ❌ REMOVED: dto.setStoreId(...) and dto.setStoreName(...)
         }
 
-        // --- Category Info ---
+        // --- MAP CATEGORY / SUBCATEGORY ---
         if (product.getCategory() != null) {
             dto.setCategoryId(product.getCategory().getCategoryId());
             dto.setCategoryName(product.getCategory().getName());
@@ -142,7 +145,7 @@ public class CatalogMapper {
             dto.setSubCategoryName(product.getSubCategory().getName());
         }
 
-        // --- Variants ---
+        // --- MAP VARIANTS ---
         if (product.getVariants() != null && !product.getVariants().isEmpty()) {
             dto.setVariants(product.getVariants().stream().map(v -> {
                 ProductVariantResponse vDto = new ProductVariantResponse();
