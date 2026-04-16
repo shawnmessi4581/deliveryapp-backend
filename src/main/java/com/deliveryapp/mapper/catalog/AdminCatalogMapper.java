@@ -1,23 +1,24 @@
 package com.deliveryapp.mapper.catalog;
 
 import com.deliveryapp.dto.catalog.AdminProductResponse;
+import com.deliveryapp.dto.catalog.AdminProductVariantResponse;
 import com.deliveryapp.entity.Product;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
 public class AdminCatalogMapper {
 
-    private final CatalogMapper catalogMapper; // Re-use public mapping logic
+    private final CatalogMapper catalogMapper;
 
     public AdminProductResponse toAdminProductResponse(Product product) {
         AdminProductResponse dto = new AdminProductResponse();
 
-        // 1. Copy all public fields (like calculatedPrice, images, variants)
-        // Note: You can use
-        // BeanUtils.copyProperties(catalogMapper.toProductResponse(product), dto);
-        // or map them manually. Assuming manual for clarity:
+        // 1. Copy Public Fields
         var publicDto = catalogMapper.toProductResponse(product);
         dto.setProductId(publicDto.getProductId());
         dto.setName(publicDto.getName());
@@ -29,15 +30,46 @@ public class AdminCatalogMapper {
         dto.setDisplayOrder(publicDto.getDisplayOrder());
         dto.setImages(publicDto.getImages());
         dto.setColors(publicDto.getColors());
-        dto.setVariants(publicDto.getVariants());
         dto.setStore(publicDto.getStore());
         dto.setCategoryId(publicDto.getCategoryId());
         dto.setSubCategoryId(publicDto.getSubCategoryId());
 
-        // 2. Add the Admin-Only Raw Pricing Fields
+        // We set the public variants list just in case it's needed
+        dto.setVariants(publicDto.getVariants());
+
+        // 2. Admin Raw Pricing
         dto.setBasePrice(product.getBasePrice());
         dto.setUsdPrice(product.getUsdPrice());
         dto.setIsUsd(product.getIsUsd());
+
+        // 3. MAP ADMIN VARIANTS (Type-Safe Fix)
+        if (product.getVariants() != null && !product.getVariants().isEmpty()) {
+
+            List<AdminProductVariantResponse> adminVariantsList = product.getVariants().stream().map(v -> {
+                AdminProductVariantResponse vDto = new AdminProductVariantResponse();
+
+                vDto.setVariantId(v.getVariantId());
+                vDto.setVariantName(v.getVariantValue());
+
+                // Retrieve the calculated price from the public DTO
+                var publicVariant = publicDto.getVariants().stream()
+                        .filter(pv -> pv.getVariantId().equals(v.getVariantId()))
+                        .findFirst()
+                        .orElse(null);
+
+                if (publicVariant != null) {
+                    vDto.setCalculatedPriceAdjustment(publicVariant.getCalculatedPriceAdjustment());
+                }
+
+                // Set the raw price adjustment from the database
+                vDto.setPriceAdjustment(v.getPriceAdjustment());
+
+                return vDto;
+            }).collect(Collectors.toList());
+
+            // 🟢 FIX: Set the dedicated admin list
+            dto.setAdminVariants(adminVariantsList);
+        }
 
         return dto;
     }

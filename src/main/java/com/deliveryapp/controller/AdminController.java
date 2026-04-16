@@ -271,11 +271,27 @@ public class AdminController {
 
     @PostMapping("/products/{productId}/variants")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
-    public ResponseEntity<?> addVariant(
+    public ResponseEntity<AdminProductVariantResponse> addVariant(
             @PathVariable Long productId,
             @RequestParam("name") String name,
             @RequestParam("price") Double priceAdjustment) {
-        return ResponseEntity.ok(adminService.addProductVariant(productId, name, priceAdjustment));
+
+        // 1. Save it
+        ProductVariant variant = adminService.addProductVariant(productId, name, priceAdjustment);
+
+        // 2. Map it to the Admin DTO
+        AdminProductVariantResponse responseDto = new AdminProductVariantResponse();
+        responseDto.setVariantId(variant.getVariantId());
+        responseDto.setVariantName(variant.getVariantValue());
+
+        // The RAW price you just saved
+        responseDto.setPriceAdjustment(variant.getPriceAdjustment());
+
+        // The SYP calculated price (You need PricingService injected in
+        // AdminController, or just leave it null for this quick return)
+        // If you don't care about the calculated price right this second, just return
+        // the DTO:
+        return ResponseEntity.ok(responseDto);
     }
 
     @DeleteMapping("/variants/{variantId}")
