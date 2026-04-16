@@ -14,6 +14,8 @@ import com.deliveryapp.mapper.user.UserMapper;
 import com.deliveryapp.repository.DeliveryInstructionRepository;
 import com.deliveryapp.service.AdminService;
 import com.deliveryapp.service.OrderService;
+import com.deliveryapp.service.PricingService;
+
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.data.domain.Page;
@@ -39,6 +41,7 @@ public class AdminController {
     private final AdminService adminService;
     private final OrderService orderService;
     private final DeliveryInstructionRepository instructionRepository;
+    private final PricingService pricingService;
 
     // Mappers
     private final CatalogMapper catalogMapper;
@@ -276,7 +279,7 @@ public class AdminController {
             @RequestParam("name") String name,
             @RequestParam("price") Double priceAdjustment) {
 
-        // 1. Save it
+        // 1. Save it to DB
         ProductVariant variant = adminService.addProductVariant(productId, name, priceAdjustment);
 
         // 2. Map it to the Admin DTO
@@ -284,13 +287,14 @@ public class AdminController {
         responseDto.setVariantId(variant.getVariantId());
         responseDto.setVariantName(variant.getVariantValue());
 
-        // The RAW price you just saved
+        // 3. Set the RAW price you just saved
         responseDto.setPriceAdjustment(variant.getPriceAdjustment());
 
-        // The SYP calculated price (You need PricingService injected in
-        // AdminController, or just leave it null for this quick return)
-        // If you don't care about the calculated price right this second, just return
-        // the DTO:
+        // 4. Set the CALCULATED SYP price
+        // The PricingService will check if the parent Product is USD and convert it
+        // automatically
+        responseDto.setCalculatedPriceAdjustment(pricingService.getVariantFinalPriceInSYP(variant));
+
         return ResponseEntity.ok(responseDto);
     }
 
