@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 @Entity
 @Table(name = "stores")
@@ -45,5 +46,11 @@ public class Store {
     private Integer displayOrder = 0;
     @Column(columnDefinition = "numeric(5,2) default 0.0")
     private Double commissionPercentage = 0.0;
+
+    // 🟢 NEW: Relationship to fetch categories directly from the Store object
+    @OneToMany(mappedBy = "store", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @OrderBy("displayOrder ASC") // Ensures they are ordered automatically from the DB
+    private List<StoreCategory> storeCategories;
+
     private LocalDateTime createdAt;
 }

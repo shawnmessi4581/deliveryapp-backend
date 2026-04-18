@@ -100,4 +100,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                         @Param("categoryId") Long categoryId,
                         @Param("subCategoryId") Long subCategoryId,
                         Pageable pageable);
+
+        Page<Product> findByStoreCategoryStoreCategoryIdAndIsAvailableTrue(Long storeCategoryId, Pageable pageable);
 }

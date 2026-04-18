@@ -18,4 +18,5 @@ public class ProductRequest {
     private Double basePrice; // SYP
     private Double usdPrice; // USD
     private Boolean isUsd;
+    private Long storeCategoryId;
 }

@@ -86,6 +86,26 @@ public class CatalogMapper {
         dto.setIsBusy(store.getIsBusy()); // Map Busy Flag
         dto.setDisplayOrder(store.getDisplayOrder());
         dto.setCommissionPercentage(store.getCommissionPercentage() != null ? store.getCommissionPercentage() : 0.0);
+
+        // 🟢 NEW: Map the Store Categories
+        if (store.getStoreCategories() != null && !store.getStoreCategories().isEmpty()) {
+            List<StoreCategoryResponse> categoriesList = store.getStoreCategories().stream()
+                    // Filter to only show Active categories to the user
+                    .filter(sc -> Boolean.TRUE.equals(sc.getIsActive()))
+                    .map(sc -> {
+                        StoreCategoryResponse scDto = new StoreCategoryResponse();
+                        scDto.setStoreCategoryId(sc.getStoreCategoryId());
+                        scDto.setStoreId(sc.getStore().getStoreId());
+                        scDto.setName(sc.getName());
+                        scDto.setIsActive(sc.getIsActive());
+                        scDto.setDisplayOrder(sc.getDisplayOrder());
+                        return scDto;
+                    })
+                    .collect(Collectors.toList());
+            dto.setStoreCategories(categoriesList);
+        } else {
+            dto.setStoreCategories(Collections.emptyList());
+        }
         return dto;
     }
 
@@ -156,6 +176,11 @@ public class CatalogMapper {
             }).collect(Collectors.toList()));
         } else {
             dto.setVariants(Collections.emptyList());
+        }
+        // --- Store Category Info ---
+        if (product.getStoreCategory() != null) {
+            dto.setStoreCategoryId(product.getStoreCategory().getStoreCategoryId());
+            dto.setStoreCategoryName(product.getStoreCategory().getName());
         }
 
         return dto;

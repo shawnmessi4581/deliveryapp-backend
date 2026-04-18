@@ -1,5 +1,7 @@
 package com.deliveryapp.dto.catalog;
 
+import java.util.List;
+
 import lombok.Data;
 
 @Data
@@ -45,5 +47,7 @@ public class StoreResponse {
     private Integer displayOrder;
     //
     private Double commissionPercentage;
+    //
+    private List<StoreCategoryResponse> storeCategories;
 
 }

@@ -24,4 +24,6 @@ public class ProductResponse {
     private List<String> images;
     private List<ColorResponse> colors;
     private List<ProductVariantResponse> variants;
+    private Long storeCategoryId;
+    private String storeCategoryName;
 }
