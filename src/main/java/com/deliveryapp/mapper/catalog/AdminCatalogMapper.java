@@ -35,7 +35,8 @@ public class AdminCatalogMapper {
         dto.setCategoryName(publicDto.getCategoryName()); // Make sure this is mapped
         dto.setSubCategoryId(publicDto.getSubCategoryId());
         dto.setSubCategoryName(publicDto.getSubCategoryName()); // Make sure this is mapped
-
+        dto.setStoreCategoryId(publicDto.getStoreCategoryId());
+        dto.setStoreCategoryName(publicDto.getStoreCategoryName());
         // ❌ NO LONGER MAPPING flat storeId / storeName
 
         // 2. Admin Raw Pricing
