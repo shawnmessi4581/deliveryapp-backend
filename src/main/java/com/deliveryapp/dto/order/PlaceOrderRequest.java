@@ -1,6 +1,5 @@
 package com.deliveryapp.dto.order;
 
-
 import lombok.Data;
 import java.util.List;
 
@@ -10,6 +9,7 @@ public class PlaceOrderRequest {
     private Long addressId;
     private String instruction;
     private String couponCode;
+    private String orderNote; // NEW: "Call me when you arrive"
 
     // NEW: The Frontend sends the cart items here
     private List<OrderItemRequest> items;

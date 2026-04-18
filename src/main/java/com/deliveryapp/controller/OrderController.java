@@ -35,12 +35,7 @@ public class OrderController {
     @PostMapping("/place")
     public ResponseEntity<OrderResponse> placeOrder(@RequestBody PlaceOrderRequest request) {
         Order order = orderService.placeOrder(
-                request.getUserId(),
-                request.getAddressId(),
-                request.getInstruction(),
-                request.getCouponCode(),
-                request.getItems() // Pass the list
-        );
+                request);
         return ResponseEntity.ok(orderMapper.toOrderResponse(order));
     }
 

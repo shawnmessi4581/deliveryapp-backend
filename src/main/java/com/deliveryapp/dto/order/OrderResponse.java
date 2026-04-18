@@ -48,4 +48,6 @@ public class OrderResponse {
     // FIELDS FOR COUPONS
     private Double discountAmount; // How much was saved
     private Long couponId; // Which coupon was used (optional)
+    private String orderNote; // NEW
+
 }

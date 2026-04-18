@@ -48,7 +48,8 @@ public class Order {
     private Double totalAmount;
 
     private String selectedInstruction; // Text copy of the instruction
-
+    @Column(length = 500)
+    private String orderNote; // NEW: Free-text note from the customer
     // Coupon Info
     private Long couponId;
     private Double discountAmount; // Stored as Double to match your existing financial fields

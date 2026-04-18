@@ -45,22 +45,21 @@ public class OrderService {
     private final UrlUtil urlUtil;
 
     @Transactional
-    public Order placeOrder(Long userId, Long addressId, String instruction, String couponCode,
-            List<OrderItemRequest> itemsRequest) {
+    public Order placeOrder(PlaceOrderRequest request) {
 
-        if (itemsRequest == null || itemsRequest.isEmpty())
+        if (request.getItems() == null || request.getItems().isEmpty())
             throw new InvalidDataException("لم يتم تحديد أي عناصر.");
-        if (addressId == null)
+        if (request.getAddressId() == null)
             throw new InvalidDataException("عنوان التوصيل مطلوب.");
 
-        UserAddress userAddress = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود برقم: " + addressId));
+        UserAddress userAddress = addressRepository.findById(request.getAddressId())
+                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود برقم: " + request.getAddressId()));
 
-        if (!userAddress.getUser().getUserId().equals(userId)) {
+        if (!userAddress.getUser().getUserId().equals(request.getUserId())) {
             throw new ResourceNotFoundException("العنوان لا يخص هذا المستخدم");
         }
 
-        User user = userRepository.findById(userId)
+        User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود"));
 
         Order order = new Order();
@@ -72,7 +71,7 @@ public class OrderService {
         Set<Store> uniqueStores = new HashSet<>();
         double subtotal = 0.0;
 
-        for (OrderItemRequest itemReq : itemsRequest) {
+        for (OrderItemRequest itemReq : request.getItems()) {
             Product product = productRepository.findById(itemReq.getProductId())
                     .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود: " + itemReq.getProductId()));
 
@@ -131,7 +130,9 @@ public class OrderService {
         order.setDeliveryAddress(userAddress.getAddressLine());
         order.setDeliveryLatitude(userAddress.getLatitude());
         order.setDeliveryLongitude(userAddress.getLongitude());
-        order.setSelectedInstruction(instruction);
+        order.setSelectedInstruction(request.getInstruction());
+        // 🟢 NEW: Save the customer's custom note
+        order.setOrderNote(request.getOrderNote());
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
 
@@ -152,9 +153,10 @@ public class OrderService {
         double discountAmount = 0.0;
         Coupon validCoupon = null;
 
-        if (couponCode != null && !couponCode.trim().isEmpty()) {
+        if (request.getCouponCode() != null && !request.getCouponCode().trim().isEmpty()) {
             Store primaryStore = uniqueStores.iterator().next();
-            validCoupon = couponService.validateCouponForOrder(couponCode, userId, orderItems, primaryStore);
+            validCoupon = couponService.validateCouponForOrder(request.getCouponCode(), request.getUserId(), orderItems,
+                    primaryStore);
             discountAmount = couponService.calculateDiscount(validCoupon, subtotal, deliveryFee);
 
             if (validCoupon.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY) {
@@ -181,7 +183,7 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
 
         if (validCoupon != null) {
-            couponService.recordUsage(validCoupon, userId, savedOrder.getOrderId(), discountAmount);
+            couponService.recordUsage(validCoupon, request.getUserId(), savedOrder.getOrderId(), discountAmount);
         }
 
         logStatusChange(savedOrder, null, OrderStatus.PENDING, "تم استلام الطلب");
