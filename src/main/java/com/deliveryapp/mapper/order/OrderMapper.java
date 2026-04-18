@@ -57,6 +57,7 @@ public class OrderMapper {
         response.setStatus(order.getStatus());
         response.setCreatedAt(order.getCreatedAt());
         response.setDeliveredAt(order.getDeliveredAt());
+        response.setOrderNote(order.getOrderNote());
 
         // --- Financials ---
         response.setSubtotal(order.getSubtotal());
