@@ -163,9 +163,9 @@ public class ProductService {
 
         if (request.getStoreCategoryId() != null) {
             StoreCategory storeCategory = storeCategoryRepository.findById(request.getStoreCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Store Category not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("تصنيف المتجر غير موجود"));
             if (!storeCategory.getStore().getStoreId().equals(product.getStore().getStoreId())) {
-                throw new InvalidDataException("This category belongs to a different store!");
+                throw new InvalidDataException("هذا التصنيف ينتمي لمتجر آخر!");
             }
             product.setStoreCategory(storeCategory);
         } else {
@@ -253,9 +253,10 @@ public class ProductService {
                 throw new InvalidDataException("This category belongs to a different store!");
             }
             product.setStoreCategory(storeCategory);
-        } else {
-            product.setStoreCategory(null);
         }
+        // else {
+        // product.setStoreCategory(null);
+        // }
         return productRepository.save(product);
     }
 
