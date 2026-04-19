@@ -57,6 +57,8 @@ public class OrderMapper {
         response.setStatus(order.getStatus());
         response.setCreatedAt(order.getCreatedAt());
         response.setDeliveredAt(order.getDeliveredAt());
+        // 🟢 FIX: Map Instructions and Notes
+        response.setSelectedInstruction(order.getSelectedInstruction());
         response.setOrderNote(order.getOrderNote());
 
         // --- Financials ---

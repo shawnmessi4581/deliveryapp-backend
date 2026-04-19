@@ -28,6 +28,9 @@ public class OrderResponse {
     private String deliveryAddress;
     private Double deliveryLatitude;
     private Double deliveryLongitude;
+    // 🟢 NEW: Add Instructions and Notes
+    private String selectedInstruction; // e.g. "Leave at door"
+    private String orderNote; // e.g. "Call me when you arrive"
 
     // Status & Dates
     private OrderStatus status;
@@ -48,6 +51,5 @@ public class OrderResponse {
     // FIELDS FOR COUPONS
     private Double discountAmount; // How much was saved
     private Long couponId; // Which coupon was used (optional)
-    private String orderNote; // NEW
 
 }
