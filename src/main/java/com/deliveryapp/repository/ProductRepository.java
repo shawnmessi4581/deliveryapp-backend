@@ -102,4 +102,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                         Pageable pageable);
 
         Page<Product> findByStoreCategoryStoreCategoryIdAndIsAvailableTrue(Long storeCategoryId, Pageable pageable);
+
+        Page<Product> findByStoreStoreIdAndStoreCategoryStoreCategoryIdAndIsAvailableTrue(
+                        Long storeId, Long storeCategoryId, Pageable pageable);
 }

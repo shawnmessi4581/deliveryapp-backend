@@ -131,6 +131,22 @@ public class CatalogProductController {
         return ResponseEntity.ok(createPagedResponse(productService.getTrendingProducts(pageable)));
     }
 
+    @GetMapping("/store/{storeId}/store-category/{storeCategoryId}")
+    public ResponseEntity<PagedResponse<ProductResponse>> getProductsByStoreAndStoreCategory(
+            @PathVariable Long storeId,
+            @PathVariable Long storeCategoryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        // Sort by displayOrder so the menu looks exactly how the admin arranged it
+        Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
+
+        Page<Product> productPage = productService.getProductsByStoreAndStoreCategory(storeId, storeCategoryId,
+                pageable);
+
+        return ResponseEntity.ok(createPagedResponse(productPage));
+    }
+
     private PagedResponse<ProductResponse> createPagedResponse(Page<Product> productPage) {
         List<ProductResponse> content = productPage.getContent().stream()
                 .map(catalogMapper::toProductResponse)

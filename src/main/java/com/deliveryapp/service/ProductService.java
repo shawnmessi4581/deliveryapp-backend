@@ -44,6 +44,16 @@ public class ProductService {
         return productRepository.findByStoreStoreIdAndIsAvailableTrue(storeId, pageable);
     }
 
+    // 🟢 NEW: Get Products by Store and Store Category (In-Store Menu Tab)
+    public Page<Product> getProductsByStoreAndStoreCategory(Long storeId, Long storeCategoryId, Pageable pageable) {
+        if (!storeRepository.existsById(storeId))
+            throw new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId);
+        if (!storeCategoryRepository.existsById(storeCategoryId))
+            throw new ResourceNotFoundException("الفئة غير موجودة برقم: " + storeCategoryId);
+        return productRepository.findByStoreStoreIdAndStoreCategoryStoreCategoryIdAndIsAvailableTrue(
+                storeId, storeCategoryId, pageable);
+    }
+
     public Page<Product> getProductsByCategory(Long categoryId, Pageable pageable) {
         if (!categoryRepository.existsById(categoryId))
             throw new ResourceNotFoundException("الفئة غير موجودة برقم: " + categoryId);
@@ -289,4 +299,5 @@ public class ProductService {
         }
         variantRepository.deleteById(variantId);
     }
+
 }
