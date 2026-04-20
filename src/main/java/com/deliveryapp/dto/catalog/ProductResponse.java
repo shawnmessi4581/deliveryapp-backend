@@ -26,4 +26,8 @@ public class ProductResponse {
     private List<ProductVariantResponse> variants;
     private Long storeCategoryId;
     private String storeCategoryName;
+    // 🟢 NEW: For the Frontend UI
+    private Boolean hasOffer;
+    private Double originalPrice; // The crossed-out price (e.g., 5000)
+    private Integer discountPercentage; // E.g., 20 (for a "20% OFF" badge)
 }

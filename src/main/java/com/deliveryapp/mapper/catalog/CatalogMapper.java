@@ -182,6 +182,18 @@ public class CatalogMapper {
             dto.setStoreCategoryId(product.getStoreCategory().getStoreCategoryId());
             dto.setStoreCategoryName(product.getStoreCategory().getName());
         }
+        // Set Offer UI Data
+        dto.setHasOffer(product.getHasOffer() != null ? product.getHasOffer() : false);
+
+        if (dto.getHasOffer()) {
+            // If there is an offer, we need to show the old crossed-out price
+            dto.setOriginalPrice(pricingService.getRegularPriceInSYP(product));
+            // And calculate the percentage badge
+            dto.setDiscountPercentage(pricingService.getDiscountPercentage(product));
+        } else {
+            dto.setOriginalPrice(null);
+            dto.setDiscountPercentage(null);
+        }
 
         return dto;
     }

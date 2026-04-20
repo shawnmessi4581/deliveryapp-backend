@@ -11,21 +11,70 @@ public class PricingService {
 
     private final ExchangeRateService exchangeRateService;
 
-    // --- Calculate Final Price in SYP ---
+    // =================================================================================
+    // MAIN PRODUCT PRICING
+    // =================================================================================
+
+    // 1. Calculate the FINAL ACTIVE PRICE (Used by the Cart/Order system and Public
+    // DTOs)
     public Double getFinalPriceInSYP(Product product) {
+        if (Boolean.TRUE.equals(product.getHasOffer())) {
+            return getOfferPriceInSYP(product);
+        } else {
+            return getRegularPriceInSYP(product);
+        }
+    }
+
+    // 2. Calculate the Regular (Original) Price
+    public Double getRegularPriceInSYP(Product product) {
         if (Boolean.TRUE.equals(product.getIsUsd())) {
             Double rate = exchangeRateService.getCurrentRate();
             double convertedPrice = product.getUsdPrice() * rate;
-
-            // 🟢 NEW: Round UP to the nearest 10 SYP
             return roundUpToNearestTen(convertedPrice);
         }
 
-        // Even for base SYP prices, ensure it's rounded up to the nearest 10
         return product.getBasePrice() != null ? roundUpToNearestTen(product.getBasePrice()) : 0.0;
     }
 
+    // 3. Calculate the Offer (Discounted) Price
+    private Double getOfferPriceInSYP(Product product) {
+        if (Boolean.TRUE.equals(product.getIsUsd())) {
+            if (product.getOfferUsdPrice() == null)
+                return getRegularPriceInSYP(product); // Fallback
+            Double rate = exchangeRateService.getCurrentRate();
+            double convertedPrice = product.getOfferUsdPrice() * rate;
+            return roundUpToNearestTen(convertedPrice);
+        }
+
+        return product.getOfferBasePrice() != null ? roundUpToNearestTen(product.getOfferBasePrice())
+                : getRegularPriceInSYP(product);
+    }
+
+    // 4. Calculate Discount Percentage (For Frontend Badges: e.g. "20% OFF")
+    public Integer getDiscountPercentage(Product product) {
+        if (!Boolean.TRUE.equals(product.getHasOffer()))
+            return null;
+
+        Double oldPrice = getRegularPriceInSYP(product);
+        Double newPrice = getOfferPriceInSYP(product);
+
+        if (oldPrice == null || newPrice == null || oldPrice == 0.0 || newPrice >= oldPrice) {
+            return null;
+        }
+
+        // Formula: ((Old - New) / Old) * 100
+        double percentage = ((oldPrice - newPrice) / oldPrice) * 100;
+
+        return (int) Math.round(percentage); // Round to nearest whole integer (e.g. 15)
+    }
+
+    // =================================================================================
+    // VARIANT PRICING
+    // =================================================================================
+
     // --- Calculate Final Variant Price in SYP ---
+    // Variants currently do not have their own separate "offer" logic, they just
+    // inherit the currency rules.
     public Double getVariantFinalPriceInSYP(ProductVariant variant) {
         if (Boolean.TRUE.equals(variant.getProduct().getIsUsd())) {
             Double rate = exchangeRateService.getCurrentRate();

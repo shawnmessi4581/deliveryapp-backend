@@ -108,6 +108,10 @@ public class ProductService {
         return productRepository.findByIsTrendingTrueAndIsAvailableTrue(pageable);
     }
 
+    public Page<Product> getOffers(Pageable pageable) {
+        return productRepository.findByHasOfferTrueAndIsAvailableTrue(pageable);
+    }
+
     // ================= ADMIN CRUD =================
     public Page<Product> getAllProductsAdmin(Long storeId, Long categoryId, Long subCategoryId, Pageable pageable) {
         return productRepository.findAdminFilteredProducts(storeId, categoryId, subCategoryId, pageable);
@@ -180,6 +184,20 @@ public class ProductService {
             product.setStoreCategory(storeCategory);
         } else {
             product.setStoreCategory(null);
+        }
+        if (request.getHasOffer() != null) {
+            product.setHasOffer(request.getHasOffer());
+            if (request.getHasOffer()) {
+                if (request.getIsUsd() != null && request.getIsUsd()) {
+                    product.setOfferUsdPrice(request.getOfferUsdPrice());
+                    product.setOfferBasePrice(0.0);
+                } else {
+                    product.setOfferBasePrice(request.getOfferBasePrice());
+                    product.setOfferUsdPrice(0.0);
+                }
+            }
+        } else {
+            product.setHasOffer(false);
         }
         return productRepository.save(product);
     }
@@ -267,6 +285,21 @@ public class ProductService {
         // else {
         // product.setStoreCategory(null);
         // }
+
+        if (request.getHasOffer() != null) {
+            product.setHasOffer(request.getHasOffer());
+            if (request.getHasOffer()) {
+                if (request.getIsUsd() != null && request.getIsUsd()) {
+                    product.setOfferUsdPrice(request.getOfferUsdPrice());
+                    product.setOfferBasePrice(0.0);
+                } else {
+                    product.setOfferBasePrice(request.getOfferBasePrice());
+                    product.setOfferUsdPrice(0.0);
+                }
+            }
+        } else {
+            product.setHasOffer(false);
+        }
         return productRepository.save(product);
     }
 

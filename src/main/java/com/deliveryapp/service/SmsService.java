@@ -27,13 +27,13 @@ public class SmsService {
             System.out.println("📡 Preparing to send SMS via Syrian Relay to: " + phoneNumber);
 
             // 1. Prepare the message text
-            String messageText = "الكود صالح لمدة 30 دقيقة " + otpCode + " رمز التعريف الخاص بك هو :";
+            String messageText = otpCode;
             // 2. Format the phone number (Ensure it's just the numbers, no '+')
             String formattedPhone = phoneNumber.replace("+", "");
 
             // 3. Build the Form Data Body (x-www-form-urlencoded)
             String urlParameters = "phoneNumber=" + URLEncoder.encode(formattedPhone, StandardCharsets.UTF_8.toString())
-                    + "&messageText=" + URLEncoder.encode(messageText, StandardCharsets.UTF_8.toString());
+                    + "&code=" + URLEncoder.encode(messageText, StandardCharsets.UTF_8.toString());
 
             // 4. Setup the Connection
             URL url = new URL(relayUrl);

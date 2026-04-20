@@ -75,6 +75,9 @@ public class AdminCatalogMapper {
             dto.setVariants(java.util.Collections.emptyList());
             dto.setAdminVariants(java.util.Collections.emptyList());
         }
+        dto.setHasOffer(product.getHasOffer());
+        dto.setOfferBasePrice(product.getOfferBasePrice());
+        dto.setOfferUsdPrice(product.getOfferUsdPrice());
 
         return dto;
     }

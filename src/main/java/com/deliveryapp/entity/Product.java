@@ -42,6 +42,10 @@ public class Product {
     // true = priced in USD. false = priced in SYP.
     @Column(nullable = false, columnDefinition = "boolean default false")
     private Boolean isUsd = false;
+    // 🟢 NEW: Offer Pricing Fields
+    private Boolean hasOffer = false; // Is the discount active right now?
+    private Double offerBasePrice; // Discounted price in SYP
+    private Double offerUsdPrice; // Discounted price in USD
     //
     private String image;
     private Boolean isAvailable;

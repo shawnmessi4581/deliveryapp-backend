@@ -15,4 +15,7 @@ public class AdminProductResponse extends ProductResponse {
 
     // 🟢 FIX: Override the parent list to explicitly use the Admin DTO
     private List<AdminProductVariantResponse> adminVariants;
+    private Boolean hasOffer;
+    private Double offerBasePrice;
+    private Double offerUsdPrice;
 }

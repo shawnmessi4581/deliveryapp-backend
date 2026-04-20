@@ -147,6 +147,19 @@ public class CatalogProductController {
         return ResponseEntity.ok(createPagedResponse(productPage));
     }
 
+    // 🟢 NEW ROUTE: /api/catalog/products/offers
+    @GetMapping("/offers")
+    public ResponseEntity<PagedResponse<ProductResponse>> getOffers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        // Sort by displayOrder or newest, your choice.
+        Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
+        Page<Product> productPage = productService.getOffers(pageable);
+
+        return ResponseEntity.ok(createPagedResponse(productPage));
+    }
+
     private PagedResponse<ProductResponse> createPagedResponse(Page<Product> productPage) {
         List<ProductResponse> content = productPage.getContent().stream()
                 .map(catalogMapper::toProductResponse)
