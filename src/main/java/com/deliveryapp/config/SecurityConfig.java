@@ -73,6 +73,11 @@ public class SecurityConfig {
                         // Static uploads
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/api/app/download", "/api/app/link").permitAll()
+                        // 🟢 GUEST ENTRY: Allow public browsing
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/catalog/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/banners/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/store-categories/**")
+                        .permitAll()
                         // Everything else requires auth
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session
@@ -87,12 +92,11 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "https://allin-shops.com",
-            "http://allin-shops.com",
-            "https://dashboard.allin-shops.com"
-        ));
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "https://allin-shops.com",
+                "http://allin-shops.com",
+                "https://dashboard.allin-shops.com"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

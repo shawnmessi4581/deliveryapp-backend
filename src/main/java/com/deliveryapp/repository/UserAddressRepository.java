@@ -14,4 +14,6 @@ public interface UserAddressRepository extends JpaRepository<UserAddress, Long> 
     @Modifying
     @Query("UPDATE UserAddress a SET a.isDefault = false WHERE a.user.userId = :userId")
     void unsetDefaultAddressesForUser(Long userId);
+
+    void deleteByUserUserId(Long userId);
 }

@@ -46,4 +46,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     // New (Correct): Notice 'Stores' (Plural) and the underscore '_' to traverse
     // the list
     List<Order> findByStores_StoreId(Long storeId);
+
+    // Add this method to check if the user has orders currently in progress
+    boolean existsByUserUserIdAndStatusIn(Long userId, List<OrderStatus> statuses);
 }

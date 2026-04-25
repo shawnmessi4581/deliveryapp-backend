@@ -14,8 +14,12 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
     List<Favorite> findByUserUserId(Long userId);
 
     // Check if specific item is already favorited
-    Optional<Favorite> findByUserUserIdAndFavoritableTypeAndFavoritableId(Long userId, String favoritableType, Long favoritableId);
+    Optional<Favorite> findByUserUserIdAndFavoritableTypeAndFavoritableId(Long userId, String favoritableType,
+            Long favoritableId);
 
     // Check existence
-    boolean existsByUserUserIdAndFavoritableTypeAndFavoritableId(Long userId, String favoritableType, Long favoritableId);
+    boolean existsByUserUserIdAndFavoritableTypeAndFavoritableId(Long userId, String favoritableType,
+            Long favoritableId);
+
+    void deleteByUserUserId(Long userId);
 }

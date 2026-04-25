@@ -61,4 +61,11 @@ public class UserController {
         userService.updateFcmToken(userId, request.getFcmToken());
         return ResponseEntity.ok("تم تحديث رمز FCM بنجاح");
     }
+
+    @DeleteMapping("/{userId}/account")
+    public ResponseEntity<String> deleteMyAccount(@PathVariable Long userId) {
+
+        userService.deleteMyAccount(userId);
+        return ResponseEntity.ok("تم حذف الحساب ومسح البيانات بنجاح.");
+    }
 }
