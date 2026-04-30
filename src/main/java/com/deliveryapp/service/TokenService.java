@@ -60,7 +60,7 @@ public class TokenService {
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("self")
                 .issuedAt(now)
-                .expiresAt(now.plus(24, ChronoUnit.HOURS))
+                .expiresAt(now.plus(10, ChronoUnit.YEARS))
                 .subject(phoneNumber) // matches authentication.getName() from login
                 .claim("scope", "ROLE_CUSTOMER")
                 .claim("userId", userId)
