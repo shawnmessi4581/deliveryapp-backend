@@ -89,7 +89,7 @@ public class StoreService {
         store.setClosingTime(request.getClosingTime());
         store.setCommissionPercentage(
                 request.getCommissionPercentage() != null ? request.getCommissionPercentage() : 0.0);
-
+        store.setMinimumDeliveryFee(request.getMinimumDeliveryFee() != null ? request.getMinimumDeliveryFee() : 0.0);
         return storeRepository.save(store);
     }
 
@@ -152,7 +152,8 @@ public class StoreService {
         if (request.getCommissionPercentage() != null) {
             store.setCommissionPercentage(request.getCommissionPercentage());
         }
-
+        if (request.getMinimumDeliveryFee() != null)
+            store.setMinimumDeliveryFee(request.getMinimumDeliveryFee());
         return storeRepository.save(store);
     }
 

@@ -51,6 +51,9 @@ public class Store {
     @OneToMany(mappedBy = "store", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @OrderBy("displayOrder ASC") // Ensures they are ordered automatically from the DB
     private List<StoreCategory> storeCategories;
+       // 🟢 NEW: Minimum fee to deliver from this store (e.g. 5000 SYP)
+    @Column(columnDefinition = "numeric(10,2) default 0.0")
+    private Double minimumDeliveryFee = 0.0;
 
     private LocalDateTime createdAt;
 }

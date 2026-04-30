@@ -49,5 +49,6 @@ public class StoreResponse {
     private Double commissionPercentage;
     //
     private List<StoreCategoryResponse> storeCategories;
+    private Double minimumDeliveryFee;
 
 }

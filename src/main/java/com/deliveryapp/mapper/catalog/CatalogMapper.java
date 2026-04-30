@@ -106,6 +106,7 @@ public class CatalogMapper {
         } else {
             dto.setStoreCategories(Collections.emptyList());
         }
+        dto.setMinimumDeliveryFee(store.getMinimumDeliveryFee());
         return dto;
     }
 

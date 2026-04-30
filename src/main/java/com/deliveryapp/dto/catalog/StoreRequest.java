@@ -29,5 +29,6 @@ public class StoreRequest {
     private Integer displayOrder;
     //
     private Double commissionPercentage;
+    private Double minimumDeliveryFee;
 
 }

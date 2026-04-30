@@ -9,6 +9,7 @@ import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.*;
 import com.deliveryapp.util.DistanceUtil;
+import com.deliveryapp.util.MathUtil;
 import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -43,7 +44,11 @@ public class OrderService {
 
     private final DistanceUtil distanceUtil;
     private final UrlUtil urlUtil;
+    private final MathUtil mathUtil;
 
+    // =================================================================================
+    // PLACE ORDER LOGIC
+    // =================================================================================
     @Transactional
     public Order placeOrder(PlaceOrderRequest request) {
 
@@ -136,9 +141,15 @@ public class OrderService {
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
 
-        // 5. CALCULATE BEST ROUTE FEE (ROUND UP TO INTEGER)
+        // ============================================================
+        // 5. CALCULATE BEST ROUTE FEE (ROUNDED TO 10, WITH MINIMUM CHECK)
+        // ============================================================
         double maxFeePerKm = uniqueStores.stream()
                 .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
+                .max().orElse(0.0);
+
+        double maxMinimumDeliveryFee = uniqueStores.stream()
+                .mapToDouble(s -> s.getMinimumDeliveryFee() != null ? s.getMinimumDeliveryFee() : 0.0)
                 .max().orElse(0.0);
 
         double totalDistanceKm = calculateOptimizedDistance(
@@ -147,9 +158,18 @@ public class OrderService {
                 userAddress.getLongitude());
 
         double rawDeliveryFee = totalDistanceKm * maxFeePerKm;
-        double deliveryFee = Math.ceil(rawDeliveryFee); // 🟢 CEIL FIX: Round UP to nearest integer
 
+        // 🟢 FIX: Round up to nearest 10
+        double deliveryFee = mathUtil.roundUpToNearestTen(rawDeliveryFee);
+
+        // 🟢 FIX: Apply minimum delivery fee
+        if (deliveryFee < maxMinimumDeliveryFee) {
+            deliveryFee = maxMinimumDeliveryFee;
+        }
+
+        // ============================================================
         // 6. Handle Coupon Logic
+        // ============================================================
         double discountAmount = 0.0;
         Coupon validCoupon = null;
 
@@ -197,6 +217,10 @@ public class OrderService {
         return savedOrder;
     }
 
+    // =================================================================================
+    // ORDER MANAGEMENT
+    // =================================================================================
+
     @Transactional
     public Order updateOrderStatus(Long orderId, OrderStatus newStatus, Long userId) {
         Order order = orderRepository.findById(orderId)
@@ -220,7 +244,6 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
         logStatusChange(savedOrder, oldStatus, newStatus, "تم تحديث حالة الطلب بواسطة " + userId);
 
-        // 🟢 NOTIFY CUSTOMER WHEN CONFIRMED
         if (newStatus == OrderStatus.CONFIRMED && oldStatus == OrderStatus.PENDING) {
             try {
                 notificationService.sendNotification(
@@ -245,17 +268,14 @@ public class OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
 
-        // 1. Verify Ownership
         if (!order.getUser().getUserId().equals(userId)) {
             throw new InvalidDataException("ليس لديك إذن لإلغاء هذا الطلب.");
         }
 
-        // 2. Verify Status
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new InvalidDataException("يمكنك فقط إلغاء الطلب عندما يكون قيد الانتظار.");
         }
 
-        // 3. Reverse Coupon Usage
         if (order.getCouponId() != null) {
             couponUsageRepository.deleteByOrderId(orderId);
             try {
@@ -268,14 +288,12 @@ public class OrderService {
             }
         }
 
-        // 🚨 NEW: Notify Staff BEFORE deleting the order so we have the orderNumber
         try {
             notificationService.notifyStaffOfCancelledOrder(order.getOrderNumber(), orderId);
         } catch (Exception e) {
             System.err.println("Failed to notify staff of cancellation: " + e.getMessage());
         }
 
-        // 4. Delete History and Order
         historyRepository.deleteByOrderOrderId(orderId);
         orderRepository.delete(order);
     }
@@ -326,6 +344,10 @@ public class OrderService {
         couponUsageRepository.deleteByOrderId(orderId);
         orderRepository.deleteById(orderId);
     }
+
+    // =================================================================================
+    // DRIVER & ASSIGNMENT
+    // =================================================================================
 
     @Transactional
     public Order assignDriver(Long orderId, Long driverId) {
@@ -378,7 +400,6 @@ public class OrderService {
         return savedOrder;
     }
 
-    // 2. ADD NEW METHOD FOR DRIVER RESPONSE
     @Transactional
     public Order driverRespondToOrder(Long orderId, Long driverId, boolean isAccepted) {
         Order order = orderRepository.findById(orderId)
@@ -390,7 +411,6 @@ public class OrderService {
 
         if (isAccepted) {
             order.setDriverOrderStatus(DriverOrderStatus.ACCEPTED);
-            // Optional: You can auto-update the main status to PREPARING here if you want
             notificationService.notifyAllStaff(
                     "تم قبول الطلب! ✅",
                     "السائق " + order.getDriver().getName() + " وافق على توصيل الطلب رقم " + order.getOrderNumber(),
@@ -398,8 +418,6 @@ public class OrderService {
                     orderId);
         } else {
             order.setDriverOrderStatus(DriverOrderStatus.REJECTED);
-
-            // Notify Admins that the driver rejected the order!
             notificationService.notifyAllStaff(
                     "تم رفض الطلب! 🚨",
                     "السائق " + order.getDriver().getName() + " رفض توصيل الطلب رقم " + order.getOrderNumber(),
@@ -422,6 +440,10 @@ public class OrderService {
         }
     }
 
+    // =================================================================================
+    // FEES & COUPONS (PRE-CALCULATION)
+    // =================================================================================
+
     public DeliveryFeeResponse calculateDeliveryFee(Long storeId, Long addressId) {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود"));
@@ -434,11 +456,51 @@ public class OrderService {
                 store.getLatitude(), store.getLongitude());
 
         Double feePerKm = store.getDeliveryFeeKM() != null ? store.getDeliveryFeeKM() : 0.0;
+        Double minFee = store.getMinimumDeliveryFee() != null ? store.getMinimumDeliveryFee() : 0.0;
 
-        // 🟢 FIX: Ensure calculation preview also rounds up (Ceil)
-        double deliveryFee = Math.ceil(distance * feePerKm);
+        double rawDeliveryFee = distance * feePerKm;
+        double deliveryFee = mathUtil.roundUpToNearestTen(rawDeliveryFee);
+
+        if (deliveryFee < minFee) {
+            deliveryFee = minFee;
+        }
 
         return new DeliveryFeeResponse(deliveryFee, store.getEstimatedDeliveryTime());
+    }
+
+    public DeliveryFeeResponse calculateMultiStoreFee(List<Long> storeIds, Long addressId) {
+        if (storeIds == null || storeIds.isEmpty()) {
+            throw new InvalidDataException("لم يتم توفير متاجر لحساب الرسوم");
+        }
+
+        List<Store> stores = storeRepository.findAllById(storeIds);
+        if (stores.isEmpty()) {
+            throw new ResourceNotFoundException("لم يتم العثور على متاجر صالحة");
+        }
+
+        UserAddress address = addressRepository.findById(addressId)
+                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود"));
+
+        double maxFeePerKm = stores.stream()
+                .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
+                .max().orElse(0.0);
+
+        double maxMinimumDeliveryFee = stores.stream()
+                .mapToDouble(s -> s.getMinimumDeliveryFee() != null ? s.getMinimumDeliveryFee() : 0.0)
+                .max().orElse(0.0);
+
+        double totalDistanceKm = calculateOptimizedDistance(stores, address.getLatitude(), address.getLongitude());
+
+        double rawDeliveryFee = totalDistanceKm * maxFeePerKm;
+        double deliveryFee = mathUtil.roundUpToNearestTen(rawDeliveryFee);
+
+        if (deliveryFee < maxMinimumDeliveryFee) {
+            deliveryFee = maxMinimumDeliveryFee;
+        }
+
+        String estimatedTime = stores.get(0).getEstimatedDeliveryTime();
+
+        return new DeliveryFeeResponse(deliveryFee, estimatedTime);
     }
 
     public CouponCheckResponse verifyCoupon(CouponCheckRequest request) {
@@ -485,6 +547,10 @@ public class OrderService {
                 coupon.getDiscountType().name());
     }
 
+    // =================================================================================
+    // TRACKING
+    // =================================================================================
+
     public OrderTrackingResponse trackOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
@@ -502,7 +568,9 @@ public class OrderService {
             response.setDriverId(driver.getUserId());
             response.setDriverName(driver.getName());
             response.setDriverPhone(driver.getPhoneNumber());
+
             response.setDriverImage(urlUtil.getFullUrl(driver.getProfileImage()));
+
             response.setDriverVehicle(driver.getVehicleNumber());
             response.setDriverLatitude(driver.getCurrentLocationLat());
             response.setDriverLongitude(driver.getCurrentLocationLng());
@@ -522,33 +590,6 @@ public class OrderService {
         } else {
             return now.isAfter(store.getOpeningTime()) && now.isBefore(store.getClosingTime());
         }
-    }
-
-    public DeliveryFeeResponse calculateMultiStoreFee(List<Long> storeIds, Long addressId) {
-        if (storeIds == null || storeIds.isEmpty()) {
-            throw new InvalidDataException("لم يتم توفير متاجر لحساب الرسوم");
-        }
-
-        List<Store> stores = storeRepository.findAllById(storeIds);
-        if (stores.isEmpty()) {
-            throw new ResourceNotFoundException("لم يتم العثور على متاجر صالحة");
-        }
-
-        UserAddress address = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود"));
-
-        double maxFeePerKm = stores.stream()
-                .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
-                .max().orElse(0.0);
-
-        double totalDistanceKm = calculateOptimizedDistance(stores, address.getLatitude(), address.getLongitude());
-
-        // 🟢 FIX: Ensure multi-store preview also rounds up (Ceil)
-        double deliveryFee = Math.ceil(totalDistanceKm * maxFeePerKm);
-
-        String estimatedTime = stores.get(0).getEstimatedDeliveryTime();
-
-        return new DeliveryFeeResponse(deliveryFee, estimatedTime);
     }
 
     private double calculateOptimizedDistance(List<Store> stores, double userLat, double userLng) {
