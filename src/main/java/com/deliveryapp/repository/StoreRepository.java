@@ -28,4 +28,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
     List<Store> findByCategoryCategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(Long categoryId);
 
     List<Store> findBySubCategorySubcategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(Long subCategoryId);
+
+    List<Store> findBySubCategorySubcategoryIdOrderByDisplayOrderAsc(Long subCategoryId);
+
 }

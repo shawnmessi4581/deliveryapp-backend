@@ -3,9 +3,13 @@ package com.deliveryapp.service;
 import com.deliveryapp.dto.catalog.CategoryRequest;
 import com.deliveryapp.dto.catalog.SubCategoryRequest;
 import com.deliveryapp.entity.Category;
+import com.deliveryapp.entity.Product;
+import com.deliveryapp.entity.Store;
 import com.deliveryapp.entity.SubCategory;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.CategoryRepository;
+import com.deliveryapp.repository.ProductRepository;
+import com.deliveryapp.repository.StoreRepository;
 import com.deliveryapp.repository.SubCategoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,7 +26,10 @@ public class CategoryService {
     private final SubCategoryRepository subCategoryRepository;
     private final FileStorageService fileStorageService;
 
+    private final StoreRepository storeRepository;
+    private final ProductRepository productRepository;
     // ================= PUBLIC / CATALOG =================
+
     public List<Category> getAllActiveCategories() {
         return categoryRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
     }
@@ -138,12 +145,39 @@ public class CategoryService {
         return subCategoryRepository.save(subCategory);
     }
 
+    @Transactional
     public void deleteSubCategory(Long id) {
         SubCategory subCategory = subCategoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("الفئة الفرعية غير موجودة برقم: " + id));
+
+        // 1. UNLINK STORES
+        // Find all stores using this subcategory and set subcategory to null
+        List<Store> linkedStores = storeRepository.findBySubCategorySubcategoryIdOrderByDisplayOrderAsc(id);
+        for (Store store : linkedStores) {
+            store.setSubCategory(null);
+        }
+        storeRepository.saveAll(linkedStores);
+
+        // 2. UNLINK PRODUCTS
+        // Find all products using this subcategory and set subcategory to null
+        // Note: You need a method in ProductRepository that returns a List, not a Page
+        // for this cleanup
+        // If you don't have one, add this to ProductRepository: List<Product>
+        // findBySubCategorySubcategoryId(Long id);
+        List<Product> linkedProducts = productRepository.findBySubCategorySubcategoryId(id);
+        if (linkedProducts != null && !linkedProducts.isEmpty()) {
+            for (Product product : linkedProducts) {
+                product.setSubCategory(null);
+            }
+            productRepository.saveAll(linkedProducts);
+        }
+
+        // 3. 🧹 Cleanup: Delete icon from server storage
         if (subCategory.getIcon() != null) {
             fileStorageService.deleteFile(subCategory.getIcon());
         }
+
+        // 4. Finally, delete the subcategory
         subCategoryRepository.deleteById(id);
     }
 }

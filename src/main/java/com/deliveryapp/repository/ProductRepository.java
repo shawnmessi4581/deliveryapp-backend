@@ -1,6 +1,9 @@
 package com.deliveryapp.repository;
 
 import com.deliveryapp.entity.Product;
+
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -107,5 +110,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                         Long storeId, Long storeCategoryId, Pageable pageable);
 
         Page<Product> findByHasOfferTrueAndIsAvailableTrue(Pageable pageable);
+
+        List<Product> findBySubCategorySubcategoryId(Long subCategoryId);
 
 }
