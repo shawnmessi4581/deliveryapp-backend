@@ -133,12 +133,17 @@ public class StoreService {
                     .orElseThrow(() -> new ResourceNotFoundException("الفئة غير موجودة"));
             store.setCategory(cat);
         }
+        // 🟢 FIX: Handle removing SubCategory
         if (request.getSubCategoryId() != null) {
-            SubCategory sub = subCategoryRepository.findById(request.getSubCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("الفئة الفرعية غير موجودة"));
-            store.setSubCategory(sub);
+            // If the frontend sends 0 or -1, it means "Remove the SubCategory"
+            if (request.getSubCategoryId() <= 0) {
+                store.setSubCategory(null);
+            } else {
+                SubCategory sub = subCategoryRepository.findById(request.getSubCategoryId())
+                        .orElseThrow(() -> new ResourceNotFoundException("الفئة الفرعية غير موجودة"));
+                store.setSubCategory(sub);
+            }
         }
-
         if (logo != null && !logo.isEmpty()) {
             if (store.getLogo() != null)
                 fileStorageService.deleteFile(store.getLogo());

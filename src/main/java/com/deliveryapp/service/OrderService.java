@@ -220,16 +220,26 @@ public class OrderService {
     // =================================================================================
     // ORDER MANAGEMENT
     // =================================================================================
-
     @Transactional
     public Order updateOrderStatus(Long orderId, OrderStatus newStatus, Long userId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
 
+        // 1. SECURITY CHECK: If the user making the request is a DRIVER, ensure it is
+        // THEIR order
+        User user = userRepository.findById(userId).orElse(null);
+        if (user != null && user.getUserType() == UserType.DRIVER) {
+            if (order.getDriver() == null || !order.getDriver().getUserId().equals(userId)) {
+                throw new InvalidDataException("لا يمكنك تعديل حالة طلب غير مسند إليك."); // "You cannot update an order
+                                                                                          // not assigned to you"
+            }
+        }
+
         OrderStatus oldStatus = order.getStatus();
         order.setStatus(newStatus);
         order.setUpdatedAt(LocalDateTime.now());
 
+        // 2. Handle Delivery Completion (Increment Driver Stats)
         if (newStatus == OrderStatus.DELIVERED) {
             order.setDeliveredAt(LocalDateTime.now());
 
@@ -244,6 +254,7 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
         logStatusChange(savedOrder, oldStatus, newStatus, "تم تحديث حالة الطلب بواسطة " + userId);
 
+        // 3. NOTIFY CUSTOMER BASED ON STATUS CHANGE
         if (newStatus == OrderStatus.CONFIRMED && oldStatus == OrderStatus.PENDING) {
             try {
                 notificationService.sendNotification(
@@ -252,6 +263,20 @@ public class OrderService {
                         "طلبك رقم " + order.getOrderNumber() + " قيد التجهيز الآن.",
                         null,
                         "ORDER_UPDATE",
+                        "order",
+                        order.getOrderId(),
+                        null);
+            } catch (Exception e) {
+                System.err.println("Failed to notify customer: " + e.getMessage());
+            }
+        } else if (newStatus == OrderStatus.DELIVERED && oldStatus != OrderStatus.DELIVERED) {
+            try {
+                notificationService.sendNotification(
+                        order.getUser().getUserId(),
+                        "تم التوصيل بنجاح! 🎉",
+                        "شكراً لاستخدامك تطبيقنا",
+                        null,
+                        "ORDER_DELIVERED",
                         "order",
                         order.getOrderId(),
                         null);

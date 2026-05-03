@@ -3,6 +3,7 @@ package com.deliveryapp.controller;
 import com.deliveryapp.dto.order.OrderResponse;
 import com.deliveryapp.dto.user.DriverLocationResponse;
 import com.deliveryapp.entity.Order;
+import com.deliveryapp.enums.OrderStatus;
 import com.deliveryapp.mapper.order.OrderMapper; // Import the Mapper
 import com.deliveryapp.service.OrderService;
 import com.deliveryapp.service.UserService;
@@ -76,5 +77,17 @@ public class DriverController {
     @GetMapping("/{driverId}/location")
     public ResponseEntity<DriverLocationResponse> getDriverLocation(@PathVariable Long driverId) {
         return ResponseEntity.ok(userService.getDriverLocation(driverId));
+    }
+
+    // 🟢 NEW: Driver marks order as DELIVERED
+    @PatchMapping("/{driverId}/orders/{orderId}/deliver")
+    public ResponseEntity<OrderResponse> markOrderAsDelivered(
+            @PathVariable Long driverId,
+            @PathVariable Long orderId) {
+
+        // Call the existing OrderService method
+        Order updatedOrder = orderService.updateOrderStatus(orderId, OrderStatus.DELIVERED, driverId);
+
+        return ResponseEntity.ok(orderMapper.toOrderResponse(updatedOrder));
     }
 }
