@@ -294,8 +294,12 @@ public class AuthService {
         }
     }
 
-    /** 6-digit zero-padded OTP — 1,000,000 combinations. */
     private String generateOtp() {
-        return String.format("%06d", secureRandom.nextInt(1_000_000));
+        String otp;
+        do {
+            int num = secureRandom.nextInt(900_000) + 100_000; // 100000–999999, always 6 digits
+            otp = String.valueOf(num);
+        } while (otp.length() != 6);
+        return otp;
     }
 }
