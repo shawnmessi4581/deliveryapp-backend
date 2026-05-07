@@ -91,8 +91,8 @@ public class CatalogProductController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
-        return ResponseEntity
-                .ok(createPagedResponse(productService.getProductsByStoreAndCategory(storeId, categoryId, pageable)));
+        return ResponseEntity.ok(
+                createPagedResponse(productService.getProductsByStoreAndCategory(storeId, categoryId, pageable)));
     }
 
     @GetMapping("/store/{storeId}/subcategory/{subCategoryId}")
@@ -137,34 +137,23 @@ public class CatalogProductController {
             @PathVariable Long storeCategoryId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-
-        // Sort by displayOrder so the menu looks exactly how the admin arranged it
         Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
-
-        Page<Product> productPage = productService.getProductsByStoreAndStoreCategory(storeId, storeCategoryId,
-                pageable);
-
-        return ResponseEntity.ok(createPagedResponse(productPage));
+        return ResponseEntity.ok(createPagedResponse(
+                productService.getProductsByStoreAndStoreCategory(storeId, storeCategoryId, pageable)));
     }
 
-    // 🟢 NEW ROUTE: /api/catalog/products/offers
     @GetMapping("/offers")
     public ResponseEntity<PagedResponse<ProductResponse>> getOffers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-
-        // Sort by displayOrder or newest, your choice.
         Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
-        Page<Product> productPage = productService.getOffers(pageable);
-
-        return ResponseEntity.ok(createPagedResponse(productPage));
+        return ResponseEntity.ok(createPagedResponse(productService.getOffers(pageable)));
     }
 
     private PagedResponse<ProductResponse> createPagedResponse(Page<Product> productPage) {
         List<ProductResponse> content = productPage.getContent().stream()
                 .map(catalogMapper::toProductResponse)
                 .collect(Collectors.toList());
-
         return new PagedResponse<>(
                 content, productPage.getNumber(), productPage.getSize(),
                 productPage.getTotalElements(), productPage.getTotalPages(), productPage.isLast());

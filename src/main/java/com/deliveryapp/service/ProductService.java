@@ -7,13 +7,15 @@ import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,9 +30,47 @@ public class ProductService {
     private final StoreCategoryRepository storeCategoryRepository;
     private final FileStorageService fileStorageService;
 
+    // ── Strip sort from pageable (ID queries are scalar — can't sort by entity
+    // fields) ──
+    private Pageable withoutSort(Pageable pageable) {
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+    }
+
+    // ── Resolve IDs → full entities, preserving ID-query order ──
+    private Page<Product> fetchPage(Page<Long> idPage) {
+        if (idPage.isEmpty()) {
+            return new PageImpl<>(List.of(), idPage.getPageable(), idPage.getTotalElements());
+        }
+        List<Product> products = productRepository.findByProductIdIn(idPage.getContent());
+        Map<Long, Product> productMap = products.stream()
+                .collect(Collectors.toMap(Product::getProductId, p -> p));
+        List<Product> ordered = idPage.getContent().stream()
+                .map(productMap::get)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        return new PageImpl<>(ordered, idPage.getPageable(), idPage.getTotalElements());
+    }
+
+    // ── Resolve IDs → full entities, then sort in-memory by displayOrder ──
+    private Page<Product> fetchPageSortedByDisplayOrder(Page<Long> idPage) {
+        if (idPage.isEmpty()) {
+            return new PageImpl<>(List.of(), idPage.getPageable(), idPage.getTotalElements());
+        }
+        List<Product> products = productRepository.findByProductIdIn(idPage.getContent());
+        Map<Long, Product> productMap = products.stream()
+                .collect(Collectors.toMap(Product::getProductId, p -> p));
+        List<Product> ordered = idPage.getContent().stream()
+                .map(productMap::get)
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparingInt(p -> (p.getDisplayOrder() == null ? 0 : p.getDisplayOrder())))
+                .collect(Collectors.toList());
+        return new PageImpl<>(ordered, idPage.getPageable(), idPage.getTotalElements());
+    }
+
     // ================= PUBLIC / CATALOG (Paginated) =================
+
     public Page<Product> getAllProductsRandomly(Pageable pageable) {
-        return productRepository.findAllActiveProducts(pageable);
+        return fetchPageSortedByDisplayOrder(productRepository.findAllActiveProductIds(withoutSort(pageable)));
     }
 
     public Product getProductById(Long id) {
@@ -41,39 +81,45 @@ public class ProductService {
     public Page<Product> getProductsByStore(Long storeId, Pageable pageable) {
         if (!storeRepository.existsById(storeId))
             throw new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId);
-        return productRepository.findByStoreStoreIdAndIsAvailableTrue(storeId, pageable);
+        return fetchPageSortedByDisplayOrder(
+                productRepository.findIdsByStoreStoreIdAndIsAvailableTrue(storeId, withoutSort(pageable)));
     }
 
-    // 🟢 NEW: Get Products by Store and Store Category (In-Store Menu Tab)
     public Page<Product> getProductsByStoreAndStoreCategory(Long storeId, Long storeCategoryId, Pageable pageable) {
         if (!storeRepository.existsById(storeId))
             throw new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId);
         if (!storeCategoryRepository.existsById(storeCategoryId))
             throw new ResourceNotFoundException("الفئة غير موجودة برقم: " + storeCategoryId);
-        return productRepository.findByStoreStoreIdAndStoreCategoryStoreCategoryIdAndIsAvailableTrue(
-                storeId, storeCategoryId, pageable);
+        return fetchPageSortedByDisplayOrder(productRepository
+                .findIdsByStoreStoreIdAndStoreCategoryStoreCategoryIdAndIsAvailableTrue(
+                        storeId, storeCategoryId, withoutSort(pageable)));
     }
 
     public Page<Product> getProductsByCategory(Long categoryId, Pageable pageable) {
         if (!categoryRepository.existsById(categoryId))
             throw new ResourceNotFoundException("الفئة غير موجودة برقم: " + categoryId);
-        return productRepository.findByCategoryCategoryIdAndIsAvailableTrue(categoryId, pageable);
+        return fetchPageSortedByDisplayOrder(
+                productRepository.findIdsByCategoryCategoryIdAndIsAvailableTrue(categoryId, withoutSort(pageable)));
     }
 
     public Page<Product> getProductsBySubCategory(Long subCategoryId, Pageable pageable) {
         if (!subCategoryRepository.existsById(subCategoryId))
             throw new ResourceNotFoundException("الفئة الفرعية غير موجودة برقم: " + subCategoryId);
-        return productRepository.findBySubCategorySubcategoryIdAndIsAvailableTrue(subCategoryId, pageable);
+        return fetchPageSortedByDisplayOrder(
+                productRepository.findIdsBySubCategorySubcategoryIdAndIsAvailableTrue(subCategoryId,
+                        withoutSort(pageable)));
     }
 
     public Page<Product> searchProducts(String keyword, Long categoryId, Pageable pageable) {
         if (keyword == null)
             keyword = "";
         if (categoryId == null || categoryId == 0) {
-            return productRepository.findByNameContainingIgnoreCaseAndIsAvailableTrue(keyword, pageable);
+            return fetchPage(productRepository
+                    .findIdsByNameContainingIgnoreCaseAndIsAvailableTrue(keyword, pageable));
         } else {
-            return productRepository.findByCategoryCategoryIdAndNameContainingIgnoreCaseAndIsAvailableTrue(categoryId,
-                    keyword, pageable);
+            return fetchPage(productRepository
+                    .findIdsByCategoryCategoryIdAndNameContainingIgnoreCaseAndIsAvailableTrue(
+                            categoryId, keyword, pageable));
         }
     }
 
@@ -82,39 +128,44 @@ public class ProductService {
             throw new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId);
         if (keyword == null)
             keyword = "";
-        return productRepository.findByStoreStoreIdAndNameContainingIgnoreCaseAndIsAvailableTrue(storeId, keyword,
-                pageable);
+        return fetchPage(productRepository
+                .findIdsByStoreStoreIdAndNameContainingIgnoreCaseAndIsAvailableTrue(storeId, keyword, pageable));
     }
 
     public Page<Product> getProductsByStoreAndCategory(Long storeId, Long categoryId, Pageable pageable) {
-        return productRepository.findByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(storeId, categoryId,
-                pageable);
+        return fetchPageSortedByDisplayOrder(productRepository
+                .findIdsByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(storeId, categoryId,
+                        withoutSort(pageable)));
     }
 
     public Page<Product> getProductsByStoreAndSubCategory(Long storeId, Long subCategoryId, Pageable pageable) {
-        return productRepository.findByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(storeId, subCategoryId,
-                pageable);
+        return fetchPageSortedByDisplayOrder(productRepository
+                .findIdsByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(
+                        storeId, subCategoryId, withoutSort(pageable)));
     }
 
     public Page<Product> getProductsUnderPrice(Double price, Pageable pageable) {
-        return productRepository.findByBasePriceLessThanEqualAndIsAvailableTrue(price, pageable);
+        return fetchPageSortedByDisplayOrder(
+                productRepository.findIdsByBasePriceLessThanEqualAndIsAvailableTrue(price, withoutSort(pageable)));
     }
 
     public Page<Product> getNewestProducts(Pageable pageable) {
-        return productRepository.findByIsAvailableTrueOrderByProductIdDesc(pageable);
+        return fetchPage(productRepository.findIdsByIsAvailableTrueOrderByProductIdDesc(pageable));
     }
 
     public Page<Product> getTrendingProducts(Pageable pageable) {
-        return productRepository.findByIsTrendingTrueAndIsAvailableTrue(pageable);
+        return fetchPage(productRepository.findIdsByIsTrendingTrueAndIsAvailableTrue(pageable));
     }
 
     public Page<Product> getOffers(Pageable pageable) {
-        return productRepository.findByHasOfferTrueAndIsAvailableTrue(pageable);
+        return fetchPageSortedByDisplayOrder(
+                productRepository.findIdsByHasOfferTrueAndIsAvailableTrue(withoutSort(pageable)));
     }
 
     // ================= ADMIN CRUD =================
+
     public Page<Product> getAllProductsAdmin(Long storeId, Long categoryId, Long subCategoryId, Pageable pageable) {
-        return productRepository.findAdminFilteredProducts(storeId, categoryId, subCategoryId, pageable);
+        return fetchPage(productRepository.findAdminFilteredProductIds(storeId, categoryId, subCategoryId, pageable));
     }
 
     @Transactional
@@ -159,8 +210,7 @@ public class ProductService {
         }
 
         if (request.getColorIds() != null && !request.getColorIds().isEmpty()) {
-            List<Color> selectedColors = colorRepository.findAllById(request.getColorIds());
-            product.setColors(selectedColors);
+            product.setColors(colorRepository.findAllById(request.getColorIds()));
         }
 
         if (galleryImages != null && !galleryImages.isEmpty()) {
@@ -185,6 +235,7 @@ public class ProductService {
         } else {
             product.setStoreCategory(null);
         }
+
         if (request.getHasOffer() != null) {
             product.setHasOffer(request.getHasOffer());
             if (request.getHasOffer()) {
@@ -199,6 +250,7 @@ public class ProductService {
         } else {
             product.setHasOffer(false);
         }
+
         return productRepository.save(product);
     }
 
@@ -256,15 +308,12 @@ public class ProductService {
         }
 
         if (request.getColorIds() != null) {
-            List<Color> selectedColors = colorRepository.findAllById(request.getColorIds());
-            product.setColors(selectedColors);
+            product.setColors(colorRepository.findAllById(request.getColorIds()));
         }
 
         if (galleryImages != null && !galleryImages.isEmpty()) {
             if (product.getImages() != null && !product.getImages().isEmpty()) {
-                for (String oldImagePath : product.getImages()) {
-                    fileStorageService.deleteFile(oldImagePath);
-                }
+                product.getImages().forEach(fileStorageService::deleteFile);
                 product.getImages().clear();
             }
             for (MultipartFile file : galleryImages) {
@@ -282,9 +331,6 @@ public class ProductService {
             }
             product.setStoreCategory(storeCategory);
         }
-        // else {
-        // product.setStoreCategory(null);
-        // }
 
         if (request.getHasOffer() != null) {
             product.setHasOffer(request.getHasOffer());
@@ -300,6 +346,7 @@ public class ProductService {
         } else {
             product.setHasOffer(false);
         }
+
         return productRepository.save(product);
     }
 
@@ -309,9 +356,7 @@ public class ProductService {
             fileStorageService.deleteFile(product.getImage());
         }
         if (product.getImages() != null && !product.getImages().isEmpty()) {
-            for (String imagePath : product.getImages()) {
-                fileStorageService.deleteFile(imagePath);
-            }
+            product.getImages().forEach(fileStorageService::deleteFile);
         }
         productRepository.deleteById(id);
     }
@@ -327,10 +372,8 @@ public class ProductService {
     }
 
     public void deleteProductVariant(Long variantId) {
-        if (!variantRepository.existsById(variantId)) {
+        if (!variantRepository.existsById(variantId))
             throw new ResourceNotFoundException("النوع غير موجود برقم: " + variantId);
-        }
         variantRepository.deleteById(variantId);
     }
-
 }
