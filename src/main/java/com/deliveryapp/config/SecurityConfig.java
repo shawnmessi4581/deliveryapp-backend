@@ -68,17 +68,17 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/webjars/**")
                         .permitAll()
-                        // Auth endpoints
+                        // Auth endpoints — /refresh uses its own refresh token, not a JWT
                         .requestMatchers("/api/auth/**").permitAll()
                         // Static uploads
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/api/app/download", "/api/app/link").permitAll()
-                        // 🟢 GUEST ENTRY: Allow public browsing
+                        // Public browsing
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/catalog/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/banners/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/store-categories/**")
                         .permitAll()
-                        // Everything else requires auth
+                        // Everything else requires a valid access token
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -110,10 +110,10 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(
             UserDetailsService userDetailsService,
             PasswordEncoder passwordEncoder) {
-        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
-        authenticationProvider.setUserDetailsService(userDetailsService); // 👈 set manually
-        authenticationProvider.setPasswordEncoder(passwordEncoder);
-        return new ProviderManager(authenticationProvider);
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder);
+        return new ProviderManager(provider);
     }
 
     @Bean
@@ -139,8 +139,8 @@ public class SecurityConfig {
         grantedAuthoritiesConverter.setAuthorityPrefix("");
         grantedAuthoritiesConverter.setAuthoritiesClaimName("scope");
 
-        JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
-        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
-        return jwtAuthenticationConverter;
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
+        return converter;
     }
 }
