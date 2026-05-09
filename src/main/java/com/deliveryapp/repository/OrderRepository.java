@@ -2,6 +2,8 @@ package com.deliveryapp.repository;
 
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.enums.OrderStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -11,42 +13,64 @@ import java.util.List;
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
-    // Customer history
-    List<Order> findByUserUserIdOrderByCreatedAtDesc(Long userId);
+        // ==========================================================
+        // ORIGINAL METHODS (Returns List - Kept for compatibility)
+        // ==========================================================
 
-    // Driver orders
-    List<Order> findByDriverUserId(Long driverId);
+        // Customer history
+        List<Order> findByUserUserIdOrderByCreatedAtDesc(Long userId);
 
-    // Find open orders by status (e.g. find all PENDING orders)
-    List<Order> findByStatus(OrderStatus status);
+        // Driver orders
+        List<Order> findByDriverUserId(Long driverId);
 
-    // --- NEW ADMIN METHODS (Desc = Newest First) ---
+        // Find open orders by status (e.g. find all PENDING orders)
+        List<Order> findByStatus(OrderStatus status);
 
-    // 1. No filters
-    List<Order> findAllByOrderByCreatedAtDesc();
+        // Admin: No filters
+        List<Order> findAllByOrderByCreatedAtDesc();
 
-    // 2. Filter by Status
-    List<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status);
+        // Admin: Filter by Status
+        List<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status);
 
-    // 3. Filter by Date Range
-    List<Order> findByCreatedAtBetweenOrderByCreatedAtDesc(LocalDateTime start, LocalDateTime end);
+        // Admin: Filter by Date Range
+        List<Order> findByCreatedAtBetweenOrderByCreatedAtDesc(LocalDateTime start, LocalDateTime end);
 
-    // 4. Filter by Status AND Date Range
-    List<Order> findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(OrderStatus status, LocalDateTime start,
-            LocalDateTime end);
+        // Admin: Filter by Status AND Date Range
+        List<Order> findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(OrderStatus status, LocalDateTime start,
+                        LocalDateTime end);
 
-    // 1. Get All Driver Orders (History)
-    List<Order> findByDriverUserIdOrderByCreatedAtDesc(Long driverId);
+        // Driver: Get All Driver Orders (History)
+        List<Order> findByDriverUserIdOrderByCreatedAtDesc(Long driverId);
 
-    // 2. Get Driver Orders by specific status (e.g., Active ones)
-    List<Order> findByDriverUserIdAndStatusInOrderByCreatedAtDesc(Long driverId, List<OrderStatus> statuses);
+        // Driver: Get Driver Orders by specific status (e.g., Active ones)
+        List<Order> findByDriverUserIdAndStatusInOrderByCreatedAtDesc(Long driverId, List<OrderStatus> statuses);
 
-    // --- FIX IS HERE ---
-    // Old (Wrong): List<Order> findByStoreStoreId(Long storeId);
-    // New (Correct): Notice 'Stores' (Plural) and the underscore '_' to traverse
-    // the list
-    List<Order> findByStores_StoreId(Long storeId);
+        // Store: Notice 'Stores' (Plural) and the underscore '_' to traverse the list
+        List<Order> findByStores_StoreId(Long storeId);
 
-    // Add this method to check if the user has orders currently in progress
-    boolean existsByUserUserIdAndStatusIn(Long userId, List<OrderStatus> statuses);
+        // Check if the user has orders currently in progress (For Delete Account logic)
+        boolean existsByUserUserIdAndStatusIn(Long userId, List<OrderStatus> statuses);
+
+        // ==========================================================
+        // NEW PAGINATED METHODS (Returns Page - Used by Controllers)
+        // ==========================================================
+
+        // Customer history (Paginated)
+        Page<Order> findByUserUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+
+        // Driver orders (Paginated)
+        Page<Order> findByDriverUserIdOrderByCreatedAtDesc(Long driverId, Pageable pageable);
+
+        Page<Order> findByDriverUserIdAndStatusInOrderByCreatedAtDesc(Long driverId, List<OrderStatus> statuses,
+                        Pageable pageable);
+
+        // ADMIN: Filters (Paginated & Descending)
+        Page<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status, Pageable pageable);
+
+        Page<Order> findByCreatedAtBetweenOrderByCreatedAtDesc(LocalDateTime start, LocalDateTime end,
+                        Pageable pageable);
+
+        Page<Order> findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(OrderStatus status, LocalDateTime start,
+                        LocalDateTime end, Pageable pageable);
+
 }

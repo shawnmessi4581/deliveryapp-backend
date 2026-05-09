@@ -12,6 +12,9 @@ import com.deliveryapp.util.DistanceUtil;
 import com.deliveryapp.util.MathUtil;
 import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -333,8 +336,8 @@ public class OrderService {
         historyRepository.save(history);
     }
 
-    public List<Order> getUserOrders(Long userId) {
-        return orderRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
+    public Page<Order> getUserOrders(Long userId, Pageable pageable) {
+        return orderRepository.findByUserUserIdOrderByCreatedAtDesc(userId, pageable);
     }
 
     public Order getOrderById(Long orderId) {
@@ -342,22 +345,26 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
     }
 
-    public List<Order> getAdminOrders(OrderStatus status, LocalDate startDate, LocalDate endDate) {
+    // ADMIN: Filtered List (Paginated)
+    public Page<Order> getAdminOrders(OrderStatus status, LocalDate startDate, LocalDate endDate, Pageable pageable) {
         if (startDate != null && endDate != null) {
             LocalDateTime startDateTime = startDate.atStartOfDay();
             LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
 
             if (status != null) {
                 return orderRepository.findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(status, startDateTime,
-                        endDateTime);
+                        endDateTime, pageable);
             } else {
-                return orderRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDateTime, endDateTime);
+                return orderRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDateTime, endDateTime, pageable);
             }
         }
         if (status != null) {
-            return orderRepository.findByStatusOrderByCreatedAtDesc(status);
+            return orderRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
         }
-        return orderRepository.findAllByOrderByCreatedAtDesc();
+
+        // If no filters are applied, just return all pages (Pageable handles the
+        // sorting if passed from controller)
+        return orderRepository.findAll(pageable);
     }
 
     @Transactional
@@ -453,15 +460,16 @@ public class OrderService {
         return orderRepository.save(order);
     }
 
-    public List<Order> getDriverOrders(Long driverId, Boolean activeOnly) {
+    public Page<Order> getDriverOrders(Long driverId, Boolean activeOnly, Pageable pageable) {
         if (Boolean.TRUE.equals(activeOnly)) {
             List<OrderStatus> activeStatuses = Arrays.asList(
                     OrderStatus.CONFIRMED,
                     OrderStatus.PREPARING,
                     OrderStatus.OUT_FOR_DELIVERY);
-            return orderRepository.findByDriverUserIdAndStatusInOrderByCreatedAtDesc(driverId, activeStatuses);
+            return orderRepository.findByDriverUserIdAndStatusInOrderByCreatedAtDesc(driverId, activeStatuses,
+                    pageable);
         } else {
-            return orderRepository.findByDriverUserIdOrderByCreatedAtDesc(driverId);
+            return orderRepository.findByDriverUserIdOrderByCreatedAtDesc(driverId, pageable);
         }
     }
 

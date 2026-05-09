@@ -1,10 +1,14 @@
 package com.deliveryapp.controller;
 
+import com.deliveryapp.dto.PagedResponse;
 import com.deliveryapp.dto.order.*;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.mapper.order.OrderMapper;
 import com.deliveryapp.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -26,7 +30,6 @@ public class OrderController {
         return ResponseEntity.ok(orderService.calculateMultiStoreFee(request.getStoreIds(), request.getAddressId()));
     }
 
-    // 2. Verify Coupon
     @PostMapping("/verify-coupon")
     public ResponseEntity<CouponCheckResponse> verifyCoupon(@RequestBody CouponCheckRequest request) {
         return ResponseEntity.ok(orderService.verifyCoupon(request));
@@ -34,46 +37,46 @@ public class OrderController {
 
     @PostMapping("/place")
     public ResponseEntity<OrderResponse> placeOrder(@RequestBody PlaceOrderRequest request) {
-        Order order = orderService.placeOrder(
-                request);
+        Order order = orderService.placeOrder(request);
         return ResponseEntity.ok(orderMapper.toOrderResponse(order));
     }
 
-    // Get User History
+    // 🟢 GET USER HISTORY (Paginated)
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<OrderResponse>> getUserOrders(@PathVariable Long userId) {
-        List<Order> orders = orderService.getUserOrders(userId);
-        List<OrderResponse> responseList = orders.stream()
+    public ResponseEntity<PagedResponse<OrderResponse>> getUserOrders(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size); // Sorting is handled in repo definition
+        Page<Order> orderPage = orderService.getUserOrders(userId, pageable);
+
+        List<OrderResponse> content = orderPage.getContent().stream()
                 .map(orderMapper::toOrderResponse)
                 .collect(Collectors.toList());
-        return ResponseEntity.ok(responseList);
+
+        return ResponseEntity.ok(new PagedResponse<>(
+                content, orderPage.getNumber(), orderPage.getSize(),
+                orderPage.getTotalElements(), orderPage.getTotalPages(), orderPage.isLast()));
     }
 
-    // Update Status
     @PatchMapping("/{orderId}/status")
     public ResponseEntity<OrderResponse> updateStatus(
             @PathVariable Long orderId,
             @RequestBody UpdateOrderStatusRequest request) {
 
-        Order order = orderService.updateOrderStatus(
-                orderId,
-                request.getNewStatus(),
-                request.getUserId());
+        Order order = orderService.updateOrderStatus(orderId, request.getNewStatus(), request.getUserId());
         return ResponseEntity.ok(orderMapper.toOrderResponse(order));
     }
 
-    // TRACK ORDER (Real-time)
     @GetMapping("/{orderId}/track")
     public ResponseEntity<OrderTrackingResponse> trackOrder(@PathVariable Long orderId) {
         return ResponseEntity.ok(orderService.trackOrder(orderId));
     }
 
-    // CANCEL / DELETE ORDER (User)
     @DeleteMapping("/{orderId}")
     public ResponseEntity<String> cancelOrder(@PathVariable Long orderId) {
-
         Long userId = ((Jwt) SecurityContextHolder.getContext().getAuthentication().getPrincipal()).getClaim("userId");
-
         orderService.cancelOrder(orderId, userId);
         return ResponseEntity.ok("تم إلغاء الطلب بنجاح");
     }
