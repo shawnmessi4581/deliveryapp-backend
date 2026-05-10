@@ -31,16 +31,17 @@ public class DriverController {
     private final OrderMapper orderMapper; // Inject Mapper
     private final UserService userService; // 👉 Inject this
 
-    // 🟢 GET DRIVER ORDERS (Paginated)
+    // 🟢 GET DRIVER ORDERS (Paginated + Search)
     @GetMapping("/{driverId}/orders")
     public ResponseEntity<PagedResponse<OrderResponse>> getDriverOrders(
             @PathVariable Long driverId,
             @RequestParam(defaultValue = "true") Boolean active,
+            @RequestParam(required = false) String orderNumber, // Added
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
-        Page<Order> orderPage = orderService.getDriverOrders(driverId, active, pageable);
+        Page<Order> orderPage = orderService.getDriverOrders(driverId, active, orderNumber, pageable);
 
         List<OrderResponse> content = orderPage.getContent().stream()
                 .map(orderMapper::toOrderResponse)

@@ -41,15 +41,16 @@ public class OrderController {
         return ResponseEntity.ok(orderMapper.toOrderResponse(order));
     }
 
-    // 🟢 GET USER HISTORY (Paginated)
+    // 🟢 GET USER HISTORY (Paginated + Search)
     @GetMapping("/user/{userId}")
     public ResponseEntity<PagedResponse<OrderResponse>> getUserOrders(
             @PathVariable Long userId,
+            @RequestParam(required = false) String orderNumber, // Added
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        Pageable pageable = PageRequest.of(page, size); // Sorting is handled in repo definition
-        Page<Order> orderPage = orderService.getUserOrders(userId, pageable);
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Order> orderPage = orderService.getUserOrders(userId, orderNumber, pageable);
 
         List<OrderResponse> content = orderPage.getContent().stream()
                 .map(orderMapper::toOrderResponse)

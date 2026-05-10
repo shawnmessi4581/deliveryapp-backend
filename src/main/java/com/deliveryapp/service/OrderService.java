@@ -336,7 +336,13 @@ public class OrderService {
         historyRepository.save(history);
     }
 
-    public Page<Order> getUserOrders(Long userId, Pageable pageable) {
+    // 1. CUSTOMER: Get History (With Optional Order Number Search)
+    public Page<Order> getUserOrders(Long userId, String orderNumber, Pageable pageable) {
+        if (orderNumber != null && !orderNumber.trim().isEmpty()) {
+            // Partial Search
+            return orderRepository.findByUserUserIdAndOrderNumberContainingIgnoreCaseOrderByCreatedAtDesc(userId,
+                    orderNumber, pageable);
+        }
         return orderRepository.findByUserUserIdOrderByCreatedAtDesc(userId, pageable);
     }
 
@@ -345,12 +351,31 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
     }
 
-    // ADMIN: Filtered List (Paginated)
-    public Page<Order> getAdminOrders(OrderStatus status, LocalDate startDate, LocalDate endDate, Pageable pageable) {
+    // 2. ADMIN: Filtered List (With Optional Order Number Search)
+    public Page<Order> getAdminOrders(String orderNumber, OrderStatus status, LocalDate startDate, LocalDate endDate,
+            Pageable pageable) {
+
+        // Complex Filter Logic
+        if (orderNumber != null && !orderNumber.trim().isEmpty()) {
+            if (startDate != null && endDate != null && status != null) {
+                return orderRepository
+                        .findByOrderNumberContainingIgnoreCaseAndStatusAndCreatedAtBetweenOrderByCreatedAtDesc(
+                                orderNumber, status, startDate.atStartOfDay(), endDate.atTime(23, 59, 59), pageable);
+            } else if (startDate != null && endDate != null) {
+                return orderRepository.findByOrderNumberContainingIgnoreCaseAndCreatedAtBetweenOrderByCreatedAtDesc(
+                        orderNumber, startDate.atStartOfDay(), endDate.atTime(23, 59, 59), pageable);
+            } else if (status != null) {
+                return orderRepository.findByOrderNumberContainingIgnoreCaseAndStatusOrderByCreatedAtDesc(
+                        orderNumber, status, pageable);
+            } else {
+                return orderRepository.findByOrderNumberContainingIgnoreCaseOrderByCreatedAtDesc(orderNumber, pageable);
+            }
+        }
+
+        // Standard Filter Logic (No Order Number)
         if (startDate != null && endDate != null) {
             LocalDateTime startDateTime = startDate.atStartOfDay();
             LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
-
             if (status != null) {
                 return orderRepository.findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(status, startDateTime,
                         endDateTime, pageable);
@@ -358,13 +383,12 @@ public class OrderService {
                 return orderRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDateTime, endDateTime, pageable);
             }
         }
+
         if (status != null) {
             return orderRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
         }
 
-        // If no filters are applied, just return all pages (Pageable handles the
-        // sorting if passed from controller)
-        return orderRepository.findAll(pageable);
+        return orderRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 
     @Transactional
@@ -460,7 +484,13 @@ public class OrderService {
         return orderRepository.save(order);
     }
 
-    public Page<Order> getDriverOrders(Long driverId, Boolean activeOnly, Pageable pageable) {
+    // 3. DRIVER: Get Orders (With Optional Order Number Search)
+    public Page<Order> getDriverOrders(Long driverId, Boolean activeOnly, String orderNumber, Pageable pageable) {
+        if (orderNumber != null && !orderNumber.trim().isEmpty()) {
+            return orderRepository.findByDriverUserIdAndOrderNumberContainingIgnoreCaseOrderByCreatedAtDesc(driverId,
+                    orderNumber, pageable);
+        }
+
         if (Boolean.TRUE.equals(activeOnly)) {
             List<OrderStatus> activeStatuses = Arrays.asList(
                     OrderStatus.CONFIRMED,

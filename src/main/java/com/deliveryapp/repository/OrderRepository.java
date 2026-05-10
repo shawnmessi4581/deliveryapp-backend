@@ -52,19 +52,27 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         boolean existsByUserUserIdAndStatusIn(Long userId, List<OrderStatus> statuses);
 
         // ==========================================================
-        // NEW PAGINATED METHODS (Returns Page - Used by Controllers)
+        // PAGINATED METHODS (Returns Page - Used by Controllers)
         // ==========================================================
 
-        // Customer history (Paginated)
+        // --- CUSTOMER ---
         Page<Order> findByUserUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
-        // Driver orders (Paginated)
+        // NEW: Customer Search
+        Page<Order> findByUserUserIdAndOrderNumberContainingIgnoreCaseOrderByCreatedAtDesc(Long userId,
+                        String orderNumber, Pageable pageable);
+
+        // --- DRIVER ---
         Page<Order> findByDriverUserIdOrderByCreatedAtDesc(Long driverId, Pageable pageable);
 
         Page<Order> findByDriverUserIdAndStatusInOrderByCreatedAtDesc(Long driverId, List<OrderStatus> statuses,
                         Pageable pageable);
 
-        // ADMIN: Filters (Paginated & Descending)
+        // NEW: Driver Search
+        Page<Order> findByDriverUserIdAndOrderNumberContainingIgnoreCaseOrderByCreatedAtDesc(Long driverId,
+                        String orderNumber, Pageable pageable);
+
+        // --- ADMIN ---
         Page<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status, Pageable pageable);
 
         Page<Order> findByCreatedAtBetweenOrderByCreatedAtDesc(LocalDateTime start, LocalDateTime end,
@@ -72,5 +80,20 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         Page<Order> findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(OrderStatus status, LocalDateTime start,
                         LocalDateTime end, Pageable pageable);
+
+        // NEW: Admin Search Combinations
+        Page<Order> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+        Page<Order> findByOrderNumberContainingIgnoreCaseOrderByCreatedAtDesc(String orderNumber, Pageable pageable);
+
+        Page<Order> findByOrderNumberContainingIgnoreCaseAndStatusOrderByCreatedAtDesc(String orderNumber,
+                        OrderStatus status, Pageable pageable);
+
+        Page<Order> findByOrderNumberContainingIgnoreCaseAndCreatedAtBetweenOrderByCreatedAtDesc(String orderNumber,
+                        LocalDateTime start, LocalDateTime end, Pageable pageable);
+
+        Page<Order> findByOrderNumberContainingIgnoreCaseAndStatusAndCreatedAtBetweenOrderByCreatedAtDesc(
+                        String orderNumber, OrderStatus status, LocalDateTime start, LocalDateTime end,
+                        Pageable pageable);
 
 }
