@@ -94,14 +94,21 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         Page<Long> findIdsByIsTrendingTrueAndIsAvailableTrue(Pageable pageable);
 
         // ── Admin filtered ──
-        @Query(value = "SELECT p.productId FROM Product p WHERE " +
-                        "(:storeId IS NULL OR p.store.storeId = :storeId) AND " +
-                        "(:categoryId IS NULL OR p.category.categoryId = :categoryId) AND " +
-                        "(:subCategoryId IS NULL OR p.subCategory.subcategoryId = :subCategoryId)", countQuery = "SELECT COUNT(p) FROM Product p WHERE "
-                                        +
-                                        "(:storeId IS NULL OR p.store.storeId = :storeId) AND " +
-                                        "(:categoryId IS NULL OR p.category.categoryId = :categoryId) AND " +
-                                        "(:subCategoryId IS NULL OR p.subCategory.subcategoryId = :subCategoryId)")
+        // ⚠️ Must use explicit LEFT JOIN — JPQL path navigation (p.category.categoryId)
+        // generates an implicit INNER JOIN, which silently drops products whose
+        // category or subCategory is NULL, causing missing products in the admin dashboard.
+        @Query(value = "SELECT p.productId FROM Product p " +
+                        "LEFT JOIN p.category c " +
+                        "LEFT JOIN p.subCategory sc " +
+                        "WHERE (:storeId IS NULL OR p.store.storeId = :storeId) AND " +
+                        "(:categoryId IS NULL OR c.categoryId = :categoryId) AND " +
+                        "(:subCategoryId IS NULL OR sc.subcategoryId = :subCategoryId)",
+                        countQuery = "SELECT COUNT(p) FROM Product p " +
+                                        "LEFT JOIN p.category c " +
+                                        "LEFT JOIN p.subCategory sc " +
+                                        "WHERE (:storeId IS NULL OR p.store.storeId = :storeId) AND " +
+                                        "(:categoryId IS NULL OR c.categoryId = :categoryId) AND " +
+                                        "(:subCategoryId IS NULL OR sc.subcategoryId = :subCategoryId)")
         Page<Long> findAdminFilteredProductIds(
                         @Param("storeId") Long storeId,
                         @Param("categoryId") Long categoryId,

@@ -165,7 +165,11 @@ public class ProductService {
     // ================= ADMIN CRUD =================
 
     public Page<Product> getAllProductsAdmin(Long storeId, Long categoryId, Long subCategoryId, Pageable pageable) {
-        return fetchPage(productRepository.findAdminFilteredProductIds(storeId, categoryId, subCategoryId, pageable));
+        // ⚠️ Must strip the sort before passing to the scalar ID query, then re-sort
+        // in-memory. Passing a sorted Pageable to a "SELECT p.productId" JPQL query
+        // causes inconsistent pagination (same product on two pages / products skipped).
+        return fetchPageSortedByDisplayOrder(
+                productRepository.findAdminFilteredProductIds(storeId, categoryId, subCategoryId, withoutSort(pageable)));
     }
 
     @Transactional
