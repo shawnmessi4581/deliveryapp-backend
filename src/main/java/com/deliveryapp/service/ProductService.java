@@ -236,6 +236,7 @@ public class ProductService {
             product.setStoreCategory(null);
         }
 
+        // --- OFFER LOGIC ---
         if (request.getHasOffer() != null) {
             product.setHasOffer(request.getHasOffer());
             if (request.getHasOffer()) {
@@ -257,7 +258,8 @@ public class ProductService {
     @Transactional
     public Product updateProduct(Long id, ProductRequest request, MultipartFile mainImage,
             List<MultipartFile> galleryImages) {
-        Product product = getProductById(id);
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود برقم: " + id));
 
         if (request.getName() != null)
             product.setName(request.getName());
@@ -269,11 +271,11 @@ public class ProductService {
             if (request.getIsUsd()) {
                 if (request.getUsdPrice() != null)
                     product.setUsdPrice(request.getUsdPrice());
-                product.setBasePrice(0.0);
+                product.setBasePrice(0.0); // Clear SYP
             } else {
                 if (request.getBasePrice() != null)
                     product.setBasePrice(request.getBasePrice());
-                product.setUsdPrice(0.0);
+                product.setUsdPrice(0.0); // Clear USD
             }
         }
 
@@ -301,20 +303,23 @@ public class ProductService {
         }
 
         if (mainImage != null && !mainImage.isEmpty()) {
+            // 🧹 Cleanup: Delete old main image
             if (product.getImage() != null) {
                 fileStorageService.deleteFile(product.getImage());
             }
             product.setImage(fileStorageService.storeFile(mainImage, "products"));
         }
 
+        // ✅ FIX: Color clear logic.
         if (request.getColorIds() != null) {
             product.setColors(colorRepository.findAllById(request.getColorIds()));
         }
 
         if (galleryImages != null && !galleryImages.isEmpty()) {
+            // 🧹 Cleanup: Delete ALL old gallery images
             if (product.getImages() != null && !product.getImages().isEmpty()) {
                 product.getImages().forEach(fileStorageService::deleteFile);
-                product.getImages().clear();
+                product.getImages().clear(); // Clear DB list
             }
             for (MultipartFile file : galleryImages) {
                 if (!file.isEmpty()) {
@@ -323,28 +328,42 @@ public class ProductService {
             }
         }
 
+        // 🟢 FIX: Store Category Clearing Logic
         if (request.getStoreCategoryId() != null) {
-            StoreCategory storeCategory = storeCategoryRepository.findById(request.getStoreCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Store Category not found"));
-            if (!storeCategory.getStore().getStoreId().equals(product.getStore().getStoreId())) {
-                throw new InvalidDataException("This category belongs to a different store!");
+            // If they pass an ID > 0, set the category
+            if (request.getStoreCategoryId() > 0) {
+                StoreCategory storeCategory = storeCategoryRepository.findById(request.getStoreCategoryId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Store Category not found"));
+                if (!storeCategory.getStore().getStoreId().equals(product.getStore().getStoreId())) {
+                    throw new InvalidDataException("This category belongs to a different store!");
+                }
+                product.setStoreCategory(storeCategory);
+            } else {
+                // If they pass 0 or negative, it means "remove"
+                product.setStoreCategory(null);
             }
-            product.setStoreCategory(storeCategory);
+        } else {
+            // If they don't send the field at all, or send null, we clear it (or you can
+            // ignore it,
+            // but standard form-data expects it to be cleared if missing/null in a full
+            // update)
+            product.setStoreCategory(null);
         }
 
+        // 🟢 FIX: Offers Update Logic
         if (request.getHasOffer() != null) {
             product.setHasOffer(request.getHasOffer());
             if (request.getHasOffer()) {
-                if (request.getIsUsd() != null && request.getIsUsd()) {
-                    product.setOfferUsdPrice(request.getOfferUsdPrice());
+                if (Boolean.TRUE.equals(product.getIsUsd())) { // Check the product's active currency
+                    if (request.getOfferUsdPrice() != null)
+                        product.setOfferUsdPrice(request.getOfferUsdPrice());
                     product.setOfferBasePrice(0.0);
                 } else {
-                    product.setOfferBasePrice(request.getOfferBasePrice());
+                    if (request.getOfferBasePrice() != null)
+                        product.setOfferBasePrice(request.getOfferBasePrice());
                     product.setOfferUsdPrice(0.0);
                 }
             }
-        } else {
-            product.setHasOffer(false);
         }
 
         return productRepository.save(product);
@@ -372,8 +391,9 @@ public class ProductService {
     }
 
     public void deleteProductVariant(Long variantId) {
-        if (!variantRepository.existsById(variantId))
+        if (!variantRepository.existsById(variantId)) {
             throw new ResourceNotFoundException("النوع غير موجود برقم: " + variantId);
+        }
         variantRepository.deleteById(variantId);
     }
 }
