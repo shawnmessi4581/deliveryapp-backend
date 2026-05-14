@@ -93,26 +93,23 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         @Query(value = "SELECT p.productId FROM Product p WHERE p.isTrending = true AND p.isAvailable = true", countQuery = "SELECT COUNT(p) FROM Product p WHERE p.isTrending = true AND p.isAvailable = true")
         Page<Long> findIdsByIsTrendingTrueAndIsAvailableTrue(Pageable pageable);
 
-        // ── Admin filtered ──
-        // ⚠️ Must use explicit LEFT JOIN — JPQL path navigation (p.category.categoryId)
-        // generates an implicit INNER JOIN, which silently drops products whose
-        // category or subCategory is NULL, causing missing products in the admin dashboard.
-        @Query(value = "SELECT p.productId FROM Product p " +
-                        "LEFT JOIN p.category c " +
-                        "LEFT JOIN p.subCategory sc " +
-                        "WHERE (:storeId IS NULL OR p.store.storeId = :storeId) AND " +
-                        "(:categoryId IS NULL OR c.categoryId = :categoryId) AND " +
-                        "(:subCategoryId IS NULL OR sc.subcategoryId = :subCategoryId)",
-                        countQuery = "SELECT COUNT(p) FROM Product p " +
-                                        "LEFT JOIN p.category c " +
-                                        "LEFT JOIN p.subCategory sc " +
-                                        "WHERE (:storeId IS NULL OR p.store.storeId = :storeId) AND " +
-                                        "(:categoryId IS NULL OR c.categoryId = :categoryId) AND " +
-                                        "(:subCategoryId IS NULL OR sc.subcategoryId = :subCategoryId)")
+        // ── Admin filtered (with optional name search) ──
+        @Query(value = "SELECT p.productId FROM Product p WHERE " +
+                        "(:storeId IS NULL OR p.store.storeId = :storeId) AND " +
+                        "(:categoryId IS NULL OR p.category.categoryId = :categoryId) AND " +
+                        "(:subCategoryId IS NULL OR p.subCategory.subcategoryId = :subCategoryId) AND " +
+                        "(:keyword IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')))", countQuery = "SELECT COUNT(p) FROM Product p WHERE "
+                                        +
+                                        "(:storeId IS NULL OR p.store.storeId = :storeId) AND " +
+                                        "(:categoryId IS NULL OR p.category.categoryId = :categoryId) AND " +
+                                        "(:subCategoryId IS NULL OR p.subCategory.subcategoryId = :subCategoryId) AND "
+                                        +
+                                        "(:keyword IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')))")
         Page<Long> findAdminFilteredProductIds(
                         @Param("storeId") Long storeId,
                         @Param("categoryId") Long categoryId,
                         @Param("subCategoryId") Long subCategoryId,
+                        @Param("keyword") String keyword,
                         Pageable pageable);
 
         // ── By store category ──

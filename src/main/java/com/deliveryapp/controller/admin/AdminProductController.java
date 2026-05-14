@@ -38,11 +38,14 @@ public class AdminProductController {
             @RequestParam(required = false) Long storeId,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long subCategoryId,
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
+        // Sort is stripped inside the service — passed here only for page metadata
         Pageable pageable = PageRequest.of(page, size, Sort.by("displayOrder").ascending());
-        Page<Product> productPage = productService.getAllProductsAdmin(storeId, categoryId, subCategoryId, pageable);
+        Page<Product> productPage = productService.getAllProductsAdmin(
+                storeId, categoryId, subCategoryId, keyword, pageable);
 
         List<AdminProductResponse> content = productPage.getContent().stream()
                 .map(adminCatalogMapper::toAdminProductResponse)

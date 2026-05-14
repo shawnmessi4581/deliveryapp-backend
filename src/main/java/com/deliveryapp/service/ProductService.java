@@ -164,12 +164,20 @@ public class ProductService {
 
     // ================= ADMIN CRUD =================
 
-    public Page<Product> getAllProductsAdmin(Long storeId, Long categoryId, Long subCategoryId, Pageable pageable) {
-        // ⚠️ Must strip the sort before passing to the scalar ID query, then re-sort
-        // in-memory. Passing a sorted Pageable to a "SELECT p.productId" JPQL query
-        // causes inconsistent pagination (same product on two pages / products skipped).
+    /**
+     * Admin product listing with optional filters + optional name search.
+     * Passing null keyword = no name filter (returns everything matching other
+     * filters).
+     * Sort is stripped before the ID query and re-applied in-memory by
+     * displayOrder.
+     */
+    public Page<Product> getAllProductsAdmin(Long storeId, Long categoryId, Long subCategoryId,
+            String keyword, Pageable pageable) {
+        // Normalize: empty string → null so JPQL (:keyword IS NULL) branch fires
+        String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
         return fetchPageSortedByDisplayOrder(
-                productRepository.findAdminFilteredProductIds(storeId, categoryId, subCategoryId, withoutSort(pageable)));
+                productRepository.findAdminFilteredProductIds(
+                        storeId, categoryId, subCategoryId, kw, withoutSort(pageable)));
     }
 
     @Transactional
@@ -240,7 +248,6 @@ public class ProductService {
             product.setStoreCategory(null);
         }
 
-        // --- OFFER LOGIC ---
         if (request.getHasOffer() != null) {
             product.setHasOffer(request.getHasOffer());
             if (request.getHasOffer()) {
@@ -275,11 +282,11 @@ public class ProductService {
             if (request.getIsUsd()) {
                 if (request.getUsdPrice() != null)
                     product.setUsdPrice(request.getUsdPrice());
-                product.setBasePrice(0.0); // Clear SYP
+                product.setBasePrice(0.0);
             } else {
                 if (request.getBasePrice() != null)
                     product.setBasePrice(request.getBasePrice());
-                product.setUsdPrice(0.0); // Clear USD
+                product.setUsdPrice(0.0);
             }
         }
 
@@ -307,23 +314,20 @@ public class ProductService {
         }
 
         if (mainImage != null && !mainImage.isEmpty()) {
-            // 🧹 Cleanup: Delete old main image
             if (product.getImage() != null) {
                 fileStorageService.deleteFile(product.getImage());
             }
             product.setImage(fileStorageService.storeFile(mainImage, "products"));
         }
 
-        // ✅ FIX: Color clear logic.
         if (request.getColorIds() != null) {
             product.setColors(colorRepository.findAllById(request.getColorIds()));
         }
 
         if (galleryImages != null && !galleryImages.isEmpty()) {
-            // 🧹 Cleanup: Delete ALL old gallery images
             if (product.getImages() != null && !product.getImages().isEmpty()) {
                 product.getImages().forEach(fileStorageService::deleteFile);
-                product.getImages().clear(); // Clear DB list
+                product.getImages().clear();
             }
             for (MultipartFile file : galleryImages) {
                 if (!file.isEmpty()) {
@@ -395,9 +399,8 @@ public class ProductService {
     }
 
     public void deleteProductVariant(Long variantId) {
-        if (!variantRepository.existsById(variantId)) {
+        if (!variantRepository.existsById(variantId))
             throw new ResourceNotFoundException("النوع غير موجود برقم: " + variantId);
-        }
         variantRepository.deleteById(variantId);
     }
 }
