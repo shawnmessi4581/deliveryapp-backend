@@ -94,17 +94,23 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         Page<Long> findIdsByIsTrendingTrueAndIsAvailableTrue(Pageable pageable);
 
         // ── Admin filtered (with optional name search) ──
-        @Query(value = "SELECT p.productId FROM Product p WHERE " +
-                        "(:storeId IS NULL OR p.store.storeId = :storeId) AND " +
-                        "(:categoryId IS NULL OR p.category.categoryId = :categoryId) AND " +
-                        "(:subCategoryId IS NULL OR p.subCategory.subcategoryId = :subCategoryId) AND " +
-                        "(:keyword IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')))", countQuery = "SELECT COUNT(p) FROM Product p WHERE "
-                                        +
-                                        "(:storeId IS NULL OR p.store.storeId = :storeId) AND " +
-                                        "(:categoryId IS NULL OR p.category.categoryId = :categoryId) AND " +
-                                        "(:subCategoryId IS NULL OR p.subCategory.subcategoryId = :subCategoryId) AND "
-                                        +
-                                        "(:keyword IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+        @Query(value = """
+                        SELECT p.product_id
+                        FROM products p
+                        WHERE
+                        (:storeId IS NULL OR p.store_id = :storeId)
+                        AND (:categoryId IS NULL OR p.category_id = :categoryId)
+                        AND (:subCategoryId IS NULL OR p.subcategory_id = :subCategoryId)
+                        AND (:keyword IS NULL OR p.name ILIKE CONCAT('%', :keyword, '%'))
+                        """, countQuery = """
+                        SELECT COUNT(*)
+                        FROM products p
+                        WHERE
+                        (:storeId IS NULL OR p.store_id = :storeId)
+                        AND (:categoryId IS NULL OR p.category_id = :categoryId)
+                        AND (:subCategoryId IS NULL OR p.subcategory_id = :subCategoryId)
+                        AND (:keyword IS NULL OR p.name ILIKE CONCAT('%', :keyword, '%'))
+                        """, nativeQuery = true)
         Page<Long> findAdminFilteredProductIds(
                         @Param("storeId") Long storeId,
                         @Param("categoryId") Long categoryId,
