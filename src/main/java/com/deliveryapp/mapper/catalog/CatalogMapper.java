@@ -183,6 +183,18 @@ public class CatalogMapper {
             dto.setStoreCategoryId(product.getStoreCategory().getStoreCategoryId());
             dto.setStoreCategoryName(product.getStoreCategory().getName());
         }
+        // 🟢 NEW: Map USD Fields
+        dto.setIsUsd(product.getIsUsd() != null ? product.getIsUsd() : false);
+        if (dto.getIsUsd()) {
+            // If it has an offer, usdPrice should reflect the discounted USD price
+            if (Boolean.TRUE.equals(product.getHasOffer()) && product.getOfferUsdPrice() != null) {
+                dto.setUsdPrice(product.getOfferUsdPrice());
+                dto.setOriginalUsdPrice(product.getUsdPrice()); // Old price
+            } else {
+                dto.setUsdPrice(product.getUsdPrice());
+                dto.setOriginalUsdPrice(null);
+            }
+        }
         // Set Offer UI Data
         dto.setHasOffer(product.getHasOffer() != null ? product.getHasOffer() : false);
 

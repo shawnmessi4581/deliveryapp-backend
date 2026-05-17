@@ -13,21 +13,31 @@ public class ProductResponse {
     private Boolean isTrending;
     private Integer displayOrder;
 
-    // --- SECURITY RULE: ONLY EXPOSE THE CALCULATED SYP PRICE ---
-    private Double calculatedPrice; // e.g. 135000.0 (No raw USD or Base prices exposed)
+    // --- PRICING ---
+    private Double calculatedPrice; // Always the final price in SYP (Offer or Regular)
 
+    // 🟢 NEW: Allow frontend to see USD data
+    private Boolean isUsd; // True if the product is priced in USD
+    private Double usdPrice; // The raw USD price (e.g., 5.0)
+
+    // --- OFFERS ---
+    private Boolean hasOffer;
+    private Double originalPrice; // Original SYP price for strikethrough
+    private Integer discountPercentage;
+
+    // 🟢 NEW: Original USD price for strikethrough (if you want to show it)
+    private Double originalUsdPrice;
+
+    // --- RELATIONSHIPS ---
     private StoreResponse store;
     private Long categoryId;
     private String categoryName;
     private Long subCategoryId;
     private String subCategoryName;
+    private Long storeCategoryId;
+    private String storeCategoryName;
+
     private List<String> images;
     private List<ColorResponse> colors;
     private List<ProductVariantResponse> variants;
-    private Long storeCategoryId;
-    private String storeCategoryName;
-    // 🟢 NEW: For the Frontend UI
-    private Boolean hasOffer;
-    private Double originalPrice; // The crossed-out price (e.g., 5000)
-    private Integer discountPercentage; // E.g., 20 (for a "20% OFF" badge)
 }

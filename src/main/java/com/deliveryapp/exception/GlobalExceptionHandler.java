@@ -5,7 +5,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.multipart.MultipartException;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.access.AccessDeniedException;
@@ -33,13 +32,15 @@ public class GlobalExceptionHandler {
             DuplicateResourceException ex, WebRequest request) {
         return buildResponse(HttpStatus.CONFLICT, "تعارض", ex.getMessage(), request);
     }
-    @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
-    public ResponseEntity<Map<String, Object>> handleAccessDeniedException(Exception ex,WebRequest request) {
+
+    @ExceptionHandler({ AccessDeniedException.class, AuthorizationDeniedException.class })
+    public ResponseEntity<Map<String, Object>> handleAccessDeniedException(Exception ex, WebRequest request) {
         return buildResponse(HttpStatus.FORBIDDEN, "مرفوض", ex.getMessage(), request);
     }
+
     // ADD THIS METHOD
     @ExceptionHandler(MultipartException.class)
-    public ResponseEntity<Map<String, Object>> handleMultipartException(MultipartException ex,WebRequest request) {
+    public ResponseEntity<Map<String, Object>> handleMultipartException(MultipartException ex, WebRequest request) {
 
         // This will print the REAL error to your IntelliJ console
         System.err.println("❌ FILE UPLOAD ERROR DETAILS:");
@@ -59,9 +60,9 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "خطأ داخلي في الخادم", "حدث خطأ غير متوقع", request);
     }
 
-
     // Helper method to build the response map exactly as you requested
-    private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String error, String message, WebRequest request) {
+    private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String error, String message,
+            WebRequest request) {
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now());
         body.put("status", status.value());
