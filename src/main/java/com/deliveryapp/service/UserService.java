@@ -37,6 +37,7 @@ public class UserService {
     private final FavoriteRepository favoriteRepository;
     private final NotificationRepository notificationRepository;
     private final UserAddressRepository userAddressRepository;
+    private final NotificationService notificationService; // 🟢 Add this injection
 
     public User registerUser(User user) {
         if (userRepository.findByPhoneNumber(user.getPhoneNumber()).isPresent()) {
@@ -171,7 +172,26 @@ public class UserService {
             throw new InvalidDataException("المستخدم ليس سائق");
         }
 
-        driver.setIsAvailable(isAvailable);
+        // Only notify if the status actually changed to prevent spam
+        if (driver.getIsAvailable() != null && !driver.getIsAvailable().equals(isAvailable)) {
+            driver.setIsAvailable(isAvailable);
+
+            // --- NEW: Notify Staff ---
+            try {
+                String title = isAvailable ? "سائق متصل 🟢" : "سائق غير متصل 🔴";
+                String message = "السائق " + driver.getName() + " أصبح الآن " + (isAvailable ? "متاحاً" : "غير متاح");
+
+                // You will need to inject NotificationService in UserService if not already
+                // there
+                notificationService.notifyAllStaff(title, message, "DRIVER_STATUS_UPDATE", driverId);
+            } catch (Exception e) {
+                System.err.println("Failed to notify staff of driver status change: " + e.getMessage());
+            }
+        } else {
+            // Just update it if it was null previously
+            driver.setIsAvailable(isAvailable);
+        }
+
         userRepository.save(driver);
     }
 
