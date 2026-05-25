@@ -29,6 +29,7 @@ public class ProductService {
     private final ColorRepository colorRepository;
     private final StoreCategoryRepository storeCategoryRepository;
     private final FileStorageService fileStorageService;
+    private final OrderItemRepository orderItemRepository;
 
     // ── Strip sort from pageable (ID queries are scalar — can't sort by entity
     // fields) ──
@@ -377,14 +378,30 @@ public class ProductService {
         return productRepository.save(product);
     }
 
+    @Transactional
     public void deleteProduct(Long id) {
         Product product = getProductById(id);
+
+        // 1. Check if the product is in any orders
+        if (orderItemRepository.existsByProductProductId(id)) {
+            // SOFT DELETE: Mark as unavailable instead of deleting so order history doesn't
+            // break
+            product.setIsAvailable(false);
+            productRepository.save(product);
+            throw new InvalidDataException("لا يمكن حذف المنتج لأنه مرتبط بطلبات سابقة. تم إخفاء المنتج بدلاً من ذلك.");
+        }
+
+        // 2. If no orders exist, safe to hard delete
+        // 🧹 Cleanup: Delete main image
         if (product.getImage() != null) {
             fileStorageService.deleteFile(product.getImage());
         }
+
+        // 🧹 Cleanup: Delete all gallery images
         if (product.getImages() != null && !product.getImages().isEmpty()) {
             product.getImages().forEach(fileStorageService::deleteFile);
         }
+
         productRepository.deleteById(id);
     }
 

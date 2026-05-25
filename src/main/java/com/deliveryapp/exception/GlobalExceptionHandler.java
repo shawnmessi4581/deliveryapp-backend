@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.dao.DataIntegrityViolationException; // Add this import
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -71,5 +72,23 @@ public class GlobalExceptionHandler {
         body.put("path", request.getDescription(false).replace("uri=", ""));
 
         return new ResponseEntity<>(body, status);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolationException(
+            DataIntegrityViolationException ex, WebRequest request) {
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", HttpStatus.CONFLICT.value());
+        body.put("error", "خطأ في قاعدة البيانات"); // Database Error
+
+        // Extract the root cause message so you can read it in Postman
+        String specificError = ex.getMostSpecificCause().getMessage();
+        body.put("message", "لا يمكن تنفيذ العملية لارتباط البيانات بسجلات أخرى. التفاصيل: " + specificError);
+
+        body.put("path", request.getDescription(false).replace("uri=", ""));
+
+        return new ResponseEntity<>(body, HttpStatus.CONFLICT); // Returns 409 Conflict
     }
 }
