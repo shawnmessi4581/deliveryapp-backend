@@ -379,30 +379,31 @@ public class ProductService {
     }
 
     @Transactional
-    public void deleteProduct(Long id) {
+    public String deleteProduct(Long id) { // Change return type to String
         Product product = getProductById(id);
 
         // 1. Check if the product is in any orders
         if (orderItemRepository.existsByProductProductId(id)) {
-            // SOFT DELETE: Mark as unavailable instead of deleting so order history doesn't
-            // break
+            // SOFT DELETE
             product.setIsAvailable(false);
             productRepository.save(product);
-            throw new InvalidDataException("لا يمكن حذف المنتج لأنه مرتبط بطلبات سابقة. تم إخفاء المنتج بدلاً من ذلك.");
+
+            // Return a success message instead of throwing an exception
+            // This prevents the transaction from rolling back!
+            return "لا يمكن حذف المنتج نهائياً لارتباطه بطلبات سابقة. تم إخفاؤه بدلاً من ذلك.";
         }
 
         // 2. If no orders exist, safe to hard delete
-        // 🧹 Cleanup: Delete main image
         if (product.getImage() != null) {
             fileStorageService.deleteFile(product.getImage());
         }
-
-        // 🧹 Cleanup: Delete all gallery images
         if (product.getImages() != null && !product.getImages().isEmpty()) {
             product.getImages().forEach(fileStorageService::deleteFile);
         }
 
         productRepository.deleteById(id);
+
+        return "تم حذف المنتج بنجاح"; // "Product deleted successfully"
     }
 
     public ProductVariant addProductVariant(Long productId, String name, Double priceAdjustment) {
