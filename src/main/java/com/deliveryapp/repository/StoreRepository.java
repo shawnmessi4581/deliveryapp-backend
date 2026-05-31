@@ -2,6 +2,7 @@ package com.deliveryapp.repository;
 
 import com.deliveryapp.entity.Store;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -30,5 +31,11 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
     List<Store> findBySubCategorySubcategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(Long subCategoryId);
 
     List<Store> findBySubCategorySubcategoryIdOrderByDisplayOrderAsc(Long subCategoryId);
+
+    @Query("SELECT s FROM Store s WHERE s.isActive = true AND " +
+            "(LOWER(s.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+            "LOWER(s.description) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+            "ORDER BY s.rating DESC, s.totalOrders DESC")
+    List<Store> searchStoresGlobal(String keyword);
 
 }

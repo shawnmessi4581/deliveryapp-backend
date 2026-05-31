@@ -46,6 +46,12 @@ public class StoreService {
         return storeRepository.findBySubCategorySubcategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(subCategoryId);
     }
 
+    public List<Store> searchStores(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty())
+            return new java.util.ArrayList<>();
+        return storeRepository.searchStoresGlobal(keyword);
+    }
+
     // ================= ADMIN CRUD =================
     public List<Store> getAllStores() {
         return storeRepository.findAllByOrderByDisplayOrderAsc();

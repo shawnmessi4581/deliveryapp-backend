@@ -163,6 +163,13 @@ public class ProductService {
                 productRepository.findIdsByHasOfferTrueAndIsAvailableTrue(withoutSort(pageable)));
     }
 
+    public Page<Product> searchProductsGlobal(String keyword, Pageable pageable) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            // Return empty page if no keyword
+            return new org.springframework.data.domain.PageImpl<>(new java.util.ArrayList<>(), pageable, 0);
+        }
+        return fetchPage(productRepository.findIdsByDeepSearchGlobal(keyword, pageable));
+    }
     // ================= ADMIN CRUD =================
 
     /**
