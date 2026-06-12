@@ -18,7 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
+import com.deliveryapp.dto.user.UpdateDriverRequest;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -106,6 +106,50 @@ public class AdminUserService {
         driver.setCreatedAt(LocalDateTime.now());
 
         if (image != null && !image.isEmpty()) {
+            String imageUrl = fileStorageService.storeFile(image, "profiles");
+            driver.setProfileImage(imageUrl);
+        }
+
+        return userRepository.save(driver);
+    }
+
+    @Transactional
+    public User updateDriver(Long driverId, UpdateDriverRequest request, MultipartFile image) {
+        User driver = userRepository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException("السائق غير موجود برقم: " + driverId));
+
+        if (driver.getUserType() != UserType.DRIVER) {
+            throw new InvalidDataException("هذا المستخدم ليس سائقاً");
+        }
+
+        // 1. Check Phone Number Conflict
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().equals(driver.getPhoneNumber())) {
+            if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
+                throw new DuplicateResourceException("رقم الهاتف مستخدم بالفعل");
+            }
+            driver.setPhoneNumber(request.getPhoneNumber());
+        }
+
+        // 2. Update Basic Info
+        if (request.getName() != null)
+            driver.setName(request.getName());
+        if (request.getEmail() != null)
+            driver.setEmail(request.getEmail());
+        if (request.getIsActive() != null)
+            driver.setIsActive(request.getIsActive());
+
+        // 3. Update Vehicle Info
+        if (request.getVehicleType() != null)
+            driver.setVehicleType(request.getVehicleType());
+        if (request.getVehicleNumber() != null)
+            driver.setVehicleNumber(request.getVehicleNumber());
+
+        // 4. Update Image
+        if (image != null && !image.isEmpty()) {
+            // Cleanup old image
+            if (driver.getProfileImage() != null) {
+                fileStorageService.deleteFile(driver.getProfileImage());
+            }
             String imageUrl = fileStorageService.storeFile(image, "profiles");
             driver.setProfileImage(imageUrl);
         }

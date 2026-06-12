@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.deliveryapp.dto.user.UpdateDriverRequest;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -76,6 +77,17 @@ public class AdminUserController {
             @RequestParam(value = "image", required = false) MultipartFile image) {
         User driver = adminUserService.createDriver(request, image);
         return ResponseEntity.ok(userMapper.toUserResponse(driver));
+    }
+
+    @PutMapping(value = "/drivers/{driverId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<UserResponse> updateDriver(
+            @PathVariable Long driverId,
+            @ModelAttribute UpdateDriverRequest request,
+            @RequestParam(value = "image", required = false) MultipartFile image) {
+
+        User updatedDriver = adminUserService.updateDriver(driverId, request, image);
+        return ResponseEntity.ok(userMapper.toUserResponse(updatedDriver));
     }
 
     @PatchMapping("/{orderId}/assign/{driverId}")
