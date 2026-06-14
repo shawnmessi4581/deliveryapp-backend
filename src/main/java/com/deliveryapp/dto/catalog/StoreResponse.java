@@ -33,8 +33,7 @@ public class StoreResponse {
     // Relationships (Added for Admin Forms)
     private Long categoryId;
     private String categoryName;
-    private Long subCategoryId;
-    private String subCategoryName;
+    private List<SubCategoryResponse> subCategories;
 
     // User Context (Calculated fee)
     private Double predictedDeliveryFee;

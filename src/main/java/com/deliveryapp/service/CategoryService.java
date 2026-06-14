@@ -152,9 +152,11 @@ public class CategoryService {
 
         // 1. UNLINK STORES
         // Find all stores using this subcategory and set subcategory to null
-        List<Store> linkedStores = storeRepository.findBySubCategorySubcategoryIdOrderByDisplayOrderAsc(id);
+        List<Store> linkedStores = storeRepository.findBySubCategories_SubcategoryIdOrderByDisplayOrderAsc(id);
         for (Store store : linkedStores) {
-            store.setSubCategory(null);
+            if (store.getSubCategories() != null) {
+                store.getSubCategories().removeIf(s -> s.getSubcategoryId().equals(id));
+            }
         }
         storeRepository.saveAll(linkedStores);
 

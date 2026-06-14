@@ -20,9 +20,13 @@ public class Store {
     @JoinColumn(name = "category_id")
     private Category category;
 
-    @ManyToOne
-    @JoinColumn(name = "subcategory_id")
-    private SubCategory subCategory;
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "store_subcategories",
+        joinColumns = @JoinColumn(name = "store_id"),
+        inverseJoinColumns = @JoinColumn(name = "subcategory_id")
+    )
+    private List<SubCategory> subCategories;
 
     private String name;
     private String description;

@@ -43,7 +43,7 @@ public class StoreService {
         if (!subCategoryRepository.existsById(subCategoryId)) {
             throw new ResourceNotFoundException("الفئة الفرعية غير موجودة برقم: " + subCategoryId);
         }
-        return storeRepository.findBySubCategorySubcategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(subCategoryId);
+        return storeRepository.findBySubCategories_SubcategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(subCategoryId);
     }
 
     public List<Store> searchStores(String keyword) {
@@ -79,9 +79,11 @@ public class StoreService {
             Category cat = categoryRepository.findById(request.getCategoryId()).orElseThrow();
             store.setCategory(cat);
         }
-        if (request.getSubCategoryId() != null) {
-            SubCategory sub = subCategoryRepository.findById(request.getSubCategoryId()).orElseThrow();
-            store.setSubCategory(sub);
+        if (request.getSubCategoryIds() != null && !request.getSubCategoryIds().isEmpty()) {
+            List<SubCategory> subs = subCategoryRepository.findAllById(request.getSubCategoryIds());
+            store.setSubCategories(subs);
+        } else {
+            store.setSubCategories(new java.util.ArrayList<>());
         }
 
         if (logo != null && !logo.isEmpty()) {
@@ -139,15 +141,13 @@ public class StoreService {
                     .orElseThrow(() -> new ResourceNotFoundException("الفئة غير موجودة"));
             store.setCategory(cat);
         }
-        // 🟢 FIX: Handle removing SubCategory
-        if (request.getSubCategoryId() != null) {
-            // If the frontend sends 0 or -1, it means "Remove the SubCategory"
-            if (request.getSubCategoryId() <= 0) {
-                store.setSubCategory(null);
+        // 🟢 FIX: Handle removing SubCategories
+        if (request.getSubCategoryIds() != null) {
+            if (request.getSubCategoryIds().isEmpty() || (request.getSubCategoryIds().size() == 1 && request.getSubCategoryIds().get(0) <= 0)) {
+                store.setSubCategories(new java.util.ArrayList<>());
             } else {
-                SubCategory sub = subCategoryRepository.findById(request.getSubCategoryId())
-                        .orElseThrow(() -> new ResourceNotFoundException("الفئة الفرعية غير موجودة"));
-                store.setSubCategory(sub);
+                List<SubCategory> subs = subCategoryRepository.findAllById(request.getSubCategoryIds());
+                store.setSubCategories(subs);
             }
         }
         if (logo != null && !logo.isEmpty()) {

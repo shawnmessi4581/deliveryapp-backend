@@ -71,9 +71,12 @@ public class CatalogMapper {
             dto.setCategoryId(store.getCategory().getCategoryId());
             dto.setCategoryName(store.getCategory().getName());
         }
-        if (store.getSubCategory() != null) {
-            dto.setSubCategoryId(store.getSubCategory().getSubcategoryId());
-            dto.setSubCategoryName(store.getSubCategory().getName());
+        if (store.getSubCategories() != null && !store.getSubCategories().isEmpty()) {
+            dto.setSubCategories(store.getSubCategories().stream()
+                    .map(this::toSubCategoryResponse)
+                    .collect(Collectors.toList()));
+        } else {
+            dto.setSubCategories(Collections.emptyList());
         }
         // Map Times
         if (store.getOpeningTime() != null)

@@ -1,6 +1,7 @@
 package com.deliveryapp.dto.catalog;
 
 import java.time.LocalTime;
+import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
 
@@ -18,7 +19,7 @@ public class StoreRequest {
     private Double minimumOrder;
     private String estimatedDeliveryTime; // e.g., "30-45 min"
     private Long categoryId;
-    private Long subCategoryId;
+    private List<Long> subCategoryIds;
     private Boolean isBusy;
     @DateTimeFormat(iso = DateTimeFormat.ISO.TIME)
     private LocalTime openingTime;

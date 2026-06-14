@@ -28,9 +28,9 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
     // For User App: Only Active Stores, ordered by displayOrder
     List<Store> findByCategoryCategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(Long categoryId);
 
-    List<Store> findBySubCategorySubcategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(Long subCategoryId);
+    List<Store> findBySubCategories_SubcategoryIdAndIsActiveTrueOrderByDisplayOrderAsc(Long subCategoryId);
 
-    List<Store> findBySubCategorySubcategoryIdOrderByDisplayOrderAsc(Long subCategoryId);
+    List<Store> findBySubCategories_SubcategoryIdOrderByDisplayOrderAsc(Long subCategoryId);
 
     @Query("SELECT s FROM Store s WHERE s.isActive = true AND " +
             "(LOWER(s.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
