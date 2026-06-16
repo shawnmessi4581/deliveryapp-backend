@@ -31,13 +31,24 @@ public class ProductService {
     private final FileStorageService fileStorageService;
     private final OrderItemRepository orderItemRepository;
 
-    // ── Strip sort from pageable (ID queries are scalar — can't sort by entity
-    // fields) ──
+    // ── Strip sort from pageable so it doesn't interfere with JPQL ORDER BY ──
     private Pageable withoutSort(Pageable pageable) {
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
     }
 
-    // ── Resolve IDs → full entities, preserving ID-query order ──
+    /**
+     * Resolve IDs → full entities, preserving the exact order returned by the DB.
+     *
+     * The DB query already applies ORDER BY displayOrder ASC, productId ASC before
+     * slicing the page, so the ID list arrives in the correct order. We just need
+     * to re-join IDs → entities without scrambling that order.
+     *
+     * Using a Map and re-streaming over idPage.getContent() (not over the entity
+     * list, which comes back in arbitrary Hibernate order) guarantees:
+     * • no missing products — map lookup by id
+     * • no duplicates — one id → one entity
+     * • correct order — driven by the ordered id list, not by Hibernate
+     */
     private Page<Product> fetchPage(Page<Long> idPage) {
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), idPage.getPageable(), idPage.getTotalElements());
@@ -52,26 +63,11 @@ public class ProductService {
         return new PageImpl<>(ordered, idPage.getPageable(), idPage.getTotalElements());
     }
 
-    // ── Resolve IDs → full entities, then sort in-memory by displayOrder ──
-    private Page<Product> fetchPageSortedByDisplayOrder(Page<Long> idPage) {
-        if (idPage.isEmpty()) {
-            return new PageImpl<>(List.of(), idPage.getPageable(), idPage.getTotalElements());
-        }
-        List<Product> products = productRepository.findByProductIdIn(idPage.getContent());
-        Map<Long, Product> productMap = products.stream()
-                .collect(Collectors.toMap(Product::getProductId, p -> p));
-        List<Product> ordered = idPage.getContent().stream()
-                .map(productMap::get)
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparingInt(p -> (p.getDisplayOrder() == null ? 0 : p.getDisplayOrder())))
-                .collect(Collectors.toList());
-        return new PageImpl<>(ordered, idPage.getPageable(), idPage.getTotalElements());
-    }
-
     // ================= PUBLIC / CATALOG (Paginated) =================
 
     public Page<Product> getAllProductsRandomly(Pageable pageable) {
-        return fetchPageSortedByDisplayOrder(productRepository.findAllActiveProductIds(withoutSort(pageable)));
+        // IDs come back sorted by displayOrder ASC from the DB
+        return fetchPage(productRepository.findAllActiveProductIds(withoutSort(pageable)));
     }
 
     public Product getProductById(Long id) {
@@ -82,7 +78,7 @@ public class ProductService {
     public Page<Product> getProductsByStore(Long storeId, Pageable pageable) {
         if (!storeRepository.existsById(storeId))
             throw new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId);
-        return fetchPageSortedByDisplayOrder(
+        return fetchPage(
                 productRepository.findIdsByStoreStoreIdAndIsAvailableTrue(storeId, withoutSort(pageable)));
     }
 
@@ -91,7 +87,7 @@ public class ProductService {
             throw new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId);
         if (!storeCategoryRepository.existsById(storeCategoryId))
             throw new ResourceNotFoundException("الفئة غير موجودة برقم: " + storeCategoryId);
-        return fetchPageSortedByDisplayOrder(productRepository
+        return fetchPage(productRepository
                 .findIdsByStoreStoreIdAndStoreCategoryStoreCategoryIdAndIsAvailableTrue(
                         storeId, storeCategoryId, withoutSort(pageable)));
     }
@@ -99,14 +95,14 @@ public class ProductService {
     public Page<Product> getProductsByCategory(Long categoryId, Pageable pageable) {
         if (!categoryRepository.existsById(categoryId))
             throw new ResourceNotFoundException("الفئة غير موجودة برقم: " + categoryId);
-        return fetchPageSortedByDisplayOrder(
+        return fetchPage(
                 productRepository.findIdsByCategoryCategoryIdAndIsAvailableTrue(categoryId, withoutSort(pageable)));
     }
 
     public Page<Product> getProductsBySubCategory(Long subCategoryId, Pageable pageable) {
         if (!subCategoryRepository.existsById(subCategoryId))
             throw new ResourceNotFoundException("الفئة الفرعية غير موجودة برقم: " + subCategoryId);
-        return fetchPageSortedByDisplayOrder(
+        return fetchPage(
                 productRepository.findIdsBySubCategorySubcategoryIdAndIsAvailableTrue(subCategoryId,
                         withoutSort(pageable)));
     }
@@ -134,56 +130,53 @@ public class ProductService {
     }
 
     public Page<Product> getProductsByStoreAndCategory(Long storeId, Long categoryId, Pageable pageable) {
-        return fetchPageSortedByDisplayOrder(productRepository
+        return fetchPage(productRepository
                 .findIdsByStoreStoreIdAndCategoryCategoryIdAndIsAvailableTrue(storeId, categoryId,
                         withoutSort(pageable)));
     }
 
     public Page<Product> getProductsByStoreAndSubCategory(Long storeId, Long subCategoryId, Pageable pageable) {
-        return fetchPageSortedByDisplayOrder(productRepository
+        return fetchPage(productRepository
                 .findIdsByStoreStoreIdAndSubCategorySubcategoryIdAndIsAvailableTrue(
                         storeId, subCategoryId, withoutSort(pageable)));
     }
 
     public Page<Product> getProductsUnderPrice(Double price, Pageable pageable) {
-        return fetchPageSortedByDisplayOrder(
+        return fetchPage(
                 productRepository.findIdsByBasePriceLessThanEqualAndIsAvailableTrue(price, withoutSort(pageable)));
     }
 
     public Page<Product> getNewestProducts(Pageable pageable) {
+        // Intentionally sorted by productId DESC (newest first) — no displayOrder here
         return fetchPage(productRepository.findIdsByIsAvailableTrueOrderByProductIdDesc(pageable));
     }
 
     public Page<Product> getTrendingProducts(Pageable pageable) {
-        return fetchPage(productRepository.findIdsByIsTrendingTrueAndIsAvailableTrue(pageable));
+        return fetchPage(productRepository.findIdsByIsTrendingTrueAndIsAvailableTrue(withoutSort(pageable)));
     }
 
     public Page<Product> getOffers(Pageable pageable) {
-        return fetchPageSortedByDisplayOrder(
+        return fetchPage(
                 productRepository.findIdsByHasOfferTrueAndIsAvailableTrue(withoutSort(pageable)));
     }
 
     public Page<Product> searchProductsGlobal(String keyword, Pageable pageable) {
         if (keyword == null || keyword.trim().isEmpty()) {
-            // Return empty page if no keyword
-            return new org.springframework.data.domain.PageImpl<>(new java.util.ArrayList<>(), pageable, 0);
+            return new PageImpl<>(new ArrayList<>(), pageable, 0);
         }
         return fetchPage(productRepository.findIdsByDeepSearchGlobal(keyword, pageable));
     }
+
     // ================= ADMIN CRUD =================
 
     /**
      * Admin product listing with optional filters + optional name search.
-     * Passing null keyword = no name filter (returns everything matching other
-     * filters).
-     * Sort is stripped before the ID query and re-applied in-memory by
-     * displayOrder.
+     * Sort is applied in the DB query (ORDER BY display_order ASC, product_id ASC).
      */
     public Page<Product> getAllProductsAdmin(Long storeId, Long categoryId, Long subCategoryId,
             String keyword, Pageable pageable) {
-        // Normalize: empty string → null so JPQL (:keyword IS NULL) branch fires
         String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
-        return fetchPageSortedByDisplayOrder(
+        return fetchPage(
                 productRepository.findAdminFilteredProductIds(
                         storeId, categoryId, subCategoryId, kw, withoutSort(pageable)));
     }
@@ -344,9 +337,7 @@ public class ProductService {
             }
         }
 
-        // 🟢 FIX: Store Category Clearing Logic
         if (request.getStoreCategoryId() != null) {
-            // If they pass an ID > 0, set the category
             if (request.getStoreCategoryId() > 0) {
                 StoreCategory storeCategory = storeCategoryRepository.findById(request.getStoreCategoryId())
                         .orElseThrow(() -> new ResourceNotFoundException("Store Category not found"));
@@ -355,22 +346,16 @@ public class ProductService {
                 }
                 product.setStoreCategory(storeCategory);
             } else {
-                // If they pass 0 or negative, it means "remove"
                 product.setStoreCategory(null);
             }
         } else {
-            // If they don't send the field at all, or send null, we clear it (or you can
-            // ignore it,
-            // but standard form-data expects it to be cleared if missing/null in a full
-            // update)
             product.setStoreCategory(null);
         }
 
-        // 🟢 FIX: Offers Update Logic
         if (request.getHasOffer() != null) {
             product.setHasOffer(request.getHasOffer());
             if (request.getHasOffer()) {
-                if (Boolean.TRUE.equals(product.getIsUsd())) { // Check the product's active currency
+                if (Boolean.TRUE.equals(product.getIsUsd())) {
                     if (request.getOfferUsdPrice() != null)
                         product.setOfferUsdPrice(request.getOfferUsdPrice());
                     product.setOfferBasePrice(0.0);
@@ -386,21 +371,15 @@ public class ProductService {
     }
 
     @Transactional
-    public String deleteProduct(Long id) { // Change return type to String
+    public String deleteProduct(Long id) {
         Product product = getProductById(id);
 
-        // 1. Check if the product is in any orders
         if (orderItemRepository.existsByProductProductId(id)) {
-            // SOFT DELETE
             product.setIsAvailable(false);
             productRepository.save(product);
-
-            // Return a success message instead of throwing an exception
-            // This prevents the transaction from rolling back!
             return "لا يمكن حذف المنتج نهائياً لارتباطه بطلبات سابقة. تم إخفاؤه بدلاً من ذلك.";
         }
 
-        // 2. If no orders exist, safe to hard delete
         if (product.getImage() != null) {
             fileStorageService.deleteFile(product.getImage());
         }
@@ -409,8 +388,7 @@ public class ProductService {
         }
 
         productRepository.deleteById(id);
-
-        return "تم حذف المنتج بنجاح"; // "Product deleted successfully"
+        return "تم حذف المنتج بنجاح";
     }
 
     public ProductVariant addProductVariant(Long productId, String name, Double priceAdjustment) {
