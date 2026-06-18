@@ -1,6 +1,7 @@
 package com.deliveryapp.service;
 
 import com.deliveryapp.dto.order.*;
+import com.deliveryapp.dto.websocket.OrderWebSocketEvent;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.enums.DriverOrderStatus;
 import com.deliveryapp.enums.OrderStatus;
@@ -12,6 +13,7 @@ import com.deliveryapp.util.DistanceUtil;
 import com.deliveryapp.util.MathUtil;
 import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -48,6 +50,8 @@ public class OrderService {
     private final DistanceUtil distanceUtil;
     private final UrlUtil urlUtil;
     private final MathUtil mathUtil;
+    
+    private final SimpMessagingTemplate messagingTemplate;
 
     // =================================================================================
     // PLACE ORDER LOGIC
@@ -217,6 +221,12 @@ public class OrderService {
             System.err.println("Failed to notify staff: " + e.getMessage());
         }
 
+        try {
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("CREATED", savedOrder.getOrderId(), savedOrder));
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast order creation via websocket: " + e.getMessage());
+        }
+
         return savedOrder;
     }
 
@@ -288,6 +298,12 @@ public class OrderService {
             }
         }
 
+        try {
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), savedOrder));
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast order update via websocket: " + e.getMessage());
+        }
+
         return savedOrder;
     }
 
@@ -324,6 +340,12 @@ public class OrderService {
 
         historyRepository.deleteByOrderOrderId(orderId);
         orderRepository.delete(order);
+
+        try {
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("DELETED", orderId, null));
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast order cancellation via websocket: " + e.getMessage());
+        }
     }
 
     private void logStatusChange(Order order, OrderStatus oldS, OrderStatus newS, String notes) {
@@ -399,6 +421,12 @@ public class OrderService {
         historyRepository.deleteByOrderOrderId(orderId);
         couponUsageRepository.deleteByOrderId(orderId);
         orderRepository.deleteById(orderId);
+
+        try {
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("DELETED", orderId, null));
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast order deletion via websocket: " + e.getMessage());
+        }
     }
 
     // =================================================================================
@@ -453,6 +481,12 @@ public class OrderService {
             System.err.println("Failed to notify driver: " + e.getMessage());
         }
 
+        try {
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), savedOrder));
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast driver assignment via websocket: " + e.getMessage());
+        }
+
         return savedOrder;
     }
 
@@ -481,7 +515,14 @@ public class OrderService {
                     orderId);
         }
 
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        try {
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), savedOrder));
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast driver response via websocket: " + e.getMessage());
+        }
+
+        return savedOrder;
     }
 
     // 3. DRIVER: Get Orders (With Optional Order Number Search)
