@@ -8,6 +8,7 @@ import com.deliveryapp.enums.OrderStatus;
 import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
+import com.deliveryapp.mapper.order.OrderMapper;
 import com.deliveryapp.repository.*;
 import com.deliveryapp.util.DistanceUtil;
 import com.deliveryapp.util.MathUtil;
@@ -52,6 +53,7 @@ public class OrderService {
     private final MathUtil mathUtil;
     
     private final SimpMessagingTemplate messagingTemplate;
+    private final OrderMapper orderMapper;
 
     // =================================================================================
     // PLACE ORDER LOGIC
@@ -222,7 +224,7 @@ public class OrderService {
         }
 
         try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("CREATED", savedOrder.getOrderId(), savedOrder));
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("CREATED", savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
         } catch (Exception e) {
             System.err.println("Failed to broadcast order creation via websocket: " + e.getMessage());
         }
@@ -299,7 +301,7 @@ public class OrderService {
         }
 
         try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), savedOrder));
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
         } catch (Exception e) {
             System.err.println("Failed to broadcast order update via websocket: " + e.getMessage());
         }
@@ -482,7 +484,7 @@ public class OrderService {
         }
 
         try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), savedOrder));
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
         } catch (Exception e) {
             System.err.println("Failed to broadcast driver assignment via websocket: " + e.getMessage());
         }
@@ -517,7 +519,7 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
         try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), savedOrder));
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
         } catch (Exception e) {
             System.err.println("Failed to broadcast driver response via websocket: " + e.getMessage());
         }
