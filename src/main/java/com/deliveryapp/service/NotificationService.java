@@ -180,6 +180,34 @@ public class NotificationService {
 
     @Async
     @Transactional
+    public void notifyStaffOfOrderAccepted(String orderNumber, Long orderId, String driverName) {
+        String title = "تم قبول الطلب من السائق ✅";
+        String message = "قام السائق " + driverName + " بقبول الطلب رقم " + orderNumber + ".";
+
+        List<User> staff = new ArrayList<>();
+        staff.addAll(userRepository.findByUserType(UserType.ADMIN));
+        staff.addAll(userRepository.findByUserType(UserType.EMPLOYEE));
+
+        if (staff.isEmpty())
+            return;
+
+        List<Notification> dbNotifications = new ArrayList<>();
+        List<String> tokens = new ArrayList<>();
+
+        for (User user : staff) {
+            dbNotifications.add(createNotificationObj(user, title, message, null, "ORDER_ACCEPTED", "order", orderId,
+                    null));
+            if (user.getFcmToken() != null && !user.getFcmToken().isEmpty()) {
+                tokens.add(user.getFcmToken());
+            }
+        }
+
+        notificationRepository.saveAll(dbNotifications);
+        fcmService.sendToManyTokens(tokens, title, message, null, "ORDER_ACCEPTED", String.valueOf(orderId));
+    }
+
+    @Async
+    @Transactional
     public void notifyStaffOfCancelledOrder(String orderNumber, Long orderId) {
         System.out.println("🔔 Notifying staff of Cancelled Order #" + orderNumber);
 

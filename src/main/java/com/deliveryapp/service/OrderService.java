@@ -511,6 +511,18 @@ public class OrderService {
         }
 
         Order savedOrder = orderRepository.save(order);
+
+        if (isAccepted && savedOrder.getDriver() != null) {
+            try {
+                notificationService.notifyStaffOfOrderAccepted(
+                        savedOrder.getOrderNumber(),
+                        savedOrder.getOrderId(),
+                        savedOrder.getDriver().getName());
+            } catch (Exception e) {
+                System.err.println("Failed to notify staff of accepted order: " + e.getMessage());
+            }
+        }
+
         try {
             messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED",
                     savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
