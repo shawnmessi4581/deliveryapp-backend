@@ -2,6 +2,7 @@ package com.deliveryapp.service;
 
 import com.deliveryapp.dto.user.DriverLocationResponse;
 import com.deliveryapp.dto.user.UserUpdateRequest;
+import com.deliveryapp.dto.websocket.DriverWebSocketEvent;
 import com.deliveryapp.entity.OtpVerification;
 import com.deliveryapp.entity.User;
 import com.deliveryapp.enums.OrderStatus;
@@ -16,6 +17,7 @@ import com.deliveryapp.repository.OtpVerificationRepository;
 import com.deliveryapp.repository.UserAddressRepository;
 import com.deliveryapp.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -37,7 +39,7 @@ public class UserService {
     private final FavoriteRepository favoriteRepository;
     private final NotificationRepository notificationRepository;
     private final UserAddressRepository userAddressRepository;
-    private final NotificationService notificationService; // 🟢 Add this injection
+    private final SimpMessagingTemplate messagingTemplate;
 
     public User registerUser(User user) {
         if (userRepository.findByPhoneNumber(user.getPhoneNumber()).isPresent()) {
@@ -172,27 +174,28 @@ public class UserService {
             throw new InvalidDataException("المستخدم ليس سائق");
         }
 
-        // Only notify if the status actually changed to prevent spam
-        if (driver.getIsAvailable() != null && !driver.getIsAvailable().equals(isAvailable)) {
-            driver.setIsAvailable(isAvailable);
+        boolean statusChanged = driver.getIsAvailable() == null || !driver.getIsAvailable().equals(isAvailable);
 
-            // --- NEW: Notify Staff ---
-            try {
-                String title = isAvailable ? "سائق متصل 🟢" : "سائق غير متصل 🔴";
-                String message = "السائق " + driver.getName() + " أصبح الآن " + (isAvailable ? "متاحاً" : "غير متاح");
-
-                // You will need to inject NotificationService in UserService if not already
-                // there
-                notificationService.notifyAllStaff(title, message, "DRIVER_STATUS_UPDATE", driverId);
-            } catch (Exception e) {
-                System.err.println("Failed to notify staff of driver status change: " + e.getMessage());
-            }
-        } else {
-            // Just update it if it was null previously
-            driver.setIsAvailable(isAvailable);
-        }
-
+        driver.setIsAvailable(isAvailable);
         userRepository.save(driver);
+
+        if (statusChanged) {
+            try {
+                DriverLocationResponse driverPayload = new DriverLocationResponse(
+                        driver.getUserId(),
+                        driver.getCurrentLocationLat(),
+                        driver.getCurrentLocationLng(),
+                        driver.getIsAvailable(),
+                        driver.getVehicleType(),
+                        driver.getVehicleNumber());
+
+                messagingTemplate.convertAndSend(
+                        "/topic/drivers",
+                        new DriverWebSocketEvent("STATUS_UPDATE", driverId, driverPayload));
+            } catch (Exception e) {
+                System.err.println("Failed to broadcast driver availability update via websocket: " + e.getMessage());
+            }
+        }
     }
 
     public DriverLocationResponse getDriverLocation(Long driverId) {

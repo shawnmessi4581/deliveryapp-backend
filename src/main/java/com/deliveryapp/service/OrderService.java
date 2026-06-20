@@ -51,7 +51,7 @@ public class OrderService {
     private final DistanceUtil distanceUtil;
     private final UrlUtil urlUtil;
     private final MathUtil mathUtil;
-    
+
     private final SimpMessagingTemplate messagingTemplate;
     private final OrderMapper orderMapper;
 
@@ -161,7 +161,7 @@ public class OrderService {
                 .mapToDouble(s -> s.getMinimumDeliveryFee() != null ? s.getMinimumDeliveryFee() : 0.0)
                 .max().orElse(0.0);
 
-        double totalDistanceKm = calculateOptimizedDistance(
+        double totalDistanceKm = distanceUtil.calculateOptimizedDistance(
                 new ArrayList<>(uniqueStores),
                 userAddress.getLatitude(),
                 userAddress.getLongitude());
@@ -224,7 +224,8 @@ public class OrderService {
         }
 
         try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("CREATED", savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("CREATED",
+                    savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
         } catch (Exception e) {
             System.err.println("Failed to broadcast order creation via websocket: " + e.getMessage());
         }
@@ -301,7 +302,8 @@ public class OrderService {
         }
 
         try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED",
+                    savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
         } catch (Exception e) {
             System.err.println("Failed to broadcast order update via websocket: " + e.getMessage());
         }
@@ -484,7 +486,8 @@ public class OrderService {
         }
 
         try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED",
+                    savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
         } catch (Exception e) {
             System.err.println("Failed to broadcast driver assignment via websocket: " + e.getMessage());
         }
@@ -503,23 +506,14 @@ public class OrderService {
 
         if (isAccepted) {
             order.setDriverOrderStatus(DriverOrderStatus.ACCEPTED);
-            notificationService.notifyAllStaff(
-                    "تم قبول الطلب! ✅",
-                    "السائق " + order.getDriver().getName() + " وافق على توصيل الطلب رقم " + order.getOrderNumber(),
-                    "DRIVER_ACCEPTED",
-                    orderId);
         } else {
             order.setDriverOrderStatus(DriverOrderStatus.REJECTED);
-            notificationService.notifyAllStaff(
-                    "تم رفض الطلب! 🚨",
-                    "السائق " + order.getDriver().getName() + " رفض توصيل الطلب رقم " + order.getOrderNumber(),
-                    "DRIVER_REJECTED",
-                    orderId);
         }
 
         Order savedOrder = orderRepository.save(order);
         try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED", savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
+            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED",
+                    savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
         } catch (Exception e) {
             System.err.println("Failed to broadcast driver response via websocket: " + e.getMessage());
         }
@@ -557,9 +551,10 @@ public class OrderService {
         UserAddress address = addressRepository.findById(addressId)
                 .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود"));
 
-        double distance = distanceUtil.calculateDistance(
-                address.getLatitude(), address.getLongitude(),
-                store.getLatitude(), store.getLongitude());
+        double distance = distanceUtil.calculateOptimizedDistance(
+                List.of(store),
+                address.getLatitude(),
+                address.getLongitude());
 
         Double feePerKm = store.getDeliveryFeeKM() != null ? store.getDeliveryFeeKM() : 0.0;
         Double minFee = store.getMinimumDeliveryFee() != null ? store.getMinimumDeliveryFee() : 0.0;
@@ -595,7 +590,8 @@ public class OrderService {
                 .mapToDouble(s -> s.getMinimumDeliveryFee() != null ? s.getMinimumDeliveryFee() : 0.0)
                 .max().orElse(0.0);
 
-        double totalDistanceKm = calculateOptimizedDistance(stores, address.getLatitude(), address.getLongitude());
+        double totalDistanceKm = distanceUtil.calculateOptimizedDistance(stores, address.getLatitude(),
+                address.getLongitude());
 
         double rawDeliveryFee = totalDistanceKm * maxFeePerKm;
         double deliveryFee = mathUtil.roundUpToNearestTen(rawDeliveryFee);
@@ -696,42 +692,5 @@ public class OrderService {
         } else {
             return now.isAfter(store.getOpeningTime()) && now.isBefore(store.getClosingTime());
         }
-    }
-
-    private double calculateOptimizedDistance(List<Store> stores, double userLat, double userLng) {
-        if (stores.isEmpty())
-            return 0.0;
-
-        List<Store> unvisited = new ArrayList<>(stores);
-        double currentLat = userLat;
-        double currentLng = userLng;
-        double totalDistance = 0.0;
-
-        while (!unvisited.isEmpty()) {
-            Store closestStore = null;
-            double minDist = Double.MAX_VALUE;
-
-            for (Store s : unvisited) {
-                if (s.getLatitude() == null || s.getLongitude() == null)
-                    continue;
-
-                double d = distanceUtil.calculateDistance(currentLat, currentLng, s.getLatitude(), s.getLongitude());
-                if (d < minDist) {
-                    minDist = d;
-                    closestStore = s;
-                }
-            }
-
-            if (closestStore != null) {
-                totalDistance += minDist;
-                currentLat = closestStore.getLatitude();
-                currentLng = closestStore.getLongitude();
-                unvisited.remove(closestStore);
-            } else {
-                break;
-            }
-        }
-
-        return totalDistance;
     }
 }
