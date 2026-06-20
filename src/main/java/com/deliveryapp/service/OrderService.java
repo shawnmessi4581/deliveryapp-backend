@@ -566,7 +566,19 @@ public class OrderService {
             deliveryFee = minFee;
         }
 
-        return new DeliveryFeeResponse(deliveryFee, store.getEstimatedDeliveryTime());
+        DeliveryFeeResponse response = new DeliveryFeeResponse();
+        response.setDeliveryFee(deliveryFee);
+        response.setEstimatedTime(store.getEstimatedDeliveryTime());
+        response.setMaxMinimumDeliveryFee(minFee);
+        response.setTotalDistanceKm(distance);
+        response.setRouteSegments(List.of(
+                new DeliveryFeeResponse.RouteSegmentResponse(
+                        store.getName(),
+                        store.getName(),
+                        distance,
+                        "STORE_TO_USER")));
+
+        return response;
     }
 
     public DeliveryFeeResponse calculateMultiStoreFee(List<Long> storeIds, Long addressId) {
@@ -602,7 +614,44 @@ public class OrderService {
 
         String estimatedTime = stores.get(0).getEstimatedDeliveryTime();
 
-        return new DeliveryFeeResponse(deliveryFee, estimatedTime);
+        List<DeliveryFeeResponse.RouteSegmentResponse> segments = new ArrayList<>();
+        for (int i = 0; i < stores.size() - 1; i++) {
+            Store fromStore = stores.get(i);
+            Store toStore = stores.get(i + 1);
+            double segmentDistance = distanceUtil.calculateDistance(
+                    fromStore.getLatitude(),
+                    fromStore.getLongitude(),
+                    toStore.getLatitude(),
+                    toStore.getLongitude());
+            segments.add(new DeliveryFeeResponse.RouteSegmentResponse(
+                    fromStore.getName(),
+                    toStore.getName(),
+                    segmentDistance,
+                    "STORE_TO_STORE"));
+        }
+
+        if (!stores.isEmpty()) {
+            Store lastStore = stores.get(stores.size() - 1);
+            double lastSegmentDistance = distanceUtil.calculateDistance(
+                    lastStore.getLatitude(),
+                    lastStore.getLongitude(),
+                    address.getLatitude(),
+                    address.getLongitude());
+            segments.add(new DeliveryFeeResponse.RouteSegmentResponse(
+                    lastStore.getName(),
+                    address.getLabel() != null ? address.getLabel() : "User",
+                    lastSegmentDistance,
+                    "STORE_TO_USER"));
+        }
+
+        DeliveryFeeResponse response = new DeliveryFeeResponse();
+        response.setDeliveryFee(deliveryFee);
+        response.setEstimatedTime(estimatedTime);
+        response.setMaxMinimumDeliveryFee(maxMinimumDeliveryFee);
+        response.setTotalDistanceKm(totalDistanceKm);
+        response.setRouteSegments(segments);
+
+        return response;
     }
 
     public CouponCheckResponse verifyCoupon(CouponCheckRequest request) {

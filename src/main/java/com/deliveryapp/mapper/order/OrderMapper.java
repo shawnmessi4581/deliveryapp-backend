@@ -1,14 +1,18 @@
 package com.deliveryapp.mapper.order;
 
 import com.deliveryapp.dto.catalog.StoreResponse;
+import com.deliveryapp.dto.order.DeliveryFeeResponse;
 import com.deliveryapp.dto.order.OrderItemResponse;
 import com.deliveryapp.dto.order.OrderResponse;
 import com.deliveryapp.entity.Order;
+import com.deliveryapp.entity.Store;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.mapper.user.UserMapper;
+import com.deliveryapp.util.DistanceUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -19,6 +23,7 @@ public class OrderMapper {
 
     private final CatalogMapper catalogMapper;
     private final UserMapper userMapper;
+    private final DistanceUtil distanceUtil;
 
     public OrderResponse toOrderResponse(Order order) {
         OrderResponse response = new OrderResponse();
@@ -53,6 +58,73 @@ public class OrderMapper {
         response.setDeliveryAddress(order.getDeliveryAddress());
         response.setDeliveryLatitude(order.getDeliveryLatitude());
         response.setDeliveryLongitude(order.getDeliveryLongitude());
+
+        if (order.getStores() != null && !order.getStores().isEmpty()
+                && order.getDeliveryLatitude() != null && order.getDeliveryLongitude() != null) {
+            List<Store> validStores = new ArrayList<>();
+            for (Store store : order.getStores()) {
+                if (store != null && store.getLatitude() != null && store.getLongitude() != null) {
+                    validStores.add(store);
+                }
+            }
+
+            validStores.sort((left, right) -> {
+                double leftDistance = distanceUtil.calculateDistance(
+                        order.getDeliveryLatitude(),
+                        order.getDeliveryLongitude(),
+                        left.getLatitude(),
+                        left.getLongitude());
+                double rightDistance = distanceUtil.calculateDistance(
+                        order.getDeliveryLatitude(),
+                        order.getDeliveryLongitude(),
+                        right.getLatitude(),
+                        right.getLongitude());
+                return Double.compare(rightDistance, leftDistance);
+            });
+
+            response.setMaxMinimumDeliveryFee(validStores.stream()
+                    .mapToDouble(store -> store.getMinimumDeliveryFee() != null ? store.getMinimumDeliveryFee() : 0.0)
+                    .max()
+                    .orElse(0.0));
+
+            response.setTotalDistanceKm(distanceUtil.calculateOptimizedDistance(
+                    validStores,
+                    order.getDeliveryLatitude(),
+                    order.getDeliveryLongitude()));
+
+            List<DeliveryFeeResponse.RouteSegmentResponse> segments = new ArrayList<>();
+            for (int i = 0; i < validStores.size() - 1; i++) {
+                Store fromStore = validStores.get(i);
+                Store toStore = validStores.get(i + 1);
+                segments.add(new DeliveryFeeResponse.RouteSegmentResponse(
+                        fromStore.getName(),
+                        toStore.getName(),
+                        distanceUtil.calculateDistance(
+                                fromStore.getLatitude(),
+                                fromStore.getLongitude(),
+                                toStore.getLatitude(),
+                                toStore.getLongitude()),
+                        "STORE_TO_STORE"));
+            }
+
+            if (!validStores.isEmpty()) {
+                Store lastStore = validStores.get(validStores.size() - 1);
+                String userName = order.getUser() != null && order.getUser().getName() != null
+                        ? order.getUser().getName()
+                        : "User";
+                segments.add(new DeliveryFeeResponse.RouteSegmentResponse(
+                        lastStore.getName(),
+                        userName,
+                        distanceUtil.calculateDistance(
+                                lastStore.getLatitude(),
+                                lastStore.getLongitude(),
+                                order.getDeliveryLatitude(),
+                                order.getDeliveryLongitude()),
+                        "STORE_TO_USER"));
+            }
+
+            response.setRouteSegments(segments);
+        }
 
         response.setStatus(order.getStatus());
         response.setCreatedAt(order.getCreatedAt());

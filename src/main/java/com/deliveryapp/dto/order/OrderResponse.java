@@ -42,6 +42,11 @@ public class OrderResponse {
     private Double deliveryFee;
     private Double totalAmount;
 
+    // Route debugging details for admin dashboard
+    private Double maxMinimumDeliveryFee;
+    private Double totalDistanceKm;
+    private List<DeliveryFeeResponse.RouteSegmentResponse> routeSegments;
+
     // Items
     private List<OrderItemResponse> items;
 
