@@ -54,6 +54,18 @@ public class NotificationService {
         notificationRepository.save(notification);
     }
 
+    @Transactional
+    public void markAllAsRead(Long userId) {
+        List<Notification> unreadNotifications = notificationRepository.findByUserUserIdAndIsReadFalse(userId);
+
+        if (unreadNotifications.isEmpty()) {
+            return;
+        }
+
+        unreadNotifications.forEach(notification -> notification.setIsRead(true));
+        notificationRepository.saveAll(unreadNotifications);
+    }
+
     // 1. SEND TO SINGLE USER
     @Transactional
     public void sendNotification(Long userId, String title, String message, MultipartFile imageFile, String type,

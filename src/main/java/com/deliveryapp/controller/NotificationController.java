@@ -37,6 +37,13 @@ public class NotificationController {
         return ResponseEntity.ok("تم تمييز الإشعار كمقروء");
     }
 
+    // 3a. Mark All Notifications as Read for a User
+    @PatchMapping("/{userId}/read-all")
+    public ResponseEntity<String> markAllAsRead(@PathVariable Long userId) {
+        notificationService.markAllAsRead(userId);
+        return ResponseEntity.ok("تم تمييز جميع الإشعارات كمقروءة");
+    }
+
     // 4. Send Notification (Updated for Multipart/File Upload & Target Group)
     @PostMapping(value = "/send", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> sendNotification(
