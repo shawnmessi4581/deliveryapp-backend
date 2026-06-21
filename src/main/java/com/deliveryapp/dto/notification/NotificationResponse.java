@@ -2,6 +2,7 @@ package com.deliveryapp.dto.notification;
 
 import com.deliveryapp.dto.catalog.ProductResponse;
 import com.deliveryapp.dto.catalog.StoreResponse;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import java.time.LocalDateTime;
 
@@ -23,5 +24,7 @@ public class NotificationResponse {
     private ProductResponse product; // Populated if referenceType == "product"
 
     private Boolean isRead;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
 }
