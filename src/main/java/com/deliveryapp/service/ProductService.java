@@ -401,9 +401,17 @@ public class ProductService {
         return variantRepository.save(variant);
     }
 
+    @Transactional
     public void deleteProductVariant(Long variantId) {
         if (!variantRepository.existsById(variantId))
             throw new ResourceNotFoundException("النوع غير موجود برقم: " + variantId);
+
+        List<OrderItem> orderItems = orderItemRepository.findByVariantVariantId(variantId);
+        if (!orderItems.isEmpty()) {
+            orderItems.forEach(item -> item.setVariant(null));
+            orderItemRepository.saveAll(orderItems);
+        }
+
         variantRepository.deleteById(variantId);
     }
 }

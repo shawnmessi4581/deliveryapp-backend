@@ -147,7 +147,11 @@ public class OrderMapper {
 
                 // Map Product details
                 r.setProductName(item.getProductName());
-                r.setVariantDetails(item.getVariantDetails());
+                String variantDetails = item.getVariantDetails();
+                if ((variantDetails == null || variantDetails.isBlank()) && item.getVariant() != null) {
+                    variantDetails = item.getVariant().getVariantValue();
+                }
+                r.setVariantDetails(variantDetails);
                 r.setQuantity(item.getQuantity());
                 r.setUnitPrice(item.getUnitPrice());
                 r.setTotalPrice(item.getTotalPrice());
