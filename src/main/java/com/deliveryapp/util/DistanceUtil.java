@@ -27,12 +27,13 @@ public class DistanceUtil {
         if (startLat == endLat && startLong == endLong) {
             return 0.0;
         }
+        return calculateHaversineDistance(startLat, startLong, endLat, endLong);
 
-        try {
-            return fetchDrivingDistance(startLat, startLong, endLat, endLong);
-        } catch (Exception ex) {
-            return calculateHaversineDistance(startLat, startLong, endLat, endLong);
-        }
+        // try {
+        // return fetchDrivingDistance(startLat, startLong, endLat, endLong);
+        // } catch (Exception ex) {
+        // return calculateHaversineDistance(startLat, startLong, endLat, endLong);
+        // }
     }
 
     public double calculateOptimizedDistance(List<Store> stores, double userLat, double userLng) {
