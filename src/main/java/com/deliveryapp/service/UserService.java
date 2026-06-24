@@ -40,6 +40,7 @@ public class UserService {
     private final NotificationRepository notificationRepository;
     private final UserAddressRepository userAddressRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    // private final NotificationService notificationService;
 
     public User registerUser(User user) {
         if (userRepository.findByPhoneNumber(user.getPhoneNumber()).isPresent()) {
@@ -111,8 +112,9 @@ public class UserService {
                     savedDriver.getVehicleType(),
                     savedDriver.getVehicleNumber());
 
+            // NEW: Send to dedicated topic for this specific driver!
             messagingTemplate.convertAndSend(
-                    "/topic/drivers",
+                    "/topic/drivers/" + driverId,
                     new DriverWebSocketEvent("LOCATION_UPDATE", driverId, driverPayload));
         } catch (Exception e) {
             System.err.println("Failed to broadcast driver location update via websocket: " + e.getMessage());
@@ -192,12 +194,23 @@ public class UserService {
             throw new InvalidDataException("المستخدم ليس سائق");
         }
 
-        boolean statusChanged = driver.getIsAvailable() == null || !driver.getIsAvailable().equals(isAvailable);
+        // Only notify if the status actually changed to prevent spam
+        if (driver.getIsAvailable() != null && !driver.getIsAvailable().equals(isAvailable)) {
+            driver.setIsAvailable(isAvailable);
 
-        driver.setIsAvailable(isAvailable);
-        userRepository.save(driver);
+            // --- RESTORED: Notify Staff ---
+            // try {
+            // String title = isAvailable ? "سائق متصل 🟢" : "سائق غير متصل 🔴";
+            // String message = "السائق " + driver.getName() + " أصبح الآن " + (isAvailable
+            // ? "متاحاً" : "غير متاح");
+            // notificationService.notifyAllStaff(title, message, "DRIVER_STATUS_UPDATE",
+            // driverId);
+            // } catch (Exception e) {
+            // System.err.println("Failed to notify staff of driver status change: " +
+            // e.getMessage());
+            // }
 
-        if (statusChanged) {
+            // --- RESTORED: WebSocket ---
             try {
                 DriverLocationResponse driverPayload = new DriverLocationResponse(
                         driver.getUserId(),
@@ -213,7 +226,11 @@ public class UserService {
             } catch (Exception e) {
                 System.err.println("Failed to broadcast driver availability update via websocket: " + e.getMessage());
             }
+        } else {
+            driver.setIsAvailable(isAvailable);
         }
+
+        userRepository.save(driver);
     }
 
     public DriverLocationResponse getDriverLocation(Long driverId) {
