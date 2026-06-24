@@ -100,7 +100,25 @@ public class UserService {
 
         driver.setCurrentLocationLat(lat);
         driver.setCurrentLocationLng(lng);
-        return userRepository.save(driver);
+        User savedDriver = userRepository.save(driver);
+
+        try {
+            DriverLocationResponse driverPayload = new DriverLocationResponse(
+                    savedDriver.getUserId(),
+                    savedDriver.getCurrentLocationLat(),
+                    savedDriver.getCurrentLocationLng(),
+                    savedDriver.getIsAvailable(),
+                    savedDriver.getVehicleType(),
+                    savedDriver.getVehicleNumber());
+
+            messagingTemplate.convertAndSend(
+                    "/topic/drivers",
+                    new DriverWebSocketEvent("LOCATION_UPDATE", driverId, driverPayload));
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast driver location update via websocket: " + e.getMessage());
+        }
+
+        return savedDriver;
     }
     // ... imports ...
 

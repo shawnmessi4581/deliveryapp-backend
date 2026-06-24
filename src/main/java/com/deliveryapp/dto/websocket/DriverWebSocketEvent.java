@@ -1,6 +1,5 @@
 package com.deliveryapp.dto.websocket;
 
-import com.deliveryapp.dto.user.DriverLocationResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DriverWebSocketEvent {
-    private String eventType; // STATUS_UPDATE, LOCATION_UPDATE
+    private String eventType; // LOCATION_UPDATE, STATUS_UPDATE
     private Long driverId;
-    private DriverLocationResponse driver;
+    private Object payload;
 }
