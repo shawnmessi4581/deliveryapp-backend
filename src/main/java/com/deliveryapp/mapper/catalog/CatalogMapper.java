@@ -89,7 +89,7 @@ public class CatalogMapper {
         dto.setIsBusy(store.getIsBusy()); // Map Busy Flag
         dto.setDisplayOrder(store.getDisplayOrder());
         dto.setCommissionPercentage(store.getCommissionPercentage() != null ? store.getCommissionPercentage() : 0.0);
-
+        dto.setTelegramChatId(store.getTelegramChatId()); // Map Telegram Chat ID
         // 🟢 NEW: Map the Store Categories
         if (store.getStoreCategories() != null && !store.getStoreCategories().isEmpty()) {
             List<StoreCategoryResponse> categoriesList = store.getStoreCategories().stream()

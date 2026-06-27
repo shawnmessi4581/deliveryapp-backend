@@ -49,5 +49,6 @@ public class StoreResponse {
     //
     private List<StoreCategoryResponse> storeCategories;
     private Double minimumDeliveryFee;
+    private String telegramChatId;
 
 }
