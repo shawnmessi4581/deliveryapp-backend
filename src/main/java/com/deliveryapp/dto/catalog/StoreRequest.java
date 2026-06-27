@@ -32,4 +32,7 @@ public class StoreRequest {
     private Double commissionPercentage;
     private Double minimumDeliveryFee;
 
+    // 🔔 Telegram: Chat/Group/Channel ID for order notifications
+    private String telegramChatId;
+
 }

@@ -98,6 +98,9 @@ public class StoreService {
         store.setCommissionPercentage(
                 request.getCommissionPercentage() != null ? request.getCommissionPercentage() : 0.0);
         store.setMinimumDeliveryFee(request.getMinimumDeliveryFee() != null ? request.getMinimumDeliveryFee() : 0.0);
+        // 🔔 Telegram Chat ID
+        if (request.getTelegramChatId() != null)
+            store.setTelegramChatId(request.getTelegramChatId());
         return storeRepository.save(store);
     }
 
@@ -165,6 +168,9 @@ public class StoreService {
         }
         if (request.getMinimumDeliveryFee() != null)
             store.setMinimumDeliveryFee(request.getMinimumDeliveryFee());
+        // 🔔 Telegram Chat ID (pass empty string to clear, or null to leave unchanged)
+        if (request.getTelegramChatId() != null)
+            store.setTelegramChatId(request.getTelegramChatId().isBlank() ? null : request.getTelegramChatId());
         return storeRepository.save(store);
     }
 

@@ -47,6 +47,7 @@ public class OrderService {
     private final CouponService couponService;
     private final NotificationService notificationService;
     private final PricingService pricingService;
+    private final TelegramService telegramService;
 
     private final DistanceUtil distanceUtil;
     private final UrlUtil urlUtil;
@@ -221,6 +222,13 @@ public class OrderService {
             notificationService.notifyStaffOfNewOrder(savedOrder.getOrderNumber(), savedOrder.getOrderId());
         } catch (Exception e) {
             System.err.println("Failed to notify staff: " + e.getMessage());
+        }
+
+        // 🔔 Telegram: Notify each store of its own order section
+        try {
+            telegramService.notifyAllStoresOfOrder(savedOrder);
+        } catch (Exception e) {
+            System.err.println("Failed to send Telegram store notifications: " + e.getMessage());
         }
 
         try {

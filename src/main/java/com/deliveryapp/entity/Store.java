@@ -60,4 +60,7 @@ public class Store {
     private Double minimumDeliveryFee = 0.0;
 
     private LocalDateTime createdAt;
+
+    // 🔔 Telegram Integration: Each store's own chat/group/channel ID for order notifications
+    private String telegramChatId;
 }
