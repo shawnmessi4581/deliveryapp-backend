@@ -20,24 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * TelegramService — sends each store its own section of a new order
- * via a Telegram Bot.
- *
- * <p>When an order is placed (possibly spanning multiple stores), this
- * service groups the order items by store and dispatches one formatted
- * Arabic message per store that has a configured {@code telegramChatId}.
- * All operations are fully asynchronous and will never block the
- * main order-placement flow.</p>
- *
- * <p>Configuration required in {@code application.properties}:</p>
- * <pre>
- * telegram.bot.token=YOUR_BOT_TOKEN_HERE
- * </pre>
- *
- * <p>Each store must have its {@code telegramChatId} set (via the admin
- * API or directly in the database) to receive notifications.</p>
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -45,28 +27,15 @@ public class TelegramService {
 
     private static final String TELEGRAM_API_BASE = "https://api.telegram.org/bot";
     private static final String DIVIDER = "━━━━━━━━━━━━━━━━━━━━";
-    private static final DateTimeFormatter TIME_FORMATTER =
-            DateTimeFormatter.ofPattern("hh:mm a");
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("hh:mm a");
 
     @Value("${telegram.bot.token}")
     private String botToken;
 
-    // Shared HttpClient — thread-safe and reusable
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
-    // ===========================================================================
-    // PUBLIC API
-    // ===========================================================================
-
-    /**
-     * Entry point called from {@link OrderService} after an order is saved.
-     * Groups all order items by their store and fires one Telegram message
-     * per store that has a {@code telegramChatId} configured.
-     *
-     * @param order the freshly saved order (with items already populated)
-     */
     @Async
     public void notifyAllStoresOfOrder(Order order) {
         try {
@@ -76,7 +45,6 @@ public class TelegramService {
                 return;
             }
 
-            // Group items by store ID to avoid calling Store.hashCode() on lazy Hibernate proxies!
             Map<Long, List<OrderItem>> itemsByStoreId = order.getOrderItems().stream()
                     .filter(item -> item.getProduct() != null && item.getProduct().getStore() != null)
                     .collect(Collectors.groupingBy(item -> item.getProduct().getStore().getStoreId()));
@@ -89,7 +57,6 @@ public class TelegramService {
 
             for (Map.Entry<Long, List<OrderItem>> entry : itemsByStoreId.entrySet()) {
                 List<OrderItem> storeItems = entry.getValue();
-                // Get the store reference from the first item
                 Store store = storeItems.get(0).getProduct().getStore();
 
                 if (store.getTelegramChatId() == null || store.getTelegramChatId().isBlank()) {
@@ -101,47 +68,23 @@ public class TelegramService {
                 notifyStoreOfOrder(order, store, storeItems);
             }
         } catch (Exception e) {
-            log.error("[Telegram] 🚨 CRITICAL ERROR inside async notifyAllStoresOfOrder for order #{}: {}", 
+            log.error("[Telegram] 🚨 CRITICAL ERROR inside async notifyAllStoresOfOrder for order #{}: {}",
                     (order != null ? order.getOrderNumber() : "unknown"), e.getMessage(), e);
         }
     }
 
-    // ===========================================================================
-    // INTERNAL HELPERS
-    // ===========================================================================
-
-    /**
-     * Builds a rich Arabic Telegram message for one store's slice of the order
-     * and dispatches it.
-     */
     private void notifyStoreOfOrder(Order order, Store store, List<OrderItem> storeItems) {
         String message = buildStoreMessage(order, store, storeItems);
         sendMessage(store.getTelegramChatId(), message);
     }
 
-    /**
-     * Builds the formatted Arabic message for a single store.
-     *
-     * <p>The message includes:</p>
-     * <ul>
-     *   <li>Order number header</li>
-     *   <li>Store name</li>
-     *   <li>Itemised product list with variant, quantity, price, and item notes</li>
-     *   <li>Store subtotal</li>
-     *   <li>Overall delivery fee and total</li>
-     *   <li>Delivery address and optional customer order note</li>
-     *   <li>Timestamp</li>
-     * </ul>
-     */
     private String buildStoreMessage(Order order, Store store, List<OrderItem> storeItems) {
         StringBuilder sb = new StringBuilder();
 
-        // ── Header ──────────────────────────────────────────────────────────────
         sb.append("🛒 *طلب جديد\\!*\n");
         sb.append("🔢 رقم الطلب: `#").append(order.getOrderNumber()).append("`\n");
         sb.append(DIVIDER).append("\n\n");
 
-        // ── Store Section ────────────────────────────────────────────────────────
         sb.append("🏪 *المتجر:* ").append(escapeMarkdown(store.getName())).append("\n");
         sb.append("📦 *المنتجات:*\n");
 
@@ -150,28 +93,27 @@ public class TelegramService {
         for (OrderItem item : storeItems) {
             sb.append("\n");
 
-            // Product name + variant (if any)
             String productName = escapeMarkdown(
                     item.getProductName() != null ? item.getProductName() : "منتج");
 
             if (item.getVariantDetails() != null && !item.getVariantDetails().isBlank()) {
+                // FIX: the literal "(" and ")" here were never escaped — only their
+                // contents went through escapeMarkdown(). Any variant text caused
+                // Telegram's MarkdownV2 parser to reject the whole message.
                 sb.append("  • ").append(productName)
-                  .append(" _(").append(escapeMarkdown(item.getVariantDetails())).append(")_\n");
+                        .append(" _\\(").append(escapeMarkdown(item.getVariantDetails())).append("\\)_\n");
             } else {
                 sb.append("  • ").append(productName).append("\n");
             }
 
-            // Color (if selected)
             if (item.getSelectedColor() != null && item.getSelectedColor().getName() != null) {
                 sb.append("    🎨 اللون: ").append(escapeMarkdown(item.getSelectedColor().getName())).append("\n");
             }
 
-            // Quantity × unit price → item total
             sb.append("    الكمية: ×").append(item.getQuantity())
-              .append("  \\|  السعر: ").append(formatPrice(item.getUnitPrice()))
-              .append("  ←  *").append(formatPrice(item.getTotalPrice())).append("*\n");
+                    .append("  \\|  السعر: ").append(formatPrice(item.getUnitPrice()))
+                    .append("  ←  *").append(formatPrice(item.getTotalPrice())).append("*\n");
 
-            // Item-level notes (e.g. "بدون بصل")
             if (item.getNotes() != null && !item.getNotes().isBlank()) {
                 sb.append("    📝 _").append(escapeMarkdown(item.getNotes())).append("_\n");
             }
@@ -179,11 +121,9 @@ public class TelegramService {
             storeSubtotal += item.getTotalPrice() != null ? item.getTotalPrice() : 0.0;
         }
 
-        // ── Store Subtotal ───────────────────────────────────────────────────────
         sb.append("\n").append(DIVIDER).append("\n");
         sb.append("💰 *إجمالي هذا المتجر:* ").append(formatPrice(storeSubtotal)).append("\n");
 
-        // ── Order-Level Financials ───────────────────────────────────────────────
         if (order.getDeliveryFee() != null && order.getDeliveryFee() > 0) {
             sb.append("🚗 *رسوم التوصيل:* ").append(formatPrice(order.getDeliveryFee())).append("\n");
         }
@@ -192,7 +132,6 @@ public class TelegramService {
         }
         sb.append("💳 *إجمالي الطلب الكلي:* *").append(formatPrice(order.getTotalAmount())).append("*\n");
 
-        // ── Delivery Details ─────────────────────────────────────────────────────
         sb.append("\n");
         if (order.getDeliveryAddress() != null) {
             sb.append("📍 *العنوان:* ").append(escapeMarkdown(order.getDeliveryAddress())).append("\n");
@@ -204,7 +143,6 @@ public class TelegramService {
             sb.append("💬 *ملاحظة العميل:* _").append(escapeMarkdown(order.getOrderNote())).append("_\n");
         }
 
-        // ── Customer Info ────────────────────────────────────────────────────────
         if (order.getUser() != null) {
             sb.append("👤 *العميل:* ").append(escapeMarkdown(order.getUser().getName())).append("\n");
             if (order.getUser().getPhoneNumber() != null) {
@@ -212,7 +150,6 @@ public class TelegramService {
             }
         }
 
-        // ── Timestamp ────────────────────────────────────────────────────────────
         sb.append("\n");
         LocalDateTime now = order.getCreatedAt() != null ? order.getCreatedAt() : LocalDateTime.now();
         sb.append("⏰ ").append(escapeMarkdown(now.format(TIME_FORMATTER)));
@@ -220,17 +157,6 @@ public class TelegramService {
         return sb.toString();
     }
 
-    /**
-     * Sends a plain-text or MarkdownV2 message to a Telegram chat via the
-     * Bot API {@code sendMessage} endpoint.
-     *
-     * <p>Uses Java 11+ {@link HttpClient} with a 15-second read timeout. Errors
-     * are logged but never thrown, so a Telegram failure cannot affect the
-     * order-placement transaction.</p>
-     *
-     * @param chatId Telegram chat ID (can be a group, channel, or private chat)
-     * @param text   The message body (MarkdownV2 formatted)
-     */
     private void sendMessage(String chatId, String text) {
         if (botToken == null || botToken.isBlank() || "YOUR_BOT_TOKEN_HERE".equals(botToken)) {
             log.warn("[Telegram] Bot token is not configured — message not sent to chat {}.", chatId);
@@ -240,12 +166,10 @@ public class TelegramService {
         try {
             String url = TELEGRAM_API_BASE + botToken + "/sendMessage";
 
-            // Build JSON body manually (no extra library needed)
             String jsonBody = String.format(
                     "{\"chat_id\":\"%s\",\"text\":\"%s\",\"parse_mode\":\"MarkdownV2\"}",
                     chatId,
-                    escapeJson(text)
-            );
+                    escapeJson(text));
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -273,10 +197,6 @@ public class TelegramService {
         }
     }
 
-    /**
-     * Sends a test message directly to a Telegram chat, and returns detailed success/error info.
-     * Unlike normal sendMessage, this runs synchronously, checks inputs, and throws or returns details.
-     */
     public String sendTestMessage(String chatId, String text, String parseMode) throws Exception {
         if (botToken == null || botToken.isBlank() || "YOUR_BOT_TOKEN_HERE".equals(botToken)) {
             throw new IllegalStateException("Telegram bot token is not configured in application.properties");
@@ -290,21 +210,18 @@ public class TelegramService {
 
         String url = TELEGRAM_API_BASE + botToken + "/sendMessage";
 
-        // Build JSON body manually. If parseMode is provided, include it in JSON.
         String jsonBody;
         if (parseMode != null && !parseMode.isBlank()) {
             jsonBody = String.format(
                     "{\"chat_id\":\"%s\",\"text\":\"%s\",\"parse_mode\":\"%s\"}",
                     chatId,
                     escapeJson(text),
-                    escapeJson(parseMode)
-            );
+                    escapeJson(parseMode));
         } else {
             jsonBody = String.format(
                     "{\"chat_id\":\"%s\",\"text\":\"%s\"}",
                     chatId,
-                    escapeJson(text)
-            );
+                    escapeJson(text));
         }
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -324,31 +241,17 @@ public class TelegramService {
         }
     }
 
-    // ===========================================================================
-    // FORMATTING UTILITIES
-    // ===========================================================================
-
-    /**
-     * Formats a monetary value as a Syrian Pound string (e.g. "12,500 ل.س").
-     * Handles null by returning "0 ل.س".
-     */
     private String formatPrice(Double amount) {
-        if (amount == null) return "0 ل\\.س";
+        if (amount == null)
+            return "0 ل\\.س";
         long rounded = Math.round(amount);
-        // Add thousands separator manually for Arabic locale readability
         String formatted = String.format("%,d", rounded).replace(",", "،");
         return escapeMarkdown(formatted + " ل.س");
     }
 
-    /**
-     * Escapes characters that are special in Telegram's MarkdownV2 mode.
-     * Required for all user-generated content to prevent parse errors.
-     *
-     * @see <a href="https://core.telegram.org/bots/api#markdownv2-style">Telegram MarkdownV2</a>
-     */
     private String escapeMarkdown(String text) {
-        if (text == null) return "";
-        // Characters that must be escaped in MarkdownV2
+        if (text == null)
+            return "";
         return text
                 .replace("\\", "\\\\")
                 .replace("_", "\\_")
@@ -371,11 +274,9 @@ public class TelegramService {
                 .replace("!", "\\!");
     }
 
-    /**
-     * Escapes a string for embedding inside a JSON double-quoted string literal.
-     */
     private String escapeJson(String text) {
-        if (text == null) return "";
+        if (text == null)
+            return "";
         return text
                 .replace("\\", "\\\\")
                 .replace("\"", "\\\"")
