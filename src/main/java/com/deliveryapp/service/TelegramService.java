@@ -69,34 +69,40 @@ public class TelegramService {
      */
     @Async
     public void notifyAllStoresOfOrder(Order order) {
-        if (order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
-            log.warn("[Telegram] Order #{} has no items — skipping store notifications.",
-                    order.getOrderNumber());
-            return;
-        }
-
-        // Group items by their store
-        Map<Store, List<OrderItem>> itemsByStore = order.getOrderItems().stream()
-                .filter(item -> item.getProduct() != null && item.getProduct().getStore() != null)
-                .collect(Collectors.groupingBy(item -> item.getProduct().getStore()));
-
-        if (itemsByStore.isEmpty()) {
-            log.warn("[Telegram] Could not resolve any store for order #{} — skipping.",
-                    order.getOrderNumber());
-            return;
-        }
-
-        for (Map.Entry<Store, List<OrderItem>> entry : itemsByStore.entrySet()) {
-            Store store = entry.getKey();
-            List<OrderItem> storeItems = entry.getValue();
-
-            if (store.getTelegramChatId() == null || store.getTelegramChatId().isBlank()) {
-                log.info("[Telegram] Store '{}' has no Telegram Chat ID configured — skipping.",
-                        store.getName());
-                continue;
+        try {
+            if (order == null || order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
+                log.warn("[Telegram] Order #{} has no items — skipping store notifications.",
+                        order != null ? order.getOrderNumber() : "unknown");
+                return;
             }
 
-            notifyStoreOfOrder(order, store, storeItems);
+            // Group items by store ID to avoid calling Store.hashCode() on lazy Hibernate proxies!
+            Map<Long, List<OrderItem>> itemsByStoreId = order.getOrderItems().stream()
+                    .filter(item -> item.getProduct() != null && item.getProduct().getStore() != null)
+                    .collect(Collectors.groupingBy(item -> item.getProduct().getStore().getStoreId()));
+
+            if (itemsByStoreId.isEmpty()) {
+                log.warn("[Telegram] Could not resolve any store for order #{} — skipping.",
+                        order.getOrderNumber());
+                return;
+            }
+
+            for (Map.Entry<Long, List<OrderItem>> entry : itemsByStoreId.entrySet()) {
+                List<OrderItem> storeItems = entry.getValue();
+                // Get the store reference from the first item
+                Store store = storeItems.get(0).getProduct().getStore();
+
+                if (store.getTelegramChatId() == null || store.getTelegramChatId().isBlank()) {
+                    log.info("[Telegram] Store '{}' has no Telegram Chat ID configured — skipping.",
+                            store.getName());
+                    continue;
+                }
+
+                notifyStoreOfOrder(order, store, storeItems);
+            }
+        } catch (Exception e) {
+            log.error("[Telegram] 🚨 CRITICAL ERROR inside async notifyAllStoresOfOrder for order #{}: {}", 
+                    (order != null ? order.getOrderNumber() : "unknown"), e.getMessage(), e);
         }
     }
 
