@@ -73,6 +73,7 @@ public class SecurityConfig {
                         // Static uploads
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/api/app/download", "/api/app/link").permitAll()
+                        .requestMatchers("/api/telegram/**").permitAll()
                         // Public browsing
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/catalog/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/banners/**").permitAll()

@@ -267,6 +267,57 @@ public class TelegramService {
         }
     }
 
+    /**
+     * Sends a test message directly to a Telegram chat, and returns detailed success/error info.
+     * Unlike normal sendMessage, this runs synchronously, checks inputs, and throws or returns details.
+     */
+    public String sendTestMessage(String chatId, String text, String parseMode) throws Exception {
+        if (botToken == null || botToken.isBlank() || "YOUR_BOT_TOKEN_HERE".equals(botToken)) {
+            throw new IllegalStateException("Telegram bot token is not configured in application.properties");
+        }
+        if (chatId == null || chatId.isBlank()) {
+            throw new IllegalArgumentException("Chat ID must not be null or blank");
+        }
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("Message text must not be null or blank");
+        }
+
+        String url = TELEGRAM_API_BASE + botToken + "/sendMessage";
+
+        // Build JSON body manually. If parseMode is provided, include it in JSON.
+        String jsonBody;
+        if (parseMode != null && !parseMode.isBlank()) {
+            jsonBody = String.format(
+                    "{\"chat_id\":\"%s\",\"text\":\"%s\",\"parse_mode\":\"%s\"}",
+                    chatId,
+                    escapeJson(text),
+                    escapeJson(parseMode)
+            );
+        } else {
+            jsonBody = String.format(
+                    "{\"chat_id\":\"%s\",\"text\":\"%s\"}",
+                    chatId,
+                    escapeJson(text)
+            );
+        }
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(15))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(
+                request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() == 200) {
+            return response.body();
+        } else {
+            throw new RuntimeException("Telegram API returned HTTP " + response.statusCode() + ": " + response.body());
+        }
+    }
+
     // ===========================================================================
     // FORMATTING UTILITIES
     // ===========================================================================
