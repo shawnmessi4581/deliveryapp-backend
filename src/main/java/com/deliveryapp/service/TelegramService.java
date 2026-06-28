@@ -137,7 +137,7 @@ public class TelegramService {
         StringBuilder sb = new StringBuilder();
 
         // ── Header ──────────────────────────────────────────────────────────────
-        sb.append("🛒 *طلب جديد!*\n");
+        sb.append("🛒 *طلب جديد\\!*\n");
         sb.append("🔢 رقم الطلب: `#").append(order.getOrderNumber()).append("`\n");
         sb.append(DIVIDER).append("\n\n");
 
@@ -168,7 +168,7 @@ public class TelegramService {
 
             // Quantity × unit price → item total
             sb.append("    الكمية: ×").append(item.getQuantity())
-              .append("  |  السعر: ").append(formatPrice(item.getUnitPrice()))
+              .append("  \\|  السعر: ").append(formatPrice(item.getUnitPrice()))
               .append("  ←  *").append(formatPrice(item.getTotalPrice())).append("*\n");
 
             // Item-level notes (e.g. "بدون بصل")
@@ -215,7 +215,7 @@ public class TelegramService {
         // ── Timestamp ────────────────────────────────────────────────────────────
         sb.append("\n");
         LocalDateTime now = order.getCreatedAt() != null ? order.getCreatedAt() : LocalDateTime.now();
-        sb.append("⏰ ").append(now.format(TIME_FORMATTER));
+        sb.append("⏰ ").append(escapeMarkdown(now.format(TIME_FORMATTER)));
 
         return sb.toString();
     }
