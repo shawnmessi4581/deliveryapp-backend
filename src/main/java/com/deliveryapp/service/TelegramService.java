@@ -97,9 +97,6 @@ public class TelegramService {
                     item.getProductName() != null ? item.getProductName() : "منتج");
 
             if (item.getVariantDetails() != null && !item.getVariantDetails().isBlank()) {
-                // FIX: the literal "(" and ")" here were never escaped — only their
-                // contents went through escapeMarkdown(). Any variant text caused
-                // Telegram's MarkdownV2 parser to reject the whole message.
                 sb.append("  • ").append(productName)
                         .append(" _\\(").append(escapeMarkdown(item.getVariantDetails())).append("\\)_\n");
             } else {
@@ -122,7 +119,31 @@ public class TelegramService {
         }
 
         sb.append("\n").append(DIVIDER).append("\n");
-        sb.append("💰 *إجمالي هذا المتجر:* ").append(formatPrice(storeSubtotal)).append("\n");
+
+        // ====================================================================
+        // 🟢 NEW LOGIC: CALCULATE STORE COMMISSION & FINAL PAYOUT
+        // ====================================================================
+
+        double commissionRate = store.getCommissionPercentage() != null ? store.getCommissionPercentage() : 0.0;
+        double commissionAmount = storeSubtotal * (commissionRate / 100.0);
+        double storePayout = storeSubtotal - commissionAmount; // What the driver gives the store
+
+        sb.append("💰 *إجمالي قيمة المنتجات:* ").append(formatPrice(storeSubtotal)).append("\n");
+
+        if (commissionRate > 0) {
+            // Note: we format the percentage dynamically to display clean numbers (e.g.
+            // 10%)
+            String commissionText = String.format("%.1f", commissionRate).replace(".0", "");
+            sb.append("📉 *عمولة التطبيق \\(").append(escapeMarkdown(commissionText)).append("%\\):* \\-")
+                    .append(formatPrice(commissionAmount)).append("\n");
+        }
+
+        sb.append("💵 *المبلغ المطلوب تسليمه لكم \\(من السائق\\):* *").append(formatPrice(storePayout)).append("*\n");
+
+        // ====================================================================
+
+        sb.append("\n").append(DIVIDER).append("\n");
+        sb.append("🧾 *معلومات الفاتورة الكلية للعميل:*\n");
 
         if (order.getDeliveryFee() != null && order.getDeliveryFee() > 0) {
             sb.append("🚗 *رسوم التوصيل:* ").append(formatPrice(order.getDeliveryFee())).append("\n");
@@ -130,7 +151,8 @@ public class TelegramService {
         if (order.getDiscountAmount() != null && order.getDiscountAmount() > 0) {
             sb.append("🎁 *الخصم:* \\-").append(formatPrice(order.getDiscountAmount())).append("\n");
         }
-        sb.append("💳 *إجمالي الطلب الكلي:* *").append(formatPrice(order.getTotalAmount())).append("*\n");
+        sb.append("💳 *إجمالي الطلب الكلي المطلوب من العميل:* *").append(formatPrice(order.getTotalAmount()))
+                .append("*\n");
 
         sb.append("\n");
         if (order.getDeliveryAddress() != null) {
