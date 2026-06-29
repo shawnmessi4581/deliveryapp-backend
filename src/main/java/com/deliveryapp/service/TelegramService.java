@@ -121,7 +121,7 @@ public class TelegramService {
         sb.append("\n").append(DIVIDER).append("\n");
 
         // ====================================================================
-        // 🟢 NEW LOGIC: CALCULATE STORE COMMISSION & FINAL PAYOUT
+        // CALCULATE STORE COMMISSION & FINAL PAYOUT
         // ====================================================================
 
         double commissionRate = store.getCommissionPercentage() != null ? store.getCommissionPercentage() : 0.0;
@@ -131,50 +131,27 @@ public class TelegramService {
         sb.append("💰 *إجمالي قيمة المنتجات:* ").append(formatPrice(storeSubtotal)).append("\n");
 
         if (commissionRate > 0) {
-            // Note: we format the percentage dynamically to display clean numbers (e.g.
-            // 10%)
             String commissionText = String.format("%.1f", commissionRate).replace(".0", "");
             sb.append("📉 *عمولة التطبيق \\(").append(escapeMarkdown(commissionText)).append("%\\):* \\-")
                     .append(formatPrice(commissionAmount)).append("\n");
         }
 
         sb.append("💵 *المبلغ المطلوب تسليمه لكم \\(من السائق\\):* *").append(formatPrice(storePayout)).append("*\n");
+        sb.append(DIVIDER).append("\n\n");
 
         // ====================================================================
+        // CUSTOMER NOTE, TIME & END MESSAGE
+        // ====================================================================
 
-        sb.append("\n").append(DIVIDER).append("\n");
-        sb.append("🧾 *معلومات الفاتورة الكلية للعميل:*\n");
-
-        if (order.getDeliveryFee() != null && order.getDeliveryFee() > 0) {
-            sb.append("🚗 *رسوم التوصيل:* ").append(formatPrice(order.getDeliveryFee())).append("\n");
-        }
-        if (order.getDiscountAmount() != null && order.getDiscountAmount() > 0) {
-            sb.append("🎁 *الخصم:* \\-").append(formatPrice(order.getDiscountAmount())).append("\n");
-        }
-        sb.append("💳 *إجمالي الطلب الكلي المطلوب من العميل:* *").append(formatPrice(order.getTotalAmount()))
-                .append("*\n");
-
-        sb.append("\n");
-        if (order.getDeliveryAddress() != null) {
-            sb.append("📍 *العنوان:* ").append(escapeMarkdown(order.getDeliveryAddress())).append("\n");
-        }
-        if (order.getSelectedInstruction() != null && !order.getSelectedInstruction().isBlank()) {
-            sb.append("📋 *تعليمات التوصيل:* ").append(escapeMarkdown(order.getSelectedInstruction())).append("\n");
-        }
         if (order.getOrderNote() != null && !order.getOrderNote().isBlank()) {
-            sb.append("💬 *ملاحظة العميل:* _").append(escapeMarkdown(order.getOrderNote())).append("_\n");
+            sb.append("💬 *ملاحظة العميل:* _").append(escapeMarkdown(order.getOrderNote())).append("_\n\n");
         }
 
-        if (order.getUser() != null) {
-            sb.append("👤 *العميل:* ").append(escapeMarkdown(order.getUser().getName())).append("\n");
-            if (order.getUser().getPhoneNumber() != null) {
-                sb.append("📞 ").append(escapeMarkdown(order.getUser().getPhoneNumber())).append("\n");
-            }
-        }
-
-        sb.append("\n");
         LocalDateTime now = order.getCreatedAt() != null ? order.getCreatedAt() : LocalDateTime.now();
-        sb.append("⏰ ").append(escapeMarkdown(now.format(TIME_FORMATTER)));
+        sb.append("⏰ ").append(escapeMarkdown(now.format(TIME_FORMATTER))).append("\n\n");
+
+        // NEW: End of week rating message
+        sb.append("⭐ _").append(escapeMarkdown("سيتم ارسال تقييم مطعمكم من قبل العميل في نهاية الاسبوع")).append("_\n");
 
         return sb.toString();
     }
