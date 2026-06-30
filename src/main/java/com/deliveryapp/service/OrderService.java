@@ -762,4 +762,9 @@ public class OrderService {
             return now.isAfter(store.getOpeningTime()) && now.isBefore(store.getClosingTime());
         }
     }
+
+    // 🟢 NEW: Vendor gets their orders
+    public Page<Order> getVendorOrders(Long storeId, Pageable pageable) {
+        return orderRepository.findByStores_StoreIdOrderByCreatedAtDesc(storeId, pageable);
+    }
 }

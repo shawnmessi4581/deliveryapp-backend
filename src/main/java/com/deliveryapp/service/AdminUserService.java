@@ -2,6 +2,7 @@ package com.deliveryapp.service;
 
 import com.deliveryapp.dto.user.CreateDriverRequest;
 import com.deliveryapp.dto.user.CreateUserRequest;
+import com.deliveryapp.entity.Store;
 import com.deliveryapp.entity.User;
 import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.DuplicateResourceException;
@@ -11,6 +12,7 @@ import com.deliveryapp.repository.FavoriteRepository;
 import com.deliveryapp.repository.NotificationRepository;
 import com.deliveryapp.repository.OrderRepository;
 import com.deliveryapp.repository.OtpVerificationRepository;
+import com.deliveryapp.repository.StoreRepository;
 import com.deliveryapp.repository.UserAddressRepository;
 import com.deliveryapp.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,7 @@ public class AdminUserService {
     private final UserAddressRepository addressRepository;
     private final OrderRepository orderRepository;
     private final OtpVerificationRepository otpRepository;
+    private final StoreRepository storeRepository; // 🟢 NEW: For linking vendors to stores
 
     public List<User> getAllUsers() {
         return userRepository.findAll();
@@ -169,12 +172,22 @@ public class AdminUserService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
 
-        if (request.getRole() == UserType.ADMIN || request.getRole() == UserType.EMPLOYEE) {
+        if (request.getRole() == UserType.ADMIN || request.getRole() == UserType.EMPLOYEE
+                || request.getRole() == UserType.VENDOR) {
             user.setUserType(request.getRole());
         } else {
             throw new InvalidDataException("دور غير صالح. استخدم ADMIN أو EMPLOYEE.");
         }
-
+        // 🟢 NEW: Link Store if VENDOR
+        if (request.getRole() == UserType.VENDOR) {
+            if (request.getManagedStoreId() == null) {
+                throw new InvalidDataException("يجب تحديد المتجر لهذا البائع"); // "Store ID required for vendor"
+            }
+            // Assuming you have storeRepository injected in AdminUserService
+            Store store = storeRepository.findById(request.getManagedStoreId())
+                    .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود"));
+            user.setManagedStore(store);
+        }
         user.setIsActive(true);
         user.setCreatedAt(LocalDateTime.now());
 

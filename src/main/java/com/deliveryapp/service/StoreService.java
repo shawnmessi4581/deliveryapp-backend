@@ -146,7 +146,8 @@ public class StoreService {
         }
         // 🟢 FIX: Handle removing SubCategories
         if (request.getSubCategoryIds() != null) {
-            if (request.getSubCategoryIds().isEmpty() || (request.getSubCategoryIds().size() == 1 && request.getSubCategoryIds().get(0) <= 0)) {
+            if (request.getSubCategoryIds().isEmpty()
+                    || (request.getSubCategoryIds().size() == 1 && request.getSubCategoryIds().get(0) <= 0)) {
                 store.setSubCategories(new java.util.ArrayList<>());
             } else {
                 List<SubCategory> subs = subCategoryRepository.findAllById(request.getSubCategoryIds());
@@ -182,4 +183,15 @@ public class StoreService {
             fileStorageService.deleteFile(store.getCoverImage());
         storeRepository.deleteById(id);
     }
+    // ================= VENDOR APP =================
+
+    @Transactional
+    public Store toggleStoreBusyStatus(Long storeId, Boolean isBusy) {
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId));
+
+        store.setIsBusy(isBusy);
+        return storeRepository.save(store);
+    }
+
 }

@@ -41,6 +41,10 @@ public class User {
 
     private String fcmToken;
     private Boolean isActive;
+    // 🟢 NEW: Link to Store (Only used if UserType == VENDOR)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "managed_store_id")
+    private Store managedStore;
 
     private LocalDateTime createdAt;
     private LocalDateTime lastLogin;

@@ -10,4 +10,5 @@ public class CreateUserRequest {
     private String email;
     private String password;
     private UserType role; // ADMIN or EMPLOYEE
+    private Long managedStoreId; // 🟢 NEW: Required if role is VENDOR
 }

@@ -37,6 +37,11 @@ public class UserMapper {
             dto.setCurrentLocationLat(user.getCurrentLocationLat());
             dto.setCurrentLocationLng(user.getCurrentLocationLng());
         }
+        // 🟢 NEW: Map Vendor Store Info
+        if (user.getUserType() == UserType.VENDOR && user.getManagedStore() != null) {
+            dto.setManagedStoreId(user.getManagedStore().getStoreId());
+            dto.setManagedStoreName(user.getManagedStore().getName());
+        }
         return dto;
     }
 

@@ -17,11 +17,14 @@ public class UserResponse {
     private String vehicleType;
     private String vehicleNumber;
     private Boolean isAvailable;
-    private Double rating;           // <--- Check this
+    private Double rating; // <--- Check this
     private Integer totalDeliveries; // <--- Check this
     private Double currentLocationLat;
     private Double currentLocationLng;
 
     // Address Info (Optional for driver list context, but part of user model)
     private String address;
+    // 🟢 NEW: Vendor Details
+    private Long managedStoreId;
+    private String managedStoreName;
 }

@@ -96,4 +96,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         String orderNumber, OrderStatus status, LocalDateTime start, LocalDateTime end,
                         Pageable pageable);
 
+        Page<Order> findByStores_StoreIdOrderByCreatedAtDesc(Long storeId, Pageable pageable);
+
 }
