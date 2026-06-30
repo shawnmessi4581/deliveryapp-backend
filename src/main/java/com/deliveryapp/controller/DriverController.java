@@ -6,6 +6,7 @@ import com.deliveryapp.dto.user.DriverLocationResponse;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.enums.OrderStatus;
 import com.deliveryapp.mapper.order.OrderMapper; // Import the Mapper
+import com.deliveryapp.service.DriverOrderService;
 import com.deliveryapp.service.OrderService;
 import com.deliveryapp.service.UserService;
 
@@ -30,6 +31,7 @@ public class DriverController {
     private final OrderService orderService;
     private final OrderMapper orderMapper; // Inject Mapper
     private final UserService userService; // 👉 Inject this
+    private final DriverOrderService driverOrderService;
 
     // 🟢 GET DRIVER ORDERS (Paginated + Search)
     @GetMapping("/{driverId}/orders")
@@ -41,7 +43,7 @@ public class DriverController {
             @RequestParam(defaultValue = "10") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
-        Page<Order> orderPage = orderService.getDriverOrders(driverId, active, orderNumber, pageable);
+        Page<Order> orderPage = driverOrderService.getDriverOrders(driverId, active, orderNumber, pageable);
 
         List<OrderResponse> content = orderPage.getContent().stream()
                 .map(orderMapper::toOrderResponse)
@@ -58,7 +60,7 @@ public class DriverController {
             @PathVariable Long orderId,
             @RequestParam Boolean accept) {
 
-        Order order = orderService.driverRespondToOrder(orderId, driverId, accept);
+        Order order = driverOrderService.driverRespondToOrder(orderId, driverId, accept);
         return ResponseEntity.ok(orderMapper.toOrderResponse(order));
     }
     // 2. TOGGLE AVAILABILITY (ONLINE / OFFLINE)

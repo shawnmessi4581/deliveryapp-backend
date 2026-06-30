@@ -1,21 +1,15 @@
 package com.deliveryapp.service;
 
 import com.deliveryapp.dto.order.*;
-import com.deliveryapp.dto.websocket.OrderWebSocketEvent;
 import com.deliveryapp.entity.*;
-import com.deliveryapp.enums.DriverOrderStatus;
 import com.deliveryapp.enums.OrderStatus;
 import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
-import com.deliveryapp.mapper.order.OrderMapper;
 import com.deliveryapp.repository.*;
-import com.deliveryapp.util.DistanceUtil;
 import com.deliveryapp.util.MathUtil;
 import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -24,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -40,7 +33,6 @@ public class OrderService {
     private final ProductRepository productRepository;
     private final ProductVariantRepository variantRepository;
     private final UserAddressRepository addressRepository;
-    private final StoreRepository storeRepository;
     private final CouponUsageRepository couponUsageRepository;
     private final ColorRepository colorRepository;
 
@@ -48,17 +40,12 @@ public class OrderService {
     private final NotificationService notificationService;
     private final PricingService pricingService;
     private final TelegramService telegramService;
+    private final OrderCalculationService calculationService; // 🟢 Inject new calculation service
+    private final OrderWebSocketService webSocketService;
 
-    private final DistanceUtil distanceUtil;
     private final UrlUtil urlUtil;
     private final MathUtil mathUtil;
 
-    private final SimpMessagingTemplate messagingTemplate;
-    private final OrderMapper orderMapper;
-
-    // =================================================================================
-    // PLACE ORDER LOGIC
-    // =================================================================================
     @Transactional
     public Order placeOrder(PlaceOrderRequest request) {
 
@@ -146,14 +133,11 @@ public class OrderService {
         order.setDeliveryLatitude(userAddress.getLatitude());
         order.setDeliveryLongitude(userAddress.getLongitude());
         order.setSelectedInstruction(request.getInstruction());
-        // 🟢 NEW: Save the customer's custom note
         order.setOrderNote(request.getOrderNote());
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
 
-        // ============================================================
-        // 5. CALCULATE BEST ROUTE FEE (ROUNDED TO 10, WITH MINIMUM CHECK)
-        // ============================================================
+        // 5. CALCULATE BEST ROUTE FEE
         double maxFeePerKm = uniqueStores.stream()
                 .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
                 .max().orElse(0.0);
@@ -162,24 +146,20 @@ public class OrderService {
                 .mapToDouble(s -> s.getMinimumDeliveryFee() != null ? s.getMinimumDeliveryFee() : 0.0)
                 .max().orElse(0.0);
 
-        double totalDistanceKm = distanceUtil.calculateOptimizedDistance(
+        double totalDistanceKm = calculationService.calculateOptimizedDistance(
                 new ArrayList<>(uniqueStores),
                 userAddress.getLatitude(),
                 userAddress.getLongitude());
 
         double rawDeliveryFee = totalDistanceKm * maxFeePerKm;
 
-        // 🟢 FIX: Round up to nearest 10
         double deliveryFee = mathUtil.roundUpToNearestTen(rawDeliveryFee);
 
-        // 🟢 FIX: Apply minimum delivery fee
         if (deliveryFee < maxMinimumDeliveryFee) {
             deliveryFee = maxMinimumDeliveryFee;
         }
 
-        // ============================================================
         // 6. Handle Coupon Logic
-        // ============================================================
         double discountAmount = 0.0;
         Coupon validCoupon = null;
 
@@ -224,38 +204,26 @@ public class OrderService {
             System.err.println("Failed to notify staff: " + e.getMessage());
         }
 
-        // 🔔 Telegram: Notify each store of its own order section
         try {
             telegramService.notifyAllStoresOfOrder(savedOrder);
         } catch (Exception e) {
             System.err.println("Failed to send Telegram store notifications: " + e.getMessage());
         }
 
-        try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("CREATED",
-                    savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
-        } catch (Exception e) {
-            System.err.println("Failed to broadcast order creation via websocket: " + e.getMessage());
-        }
+        webSocketService.broadcastOrderCreated(savedOrder);
 
         return savedOrder;
     }
 
-    // =================================================================================
-    // ORDER MANAGEMENT
-    // =================================================================================
     @Transactional
     public Order updateOrderStatus(Long orderId, OrderStatus newStatus, Long userId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
 
-        // 1. SECURITY CHECK: If the user making the request is a DRIVER, ensure it is
-        // THEIR order
         User user = userRepository.findById(userId).orElse(null);
         if (user != null && user.getUserType() == UserType.DRIVER) {
             if (order.getDriver() == null || !order.getDriver().getUserId().equals(userId)) {
-                throw new InvalidDataException("لا يمكنك تعديل حالة طلب غير مسند إليك."); // "You cannot update an order
-                                                                                          // not assigned to you"
+                throw new InvalidDataException("لا يمكنك تعديل حالة طلب غير مسند إليك.");
             }
         }
 
@@ -263,7 +231,6 @@ public class OrderService {
         order.setStatus(newStatus);
         order.setUpdatedAt(LocalDateTime.now());
 
-        // 2. Handle Delivery Completion (Increment Driver Stats)
         if (newStatus == OrderStatus.DELIVERED) {
             order.setDeliveredAt(LocalDateTime.now());
 
@@ -278,7 +245,6 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
         logStatusChange(savedOrder, oldStatus, newStatus, "تم تحديث حالة الطلب بواسطة " + userId);
 
-        // 3. NOTIFY CUSTOMER BASED ON STATUS CHANGE
         if (newStatus == OrderStatus.CONFIRMED && oldStatus == OrderStatus.PENDING) {
             try {
                 notificationService.sendNotification(
@@ -309,13 +275,7 @@ public class OrderService {
             }
         }
 
-        try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED",
-                    savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
-        } catch (Exception e) {
-            System.err.println("Failed to broadcast order update via websocket: " + e.getMessage());
-        }
-
+        webSocketService.broadcastOrderUpdated(savedOrder);
         return savedOrder;
     }
 
@@ -340,7 +300,6 @@ public class OrderService {
                     coupon.setCurrentUsageCount(Math.max(0, coupon.getCurrentUsageCount() - 1));
                 }
             } catch (ResourceNotFoundException e) {
-                // Ignore
             }
         }
 
@@ -350,14 +309,28 @@ public class OrderService {
             System.err.println("Failed to notify staff of cancellation: " + e.getMessage());
         }
 
+        List<Long> storeIds = order.getStores().stream().map(Store::getStoreId)
+                .collect(java.util.stream.Collectors.toList());
+
         historyRepository.deleteByOrderOrderId(orderId);
         orderRepository.delete(order);
 
-        try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("DELETED", orderId, null));
-        } catch (Exception e) {
-            System.err.println("Failed to broadcast order cancellation via websocket: " + e.getMessage());
-        }
+        webSocketService.broadcastOrderDeleted(orderId, storeIds);
+    }
+
+    @Transactional
+    public void deleteOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
+
+        List<Long> storeIds = order.getStores().stream().map(Store::getStoreId)
+                .collect(java.util.stream.Collectors.toList());
+
+        historyRepository.deleteByOrderOrderId(orderId);
+        couponUsageRepository.deleteByOrderId(orderId);
+        orderRepository.deleteById(orderId);
+
+        webSocketService.broadcastOrderDeleted(orderId, storeIds);
     }
 
     private void logStatusChange(Order order, OrderStatus oldS, OrderStatus newS, String notes) {
@@ -370,10 +343,8 @@ public class OrderService {
         historyRepository.save(history);
     }
 
-    // 1. CUSTOMER: Get History (With Optional Order Number Search)
     public Page<Order> getUserOrders(Long userId, String orderNumber, Pageable pageable) {
         if (orderNumber != null && !orderNumber.trim().isEmpty()) {
-            // Partial Search
             return orderRepository.findByUserUserIdAndOrderNumberContainingIgnoreCaseOrderByCreatedAtDesc(userId,
                     orderNumber, pageable);
         }
@@ -385,342 +356,39 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
     }
 
-    // 2. ADMIN: Filtered List (With Optional Order Number Search)
     public Page<Order> getAdminOrders(String orderNumber, OrderStatus status, LocalDate startDate, LocalDate endDate,
             Pageable pageable) {
-
-        // Complex Filter Logic
         if (orderNumber != null && !orderNumber.trim().isEmpty()) {
-            if (startDate != null && endDate != null && status != null) {
+            if (startDate != null && endDate != null && status != null)
                 return orderRepository
                         .findByOrderNumberContainingIgnoreCaseAndStatusAndCreatedAtBetweenOrderByCreatedAtDesc(
                                 orderNumber, status, startDate.atStartOfDay(), endDate.atTime(23, 59, 59), pageable);
-            } else if (startDate != null && endDate != null) {
+            else if (startDate != null && endDate != null)
                 return orderRepository.findByOrderNumberContainingIgnoreCaseAndCreatedAtBetweenOrderByCreatedAtDesc(
                         orderNumber, startDate.atStartOfDay(), endDate.atTime(23, 59, 59), pageable);
-            } else if (status != null) {
-                return orderRepository.findByOrderNumberContainingIgnoreCaseAndStatusOrderByCreatedAtDesc(
-                        orderNumber, status, pageable);
-            } else {
+            else if (status != null)
+                return orderRepository.findByOrderNumberContainingIgnoreCaseAndStatusOrderByCreatedAtDesc(orderNumber,
+                        status, pageable);
+            else
                 return orderRepository.findByOrderNumberContainingIgnoreCaseOrderByCreatedAtDesc(orderNumber, pageable);
-            }
         }
-
-        // Standard Filter Logic (No Order Number)
         if (startDate != null && endDate != null) {
             LocalDateTime startDateTime = startDate.atStartOfDay();
             LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
-            if (status != null) {
+            if (status != null)
                 return orderRepository.findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(status, startDateTime,
                         endDateTime, pageable);
-            } else {
+            else
                 return orderRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDateTime, endDateTime, pageable);
-            }
         }
-
-        if (status != null) {
+        if (status != null)
             return orderRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
-        }
-
         return orderRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 
-    @Transactional
-    public void deleteOrder(Long orderId) {
-        if (!orderRepository.existsById(orderId)) {
-            throw new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId);
-        }
-        historyRepository.deleteByOrderOrderId(orderId);
-        couponUsageRepository.deleteByOrderId(orderId);
-        orderRepository.deleteById(orderId);
-
-        try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("DELETED", orderId, null));
-        } catch (Exception e) {
-            System.err.println("Failed to broadcast order deletion via websocket: " + e.getMessage());
-        }
+    public Page<Order> getVendorOrders(Long storeId, Pageable pageable) {
+        return orderRepository.findByStores_StoreIdOrderByCreatedAtDesc(storeId, pageable);
     }
-
-    // =================================================================================
-    // DRIVER & ASSIGNMENT
-    // =================================================================================
-
-    @Transactional
-    public Order assignDriver(Long orderId, Long driverId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
-
-        User driver = userRepository.findById(driverId)
-                .orElseThrow(() -> new ResourceNotFoundException("السائق غير موجود برقم: " + driverId));
-
-        if (driver.getUserType() != UserType.DRIVER) {
-            throw new InvalidDataException("المستخدم المحدد ليس سائقاً");
-        }
-
-        order.setDriver(driver);
-        order.setDriverOrderStatus(DriverOrderStatus.PENDING);
-
-        if (order.getStatus() == OrderStatus.PENDING) {
-            try {
-                notificationService.sendNotification(
-                        order.getUser().getUserId(),
-                        "تم تأكيد طلبك! ✅",
-                        "طلبك رقم " + order.getOrderNumber() + " قيد التجهيز الآن.",
-                        null,
-                        "ORDER_UPDATE",
-                        "order",
-                        order.getOrderId(),
-                        null);
-            } catch (Exception e) {
-                System.err.println("Failed to notify customer: " + e.getMessage());
-            }
-            order.setStatus(OrderStatus.CONFIRMED);
-        }
-
-        Order savedOrder = orderRepository.save(order);
-
-        try {
-            notificationService.sendNotification(
-                    driverId,
-                    "تم تعيين طلب جديد 🛵",
-                    "تم تعيينك للطلب رقم " + order.getOrderNumber(),
-                    null,
-                    "DRIVER_ASSIGNMENT",
-                    "order",
-                    orderId,
-                    null);
-        } catch (Exception e) {
-            System.err.println("Failed to notify driver: " + e.getMessage());
-        }
-
-        try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED",
-                    savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
-        } catch (Exception e) {
-            System.err.println("Failed to broadcast driver assignment via websocket: " + e.getMessage());
-        }
-
-        return savedOrder;
-    }
-
-    @Transactional
-    public Order driverRespondToOrder(Long orderId, Long driverId, boolean isAccepted) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود"));
-
-        if (order.getDriver() == null || !order.getDriver().getUserId().equals(driverId)) {
-            throw new InvalidDataException("ليس لديك إذن للوصول إلى هذا الطلب.");
-        }
-
-        if (isAccepted) {
-            order.setDriverOrderStatus(DriverOrderStatus.ACCEPTED);
-        } else {
-            order.setDriverOrderStatus(DriverOrderStatus.REJECTED);
-        }
-
-        Order savedOrder = orderRepository.save(order);
-
-        if (isAccepted && savedOrder.getDriver() != null) {
-            try {
-                notificationService.notifyStaffOfOrderAccepted(
-                        savedOrder.getOrderNumber(),
-                        savedOrder.getOrderId(),
-                        savedOrder.getDriver().getName());
-            } catch (Exception e) {
-                System.err.println("Failed to notify staff of accepted order: " + e.getMessage());
-            }
-        }
-
-        try {
-            messagingTemplate.convertAndSend("/topic/orders", new OrderWebSocketEvent("UPDATED",
-                    savedOrder.getOrderId(), orderMapper.toOrderResponse(savedOrder)));
-        } catch (Exception e) {
-            System.err.println("Failed to broadcast driver response via websocket: " + e.getMessage());
-        }
-
-        return savedOrder;
-    }
-
-    // 3. DRIVER: Get Orders (With Optional Order Number Search)
-    public Page<Order> getDriverOrders(Long driverId, Boolean activeOnly, String orderNumber, Pageable pageable) {
-        if (orderNumber != null && !orderNumber.trim().isEmpty()) {
-            return orderRepository.findByDriverUserIdAndOrderNumberContainingIgnoreCaseOrderByCreatedAtDesc(driverId,
-                    orderNumber, pageable);
-        }
-
-        if (Boolean.TRUE.equals(activeOnly)) {
-            List<OrderStatus> activeStatuses = Arrays.asList(
-                    OrderStatus.CONFIRMED,
-                    OrderStatus.PREPARING,
-                    OrderStatus.OUT_FOR_DELIVERY);
-            return orderRepository.findByDriverUserIdAndStatusInOrderByCreatedAtDesc(driverId, activeStatuses,
-                    pageable);
-        } else {
-            return orderRepository.findByDriverUserIdOrderByCreatedAtDesc(driverId, pageable);
-        }
-    }
-
-    // =================================================================================
-    // FEES & COUPONS (PRE-CALCULATION)
-    // =================================================================================
-
-    public DeliveryFeeResponse calculateDeliveryFee(Long storeId, Long addressId) {
-        Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود"));
-
-        UserAddress address = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود"));
-
-        double distance = distanceUtil.calculateOptimizedDistance(
-                List.of(store),
-                address.getLatitude(),
-                address.getLongitude());
-
-        Double feePerKm = store.getDeliveryFeeKM() != null ? store.getDeliveryFeeKM() : 0.0;
-        Double minFee = store.getMinimumDeliveryFee() != null ? store.getMinimumDeliveryFee() : 0.0;
-
-        double rawDeliveryFee = distance * feePerKm;
-        double deliveryFee = mathUtil.roundUpToNearestTen(rawDeliveryFee);
-
-        if (deliveryFee < minFee) {
-            deliveryFee = minFee;
-        }
-
-        DeliveryFeeResponse response = new DeliveryFeeResponse();
-        response.setDeliveryFee(deliveryFee);
-        response.setEstimatedTime(store.getEstimatedDeliveryTime());
-        response.setMaxMinimumDeliveryFee(minFee);
-        response.setTotalDistanceKm(distance);
-        response.setRouteSegments(List.of(
-                new DeliveryFeeResponse.RouteSegmentResponse(
-                        store.getName(),
-                        store.getName(),
-                        distance,
-                        "STORE_TO_USER")));
-
-        return response;
-    }
-
-    public DeliveryFeeResponse calculateMultiStoreFee(List<Long> storeIds, Long addressId) {
-        if (storeIds == null || storeIds.isEmpty()) {
-            throw new InvalidDataException("لم يتم توفير متاجر لحساب الرسوم");
-        }
-
-        List<Store> stores = storeRepository.findAllById(storeIds);
-        if (stores.isEmpty()) {
-            throw new ResourceNotFoundException("لم يتم العثور على متاجر صالحة");
-        }
-
-        UserAddress address = addressRepository.findById(addressId)
-                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود"));
-
-        double maxFeePerKm = stores.stream()
-                .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
-                .max().orElse(0.0);
-
-        double maxMinimumDeliveryFee = stores.stream()
-                .mapToDouble(s -> s.getMinimumDeliveryFee() != null ? s.getMinimumDeliveryFee() : 0.0)
-                .max().orElse(0.0);
-
-        double totalDistanceKm = distanceUtil.calculateOptimizedDistance(stores, address.getLatitude(),
-                address.getLongitude());
-
-        double rawDeliveryFee = totalDistanceKm * maxFeePerKm;
-        double deliveryFee = mathUtil.roundUpToNearestTen(rawDeliveryFee);
-
-        if (deliveryFee < maxMinimumDeliveryFee) {
-            deliveryFee = maxMinimumDeliveryFee;
-        }
-
-        String estimatedTime = stores.get(0).getEstimatedDeliveryTime();
-
-        List<DeliveryFeeResponse.RouteSegmentResponse> segments = new ArrayList<>();
-        for (int i = 0; i < stores.size() - 1; i++) {
-            Store fromStore = stores.get(i);
-            Store toStore = stores.get(i + 1);
-            double segmentDistance = distanceUtil.calculateDistance(
-                    fromStore.getLatitude(),
-                    fromStore.getLongitude(),
-                    toStore.getLatitude(),
-                    toStore.getLongitude());
-            segments.add(new DeliveryFeeResponse.RouteSegmentResponse(
-                    fromStore.getName(),
-                    toStore.getName(),
-                    segmentDistance,
-                    "STORE_TO_STORE"));
-        }
-
-        if (!stores.isEmpty()) {
-            Store lastStore = stores.get(stores.size() - 1);
-            double lastSegmentDistance = distanceUtil.calculateDistance(
-                    lastStore.getLatitude(),
-                    lastStore.getLongitude(),
-                    address.getLatitude(),
-                    address.getLongitude());
-            segments.add(new DeliveryFeeResponse.RouteSegmentResponse(
-                    lastStore.getName(),
-                    address.getLabel() != null ? address.getLabel() : "User",
-                    lastSegmentDistance,
-                    "STORE_TO_USER"));
-        }
-
-        DeliveryFeeResponse response = new DeliveryFeeResponse();
-        response.setDeliveryFee(deliveryFee);
-        response.setEstimatedTime(estimatedTime);
-        response.setMaxMinimumDeliveryFee(maxMinimumDeliveryFee);
-        response.setTotalDistanceKm(totalDistanceKm);
-        response.setRouteSegments(segments);
-
-        return response;
-    }
-
-    public CouponCheckResponse verifyCoupon(CouponCheckRequest request) {
-        Store store = storeRepository.findById(request.getStoreId())
-                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود"));
-
-        List<OrderItem> tempItems = new ArrayList<>();
-        double subtotal = 0.0;
-
-        for (OrderItemRequest itemReq : request.getItems()) {
-            Product product = productRepository.findById(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود"));
-
-            double price = pricingService.getFinalPriceInSYP(product);
-            if (itemReq.getVariantId() != null) {
-                ProductVariant variant = variantRepository.findById(itemReq.getVariantId())
-                        .orElseThrow(() -> new ResourceNotFoundException("النوع غير موجود"));
-                price += pricingService.getVariantFinalPriceInSYP(variant);
-            }
-
-            OrderItem tempItem = new OrderItem();
-            tempItem.setProduct(product);
-            tempItem.setQuantity(itemReq.getQuantity());
-            tempItem.setUnitPrice(price);
-            tempItem.setTotalPrice(price * itemReq.getQuantity());
-
-            tempItems.add(tempItem);
-            subtotal += tempItem.getTotalPrice();
-        }
-
-        Coupon coupon = couponService.validateCouponForOrder(
-                request.getCode(),
-                request.getUserId(),
-                tempItems,
-                store);
-
-        double discount = couponService.calculateDiscount(coupon, subtotal, 0.0);
-
-        return new CouponCheckResponse(
-                coupon.getCouponId(),
-                coupon.getCode(),
-                discount,
-                "تم تطبيق القسيمة بنجاح",
-                coupon.getDiscountType().name());
-    }
-
-    // =================================================================================
-    // TRACKING
-    // =================================================================================
 
     public OrderTrackingResponse trackOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
@@ -761,10 +429,5 @@ public class OrderService {
         } else {
             return now.isAfter(store.getOpeningTime()) && now.isBefore(store.getClosingTime());
         }
-    }
-
-    // 🟢 NEW: Vendor gets their orders
-    public Page<Order> getVendorOrders(Long storeId, Pageable pageable) {
-        return orderRepository.findByStores_StoreIdOrderByCreatedAtDesc(storeId, pageable);
     }
 }

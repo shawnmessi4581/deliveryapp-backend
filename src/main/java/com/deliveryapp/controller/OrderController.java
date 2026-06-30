@@ -4,6 +4,7 @@ import com.deliveryapp.dto.PagedResponse;
 import com.deliveryapp.dto.order.*;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.mapper.order.OrderMapper;
+import com.deliveryapp.service.OrderCalculationService;
 import com.deliveryapp.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,15 +25,17 @@ public class OrderController {
 
     private final OrderService orderService;
     private final OrderMapper orderMapper;
+    private final OrderCalculationService orderCalculationService;
 
     @PostMapping("/calc-fee")
     public ResponseEntity<DeliveryFeeResponse> calculateFee(@RequestBody DeliveryFeeRequest request) {
-        return ResponseEntity.ok(orderService.calculateMultiStoreFee(request.getStoreIds(), request.getAddressId()));
+        return ResponseEntity
+                .ok(orderCalculationService.calculateMultiStoreFee(request.getStoreIds(), request.getAddressId()));
     }
 
     @PostMapping("/verify-coupon")
     public ResponseEntity<CouponCheckResponse> verifyCoupon(@RequestBody CouponCheckRequest request) {
-        return ResponseEntity.ok(orderService.verifyCoupon(request));
+        return ResponseEntity.ok(orderCalculationService.verifyCoupon(request));
     }
 
     @PostMapping("/place")

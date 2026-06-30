@@ -9,7 +9,8 @@ import com.deliveryapp.entity.User;
 import com.deliveryapp.mapper.order.OrderMapper;
 import com.deliveryapp.mapper.user.UserMapper;
 import com.deliveryapp.service.AdminUserService;
-import com.deliveryapp.service.OrderService;
+import com.deliveryapp.service.DriverOrderService;
+// import com.deliveryapp.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -27,9 +28,10 @@ import java.util.stream.Collectors;
 public class AdminUserController {
 
     private final AdminUserService adminUserService;
-    private final OrderService orderService;
+    // private final OrderService orderService;
     private final UserMapper userMapper;
     private final OrderMapper orderMapper;
+    private final DriverOrderService driverOrderService;
 
     // --- USERS ---
     @GetMapping("/users")
@@ -93,7 +95,7 @@ public class AdminUserController {
     @PatchMapping("/{orderId}/assign/{driverId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<OrderResponse> assignDriver(@PathVariable Long orderId, @PathVariable Long driverId) {
-        Order order = orderService.assignDriver(orderId, driverId);
+        Order order = driverOrderService.assignDriver(orderId, driverId);
         return ResponseEntity.ok(orderMapper.toOrderResponse(order));
     }
 }
