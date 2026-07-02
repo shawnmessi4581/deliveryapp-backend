@@ -98,4 +98,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         Page<Order> findByStores_StoreIdOrderByCreatedAtDesc(Long storeId, Pageable pageable);
 
+        // 🟢 NEW: Get Orders by Store AND Statuses (For Vendor App "Active" view)
+        Page<Order> findByStores_StoreIdAndStatusInOrderByCreatedAtDesc(Long storeId, List<OrderStatus> statuses,
+                        Pageable pageable);
 }

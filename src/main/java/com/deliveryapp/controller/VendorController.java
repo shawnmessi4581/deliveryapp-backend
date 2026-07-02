@@ -3,6 +3,7 @@ package com.deliveryapp.controller;
 import com.deliveryapp.dto.PagedResponse;
 import com.deliveryapp.dto.catalog.ProductRequest;
 import com.deliveryapp.dto.catalog.ProductResponse;
+import com.deliveryapp.dto.catalog.StoreRequest; // 🟢 Import this
 import com.deliveryapp.dto.catalog.StoreResponse;
 import com.deliveryapp.dto.order.OrderResponse;
 import com.deliveryapp.entity.Order;
@@ -34,7 +35,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/vendor")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('VENDOR')") // 🔒 Only Vendors can access this!
+@PreAuthorize("hasRole('VENDOR')") // 🔒 Only Vendors
 public class VendorController {
 
     private final UserService userService;
@@ -57,16 +58,23 @@ public class VendorController {
     }
 
     // ==========================================
-    // 1. ORDERS
+    // 1. ORDERS (Split into Active / History)
     // ==========================================
+    // Usage: /api/vendor/orders?activeOnly=true <-- For the main kitchen screen
+    // Usage: /api/vendor/orders?activeOnly=false <-- For the history/accounting
+    // screen
+
     @GetMapping("/orders")
     public ResponseEntity<PagedResponse<OrderResponse>> getMyOrders(
+            @RequestParam(defaultValue = "true") Boolean activeOnly, // 🟢 NEW Parameter
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
         Long storeId = getVendorStoreId();
         Pageable pageable = PageRequest.of(page, size);
-        Page<Order> orderPage = orderService.getVendorOrders(storeId, pageable);
+
+        // Call the updated service method
+        Page<Order> orderPage = orderService.getVendorOrders(storeId, activeOnly, pageable);
 
         List<OrderResponse> content = orderPage.getContent().stream()
                 .map(orderMapper::toOrderResponse)
@@ -78,14 +86,37 @@ public class VendorController {
     }
 
     // ==========================================
-    // 2. STORE MANAGEMENT (Toggle Busy)
+    // 2. STORE MANAGEMENT
     // ==========================================
+
     @PatchMapping("/store/busy")
     public ResponseEntity<StoreResponse> toggleStoreBusy(@RequestParam Boolean isBusy) {
         Long storeId = getVendorStoreId();
-
-        // Call the new StoreService method
         Store updatedStore = storeService.toggleStoreBusyStatus(storeId, isBusy);
+        return ResponseEntity.ok(catalogMapper.toStoreResponse(updatedStore));
+    }
+
+    // 🟢 NEW: Update Vendor's Store Info
+    @PutMapping(value = "/store/update", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<StoreResponse> updateMyStore(
+            @ModelAttribute StoreRequest request,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(value = "logo", required = false) MultipartFile logo,
+            @RequestParam(value = "cover", required = false) MultipartFile cover) {
+
+        Long storeId = getVendorStoreId();
+
+        // Security: Ensure the vendor cannot change which category/subcategory they
+        // belong to,
+        // or their commission rate. Only Super Admins can do that.
+        // We override the request fields to null to protect them.
+        request.setCategoryId(null);
+        request.setSubCategoryIds(null);
+        request.setCommissionPercentage(null);
+        request.setDeliveryFeeKM(null); // Optional: Do you want vendors setting their own delivery fee? Usually no.
+
+        // Call the same update method used by Admin
+        Store updatedStore = storeService.updateStore(storeId, request, isActive, logo, cover);
 
         return ResponseEntity.ok(catalogMapper.toStoreResponse(updatedStore));
     }
@@ -100,8 +131,6 @@ public class VendorController {
 
         Long storeId = getVendorStoreId();
         Pageable pageable = PageRequest.of(page, size);
-
-        // Use existing public service method
         Page<Product> productPage = productService.getProductsByStore(storeId, pageable);
 
         List<ProductResponse> content = productPage.getContent().stream()
@@ -113,8 +142,6 @@ public class VendorController {
                 productPage.getTotalElements(), productPage.getTotalPages(), productPage.isLast()));
     }
 
-    // 🔴 Security: When updating a product, we MUST ensure the product actually
-    // belongs to this vendor!
     @PutMapping(value = "/products/{productId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ProductResponse> updateMyProduct(
             @PathVariable Long productId,
@@ -129,8 +156,7 @@ public class VendorController {
             throw new InvalidDataException("Access Denied: Product belongs to another store.");
         }
 
-        // Force the request to use the vendor's store ID (Security)
-        request.setStoreId(vendorStoreId);
+        request.setStoreId(vendorStoreId); // Force store ID
 
         Product updatedProduct = productService.updateProduct(productId, request, mainImage, galleryImages);
         return ResponseEntity.ok(catalogMapper.toProductResponse(updatedProduct));
@@ -142,8 +168,7 @@ public class VendorController {
             @RequestParam(value = "image", required = false) MultipartFile mainImage,
             @RequestParam(value = "gallery", required = false) List<MultipartFile> galleryImages) {
 
-        // Force the request to use the vendor's store ID
-        request.setStoreId(getVendorStoreId());
+        request.setStoreId(getVendorStoreId()); // Force store ID
 
         Product newProduct = productService.createProduct(request, mainImage, galleryImages);
         return ResponseEntity.ok(catalogMapper.toProductResponse(newProduct));

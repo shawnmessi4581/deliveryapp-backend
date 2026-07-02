@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -386,8 +387,23 @@ public class OrderService {
         return orderRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 
-    public Page<Order> getVendorOrders(Long storeId, Pageable pageable) {
-        return orderRepository.findByStores_StoreIdOrderByCreatedAtDesc(storeId, pageable);
+    // 🟢 UPDATED: Vendor gets their orders (Active vs History)
+    public Page<Order> getVendorOrders(Long storeId, Boolean activeOnly, Pageable pageable) {
+        if (Boolean.TRUE.equals(activeOnly)) {
+            // For vendors, "Active" means they have to do something with it, or it hasn't
+            // been delivered yet.
+            List<OrderStatus> activeStatuses = Arrays.asList(
+                    OrderStatus.PENDING,
+                    OrderStatus.CONFIRMED,
+                    OrderStatus.PREPARING,
+                    OrderStatus.READY_FOR_PICKUP,
+                    OrderStatus.OUT_FOR_DELIVERY);
+            return orderRepository.findByStores_StoreIdAndStatusInOrderByCreatedAtDesc(storeId, activeStatuses,
+                    pageable);
+        } else {
+            // Return everything (including DELIVERED and CANCELLED)
+            return orderRepository.findByStores_StoreIdOrderByCreatedAtDesc(storeId, pageable);
+        }
     }
 
     public OrderTrackingResponse trackOrder(Long orderId) {
