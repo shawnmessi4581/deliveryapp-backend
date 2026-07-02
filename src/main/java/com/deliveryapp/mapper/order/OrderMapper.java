@@ -4,7 +4,9 @@ import com.deliveryapp.dto.catalog.StoreResponse;
 import com.deliveryapp.dto.order.DeliveryFeeResponse;
 import com.deliveryapp.dto.order.OrderItemResponse;
 import com.deliveryapp.dto.order.OrderResponse;
+import com.deliveryapp.dto.order.VendorOrderResponse;
 import com.deliveryapp.entity.Order;
+import com.deliveryapp.entity.OrderItem;
 import com.deliveryapp.entity.Store;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.mapper.user.UserMapper;
@@ -173,6 +175,62 @@ public class OrderMapper {
         } else {
             response.setItems(Collections.emptyList());
         }
+
+        return response;
+    }
+
+    // 🟢 NEW: Mapper specifically for the Vendor App
+    public VendorOrderResponse toVendorOrderResponse(Order order, Long vendorStoreId) {
+        VendorOrderResponse response = new VendorOrderResponse();
+        response.setOrderId(order.getOrderId());
+        response.setOrderNumber(order.getOrderNumber());
+        response.setStatus(order.getStatus());
+        response.setCreatedAt(order.getCreatedAt());
+        response.setOrderNote(order.getOrderNote());
+
+        if (order.getUser() != null) {
+            response.setCustomerName(order.getUser().getName());
+        }
+
+        // 1. Filter Items: ONLY keep items belonging to this vendor's store
+        List<OrderItem> vendorItems = order.getOrderItems().stream()
+                .filter(item -> item.getProduct() != null &&
+                        item.getProduct().getStore() != null &&
+                        item.getProduct().getStore().getStoreId().equals(vendorStoreId))
+                .collect(Collectors.toList());
+
+        // 2. Map the filtered items to DTOs
+        List<OrderItemResponse> itemDtos = vendorItems.stream().map(item -> {
+            OrderItemResponse r = new OrderItemResponse();
+            r.setProductName(item.getProductName());
+            r.setVariantDetails(item.getVariantDetails());
+            r.setQuantity(item.getQuantity());
+            r.setUnitPrice(item.getUnitPrice());
+            r.setTotalPrice(item.getTotalPrice());
+            r.setNotes(item.getNotes());
+            r.setSelectedColor(item.getSelectedColor());
+            return r;
+        }).collect(Collectors.toList());
+
+        response.setItems(itemDtos);
+
+        // 3. Calculate Vendor Financials (Store Subtotal & Payout)
+        double storeSubtotal = vendorItems.stream().mapToDouble(OrderItem::getTotalPrice).sum();
+
+        // Get the commission rate from the first item (all belong to same store anyway)
+        double commissionRate = 0.0;
+        if (!vendorItems.isEmpty()) {
+            Double rate = vendorItems.get(0).getProduct().getStore().getCommissionPercentage();
+            if (rate != null)
+                commissionRate = rate;
+        }
+
+        double commissionAmount = storeSubtotal * (commissionRate / 100.0);
+        double storePayout = Math.ceil(storeSubtotal - commissionAmount); // Round up for SYP
+
+        response.setStoreSubtotal(storeSubtotal);
+        response.setCommissionAmount(commissionAmount);
+        response.setStorePayout(storePayout);
 
         return response;
     }

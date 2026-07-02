@@ -5,7 +5,7 @@ import com.deliveryapp.dto.catalog.ProductRequest;
 import com.deliveryapp.dto.catalog.ProductResponse;
 import com.deliveryapp.dto.catalog.StoreRequest; // 🟢 Import this
 import com.deliveryapp.dto.catalog.StoreResponse;
-import com.deliveryapp.dto.order.OrderResponse;
+import com.deliveryapp.dto.order.VendorOrderResponse;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.entity.Product;
 import com.deliveryapp.entity.Store;
@@ -65,19 +65,18 @@ public class VendorController {
     // screen
 
     @GetMapping("/orders")
-    public ResponseEntity<PagedResponse<OrderResponse>> getMyOrders(
-            @RequestParam(defaultValue = "true") Boolean activeOnly, // 🟢 NEW Parameter
+    public ResponseEntity<PagedResponse<VendorOrderResponse>> getMyOrders(
+            @RequestParam(defaultValue = "true") Boolean activeOnly,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
         Long storeId = getVendorStoreId();
         Pageable pageable = PageRequest.of(page, size);
-
-        // Call the updated service method
         Page<Order> orderPage = orderService.getVendorOrders(storeId, activeOnly, pageable);
 
-        List<OrderResponse> content = orderPage.getContent().stream()
-                .map(orderMapper::toOrderResponse)
+        // 🟢 FIX: Map to VendorOrderResponse, passing the storeId to filter items
+        List<VendorOrderResponse> content = orderPage.getContent().stream()
+                .map(order -> orderMapper.toVendorOrderResponse(order, storeId))
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(new PagedResponse<>(
