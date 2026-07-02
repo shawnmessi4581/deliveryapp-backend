@@ -1,5 +1,6 @@
 package com.deliveryapp.dto.user;
 
+import com.deliveryapp.dto.catalog.StoreResponse;
 import com.deliveryapp.entity.UserAddress;
 import lombok.Data;
 import java.util.List;
@@ -23,4 +24,7 @@ public class UserProfileResponse {
     private String vehicleType;
     private Double rating;
     private Integer totalDeliveries;
+
+    private StoreResponse managedStore;
+
 }

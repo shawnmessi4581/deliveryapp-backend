@@ -1,5 +1,6 @@
 package com.deliveryapp.dto.user;
 
+import com.deliveryapp.dto.catalog.StoreResponse;
 import com.deliveryapp.enums.UserType;
 import lombok.Data;
 
@@ -25,6 +26,6 @@ public class UserResponse {
     // Address Info (Optional for driver list context, but part of user model)
     private String address;
     // 🟢 NEW: Vendor Details
-    private Long managedStoreId;
-    private String managedStoreName;
+    private StoreResponse managedStore;
+
 }

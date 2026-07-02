@@ -6,6 +6,7 @@ import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.User;
 import com.deliveryapp.entity.UserAddress;
 import com.deliveryapp.enums.UserType;
+import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,7 @@ import java.util.List;
 public class UserMapper {
 
     private final UrlUtil urlUtil;
+    private final CatalogMapper catalogMapper; // 🟢 Inject this
 
     public UserResponse toUserResponse(User user) {
         UserResponse dto = new UserResponse();
@@ -37,10 +39,9 @@ public class UserMapper {
             dto.setCurrentLocationLat(user.getCurrentLocationLat());
             dto.setCurrentLocationLng(user.getCurrentLocationLng());
         }
-        // 🟢 NEW: Map Vendor Store Info
+        // 🟢 VENDOR LOGIC: Map the full store object
         if (user.getUserType() == UserType.VENDOR && user.getManagedStore() != null) {
-            dto.setManagedStoreId(user.getManagedStore().getStoreId());
-            dto.setManagedStoreName(user.getManagedStore().getName());
+            dto.setManagedStore(catalogMapper.toStoreResponse(user.getManagedStore()));
         }
         return dto;
     }
@@ -75,6 +76,11 @@ public class UserMapper {
             dto.setTotalDeliveries(user.getTotalDeliveries());
             dto.setVehicleType(user.getVehicleType());
             dto.setRating(user.getRating());
+        }
+
+        // 🟢 VENDOR LOGIC: Map the full store object
+        if (user.getUserType() == UserType.VENDOR && user.getManagedStore() != null) {
+            dto.setManagedStore(catalogMapper.toStoreResponse(user.getManagedStore()));
         }
 
         return dto;
