@@ -3,6 +3,7 @@ package com.deliveryapp.controller;
 import com.deliveryapp.dto.PagedResponse;
 import com.deliveryapp.dto.catalog.ProductRequest;
 import com.deliveryapp.dto.catalog.ProductResponse;
+import com.deliveryapp.dto.catalog.StoreCategoryResponse;
 import com.deliveryapp.dto.catalog.StoreRequest; // 🟢 Import this
 import com.deliveryapp.dto.catalog.StoreResponse;
 import com.deliveryapp.dto.order.VendorOrderResponse;
@@ -15,6 +16,7 @@ import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.mapper.order.OrderMapper;
 import com.deliveryapp.service.OrderService;
 import com.deliveryapp.service.ProductService;
+import com.deliveryapp.service.StoreCategoryService;
 import com.deliveryapp.service.StoreService;
 import com.deliveryapp.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +46,7 @@ public class VendorController {
     private final StoreService storeService;
     private final OrderMapper orderMapper;
     private final CatalogMapper catalogMapper;
+    private final StoreCategoryService storeCategoryService;
 
     // --- HELPER: Get Logged In Vendor's Store ID ---
     private Long getVendorStoreId() {
@@ -123,14 +126,45 @@ public class VendorController {
     // ==========================================
     // 3. PRODUCT MANAGEMENT
     // ==========================================
+    // 🟢 NEW: Get Store Categories (For Vendor App Tabs/Filters)
+    @GetMapping("/store-categories")
+    public ResponseEntity<List<StoreCategoryResponse>> getMyStoreCategories() {
+        Long storeId = getVendorStoreId();
+
+        // Return ALL categories (active and inactive) so the vendor can manage them
+        List<StoreCategoryResponse> categories = storeCategoryService.getAllCategoriesForStore(storeId).stream()
+                // You can reuse mapToResponse from StoreCategoryController or copy it here
+                .map(sc -> {
+                    StoreCategoryResponse dto = new StoreCategoryResponse();
+                    dto.setStoreCategoryId(sc.getStoreCategoryId());
+                    dto.setStoreId(sc.getStore().getStoreId());
+                    dto.setName(sc.getName());
+                    dto.setIsActive(sc.getIsActive());
+                    dto.setDisplayOrder(sc.getDisplayOrder());
+                    return dto;
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(categories);
+    }
+
     @GetMapping("/products")
     public ResponseEntity<PagedResponse<ProductResponse>> getMyProducts(
+            @RequestParam(required = false) Long storeCategoryId, // Optional Filter
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
         Long storeId = getVendorStoreId();
         Pageable pageable = PageRequest.of(page, size);
-        Page<Product> productPage = productService.getProductsByStore(storeId, pageable);
+        Page<Product> productPage;
+
+        if (storeCategoryId != null) {
+            // Fetch Filtered
+            productPage = productService.getProductsByStoreAndStoreCategory(storeId, storeCategoryId, pageable);
+        } else {
+            // Fetch All
+            productPage = productService.getProductsByStore(storeId, pageable);
+        }
 
         List<ProductResponse> content = productPage.getContent().stream()
                 .map(catalogMapper::toProductResponse)
