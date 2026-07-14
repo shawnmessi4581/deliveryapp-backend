@@ -1,8 +1,8 @@
 package com.deliveryapp.controller;
 
 import com.deliveryapp.dto.PagedResponse;
+import com.deliveryapp.dto.catalog.AdminProductResponse;
 import com.deliveryapp.dto.catalog.ProductRequest;
-import com.deliveryapp.dto.catalog.ProductResponse;
 import com.deliveryapp.dto.catalog.StoreCategoryResponse;
 import com.deliveryapp.dto.catalog.StoreRequest; // 🟢 Import this
 import com.deliveryapp.dto.catalog.StoreResponse;
@@ -12,6 +12,7 @@ import com.deliveryapp.entity.Product;
 import com.deliveryapp.entity.Store;
 import com.deliveryapp.entity.User;
 import com.deliveryapp.exception.InvalidDataException;
+import com.deliveryapp.mapper.catalog.AdminCatalogMapper;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.mapper.order.OrderMapper;
 import com.deliveryapp.service.OrderService;
@@ -47,6 +48,7 @@ public class VendorController {
     private final OrderMapper orderMapper;
     private final CatalogMapper catalogMapper;
     private final StoreCategoryService storeCategoryService;
+    private final AdminCatalogMapper adminCatalogMapper; // 🟢 Inject this
 
     // --- HELPER: Get Logged In Vendor's Store ID ---
     private Long getVendorStoreId() {
@@ -149,61 +151,79 @@ public class VendorController {
     }
 
     @GetMapping("/products")
-    public ResponseEntity<PagedResponse<ProductResponse>> getMyProducts(
-            @RequestParam(required = false) Long storeCategoryId, // Optional Filter
+    public ResponseEntity<PagedResponse<AdminProductResponse>> getMyProducts(
+            @RequestParam(required = false) Long storeCategoryId, 
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-
+        
         Long storeId = getVendorStoreId();
         Pageable pageable = PageRequest.of(page, size);
         Page<Product> productPage;
 
         if (storeCategoryId != null) {
-            // Fetch Filtered
             productPage = productService.getProductsByStoreAndStoreCategory(storeId, storeCategoryId, pageable);
         } else {
-            // Fetch All
             productPage = productService.getProductsByStore(storeId, pageable);
         }
 
-        List<ProductResponse> content = productPage.getContent().stream()
-                .map(catalogMapper::toProductResponse)
+        // 🟢 Use Admin Mapper so Vendor sees raw prices (USD/SYP)
+        List<AdminProductResponse> content = productPage.getContent().stream()
+                .map(adminCatalogMapper::toAdminProductResponse)
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(new PagedResponse<>(
                 content, productPage.getNumber(), productPage.getSize(),
-                productPage.getTotalElements(), productPage.getTotalPages(), productPage.isLast()));
+                productPage.getTotalElements(), productPage.getTotalPages(), productPage.isLast()
+        ));
+    }
+
+    @PostMapping(value = "/products", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<AdminProductResponse> createMyProduct(
+            @ModelAttribute ProductRequest request,
+            @RequestParam(value = "image", required = false) MultipartFile mainImage,
+            @RequestParam(value = "gallery", required = false) List<MultipartFile> galleryImages) {
+        
+        // Force the request to use the vendor's store ID
+        request.setStoreId(getVendorStoreId());
+
+        Product newProduct = productService.createProduct(request, mainImage, galleryImages);
+        return ResponseEntity.ok(adminCatalogMapper.toAdminProductResponse(newProduct));
     }
 
     @PutMapping(value = "/products/{productId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ProductResponse> updateMyProduct(
+    public ResponseEntity<AdminProductResponse> updateMyProduct(
             @PathVariable Long productId,
             @ModelAttribute ProductRequest request,
             @RequestParam(value = "image", required = false) MultipartFile mainImage,
             @RequestParam(value = "gallery", required = false) List<MultipartFile> galleryImages) {
-
+        
         Long vendorStoreId = getVendorStoreId();
         Product existingProduct = productService.getProductById(productId);
-
+        
+        // Security Check
         if (!existingProduct.getStore().getStoreId().equals(vendorStoreId)) {
             throw new InvalidDataException("Access Denied: Product belongs to another store.");
         }
 
-        request.setStoreId(vendorStoreId); // Force store ID
+        request.setStoreId(vendorStoreId); 
 
         Product updatedProduct = productService.updateProduct(productId, request, mainImage, galleryImages);
-        return ResponseEntity.ok(catalogMapper.toProductResponse(updatedProduct));
+        return ResponseEntity.ok(adminCatalogMapper.toAdminProductResponse(updatedProduct));
     }
 
-    @PostMapping(value = "/products", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ProductResponse> createMyProduct(
-            @ModelAttribute ProductRequest request,
-            @RequestParam(value = "image", required = false) MultipartFile mainImage,
-            @RequestParam(value = "gallery", required = false) List<MultipartFile> galleryImages) {
+    // 🟢 NEW: DELETE PRODUCT
+    @DeleteMapping("/products/{productId}")
+    public ResponseEntity<String> deleteMyProduct(@PathVariable Long productId) {
+        Long vendorStoreId = getVendorStoreId();
+        Product existingProduct = productService.getProductById(productId);
+        
+        // Security Check
+        if (!existingProduct.getStore().getStoreId().equals(vendorStoreId)) {
+            throw new InvalidDataException("Access Denied: Product belongs to another store.");
+        }
 
-        request.setStoreId(getVendorStoreId()); // Force store ID
-
-        Product newProduct = productService.createProduct(request, mainImage, galleryImages);
-        return ResponseEntity.ok(catalogMapper.toProductResponse(newProduct));
+        // Use the existing service method (which handles soft delete if ordered)
+        String message = productService.deleteProduct(productId);
+        return ResponseEntity.ok(message);
     }
 }
