@@ -2,6 +2,8 @@ package com.deliveryapp.controller;
 
 import com.deliveryapp.dto.PagedResponse;
 import com.deliveryapp.dto.catalog.AdminProductResponse;
+import com.deliveryapp.dto.catalog.AdminProductVariantResponse;
+import com.deliveryapp.dto.catalog.ColorResponse;
 import com.deliveryapp.dto.catalog.ProductRequest;
 import com.deliveryapp.dto.catalog.StoreCategoryResponse;
 import com.deliveryapp.dto.catalog.StoreRequest; // 🟢 Import this
@@ -9,13 +11,16 @@ import com.deliveryapp.dto.catalog.StoreResponse;
 import com.deliveryapp.dto.order.VendorOrderResponse;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.entity.Product;
+import com.deliveryapp.entity.ProductVariant;
 import com.deliveryapp.entity.Store;
 import com.deliveryapp.entity.User;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.mapper.catalog.AdminCatalogMapper;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.mapper.order.OrderMapper;
+import com.deliveryapp.service.ColorService;
 import com.deliveryapp.service.OrderService;
+import com.deliveryapp.service.PricingService;
 import com.deliveryapp.service.ProductService;
 import com.deliveryapp.service.StoreCategoryService;
 import com.deliveryapp.service.StoreService;
@@ -49,6 +54,8 @@ public class VendorController {
     private final CatalogMapper catalogMapper;
     private final StoreCategoryService storeCategoryService;
     private final AdminCatalogMapper adminCatalogMapper; // 🟢 Inject this
+    private final ColorService colorService; // 🟢 Added
+    private final PricingService pricingService; // 🟢 Added
 
     // --- HELPER: Get Logged In Vendor's Store ID ---
     private Long getVendorStoreId() {
@@ -152,10 +159,10 @@ public class VendorController {
 
     @GetMapping("/products")
     public ResponseEntity<PagedResponse<AdminProductResponse>> getMyProducts(
-            @RequestParam(required = false) Long storeCategoryId, 
+            @RequestParam(required = false) Long storeCategoryId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        
+
         Long storeId = getVendorStoreId();
         Pageable pageable = PageRequest.of(page, size);
         Page<Product> productPage;
@@ -173,8 +180,7 @@ public class VendorController {
 
         return ResponseEntity.ok(new PagedResponse<>(
                 content, productPage.getNumber(), productPage.getSize(),
-                productPage.getTotalElements(), productPage.getTotalPages(), productPage.isLast()
-        ));
+                productPage.getTotalElements(), productPage.getTotalPages(), productPage.isLast()));
     }
 
     @PostMapping(value = "/products", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -182,7 +188,7 @@ public class VendorController {
             @ModelAttribute ProductRequest request,
             @RequestParam(value = "image", required = false) MultipartFile mainImage,
             @RequestParam(value = "gallery", required = false) List<MultipartFile> galleryImages) {
-        
+
         // Force the request to use the vendor's store ID
         request.setStoreId(getVendorStoreId());
 
@@ -196,16 +202,16 @@ public class VendorController {
             @ModelAttribute ProductRequest request,
             @RequestParam(value = "image", required = false) MultipartFile mainImage,
             @RequestParam(value = "gallery", required = false) List<MultipartFile> galleryImages) {
-        
+
         Long vendorStoreId = getVendorStoreId();
         Product existingProduct = productService.getProductById(productId);
-        
+
         // Security Check
         if (!existingProduct.getStore().getStoreId().equals(vendorStoreId)) {
             throw new InvalidDataException("Access Denied: Product belongs to another store.");
         }
 
-        request.setStoreId(vendorStoreId); 
+        request.setStoreId(vendorStoreId);
 
         Product updatedProduct = productService.updateProduct(productId, request, mainImage, galleryImages);
         return ResponseEntity.ok(adminCatalogMapper.toAdminProductResponse(updatedProduct));
@@ -216,7 +222,7 @@ public class VendorController {
     public ResponseEntity<String> deleteMyProduct(@PathVariable Long productId) {
         Long vendorStoreId = getVendorStoreId();
         Product existingProduct = productService.getProductById(productId);
-        
+
         // Security Check
         if (!existingProduct.getStore().getStoreId().equals(vendorStoreId)) {
             throw new InvalidDataException("Access Denied: Product belongs to another store.");
@@ -225,5 +231,49 @@ public class VendorController {
         // Use the existing service method (which handles soft delete if ordered)
         String message = productService.deleteProduct(productId);
         return ResponseEntity.ok(message);
+    }
+
+    @GetMapping("/colors")
+    public ResponseEntity<List<ColorResponse>> getAllColors() {
+        List<ColorResponse> response = colorService.getAllColors().stream().map(c -> {
+            ColorResponse dto = new ColorResponse();
+            dto.setColorId(c.getColorId());
+            dto.setName(c.getName());
+            dto.setHexCode(c.getHexCode());
+            return dto;
+        }).collect(Collectors.toList());
+        return ResponseEntity.ok(response);
+    } // 🟢 NEW: Add Product Variant (Vendor)
+
+    @PostMapping("/products/{productId}/variants")
+    public ResponseEntity<AdminProductVariantResponse> addMyProductVariant(
+            @PathVariable Long productId,
+            @RequestParam("name") String name,
+            @RequestParam("price") Double priceAdjustment) {
+
+        Long vendorStoreId = getVendorStoreId();
+        Product existingProduct = productService.getProductById(productId);
+
+        // Security Check: Only allow if product belongs to vendor's store
+        if (!existingProduct.getStore().getStoreId().equals(vendorStoreId)) {
+            throw new InvalidDataException("Access Denied: Product belongs to another store.");
+        }
+
+        ProductVariant variant = productService.addProductVariant(productId, name, priceAdjustment);
+
+        AdminProductVariantResponse responseDto = new AdminProductVariantResponse();
+        responseDto.setVariantId(variant.getVariantId());
+        responseDto.setVariantName(variant.getVariantValue());
+        responseDto.setPriceAdjustment(variant.getPriceAdjustment());
+        responseDto.setCalculatedPriceAdjustment(pricingService.getVariantFinalPriceInSYP(variant));
+
+        return ResponseEntity.ok(responseDto);
+    } // 🟢 NEW: Delete Product Variant (Vendor)
+
+    @DeleteMapping("/variants/{variantId}")
+    public ResponseEntity<String> deleteMyProductVariant(@PathVariable Long variantId) {
+        Long vendorStoreId = getVendorStoreId();
+        productService.deleteProductVariantSecurely(variantId, vendorStoreId);
+        return ResponseEntity.ok("تم حذف النوع بنجاح");
     }
 }

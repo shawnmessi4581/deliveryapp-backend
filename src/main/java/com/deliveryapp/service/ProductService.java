@@ -413,5 +413,17 @@ public class ProductService {
         }
 
         variantRepository.deleteById(variantId);
+    } // 🟢 NEW: Secure Variant Deletion for Vendor
+
+    @Transactional
+    public void deleteProductVariantSecurely(Long variantId, Long vendorStoreId) {
+        ProductVariant variant = variantRepository.findById(variantId)
+                .orElseThrow(() -> new ResourceNotFoundException("النوع غير موجود برقم: " + variantId));
+
+        if (!variant.getProduct().getStore().getStoreId().equals(vendorStoreId)) {
+            throw new InvalidDataException("Access Denied: Variant belongs to another store.");
+        }
+
+        variantRepository.deleteById(variantId);
     }
 }
