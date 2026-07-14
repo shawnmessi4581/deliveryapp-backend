@@ -23,6 +23,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -41,12 +42,15 @@ public class OrderService {
     private final NotificationService notificationService;
     private final PricingService pricingService;
     private final TelegramService telegramService;
-    private final OrderCalculationService calculationService; // 🟢 Inject new calculation service
+    private final OrderCalculationService calculationService;
     private final OrderWebSocketService webSocketService;
 
     private final UrlUtil urlUtil;
     private final MathUtil mathUtil;
 
+    // =================================================================================
+    // PLACE ORDER LOGIC
+    // =================================================================================
     @Transactional
     public Order placeOrder(PlaceOrderRequest request) {
 
@@ -199,28 +203,69 @@ public class OrderService {
 
         logStatusChange(savedOrder, null, OrderStatus.PENDING, "تم استلام الطلب");
 
+        // --- NOTIFICATIONS ---
+
+        // 1. Notify Admins and Employees
         try {
             notificationService.notifyStaffOfNewOrder(savedOrder.getOrderNumber(), savedOrder.getOrderId());
         } catch (Exception e) {
             System.err.println("Failed to notify staff: " + e.getMessage());
         }
 
+        // 2. 🟢 NEW: Notify Vendors (Store Owners)
+        try {
+            // Find all users who are VENDORS
+            List<User> allVendors = userRepository.findByUserType(UserType.VENDOR);
+
+            for (Store store : uniqueStores) {
+                // Find vendors whose managedStoreId matches this store
+                List<User> storeVendors = allVendors.stream()
+                        .filter(v -> v.getManagedStore() != null
+                                && v.getManagedStore().getStoreId().equals(store.getStoreId()))
+                        .collect(Collectors.toList());
+
+                for (User vendor : storeVendors) {
+                    notificationService.sendNotification(
+                            vendor.getUserId(),
+                            "طلب جديد! 🍽️",
+                            "لقد تلقيت طلباً جديداً (رقم " + savedOrder.getOrderNumber() + ")",
+                            null,
+                            "NEW_ORDER",
+                            "order",
+                            savedOrder.getOrderId(),
+                            null);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to notify vendors: " + e.getMessage());
+        }
+
+        // 3. Telegram Notifications
         try {
             telegramService.notifyAllStoresOfOrder(savedOrder);
         } catch (Exception e) {
             System.err.println("Failed to send Telegram store notifications: " + e.getMessage());
         }
 
-        webSocketService.broadcastOrderCreated(savedOrder);
+        // 4. WebSocket Broadcast
+        try {
+            webSocketService.broadcastOrderCreated(savedOrder);
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast order creation via websocket: " + e.getMessage());
+        }
 
         return savedOrder;
     }
 
+    // =================================================================================
+    // ORDER MANAGEMENT
+    // =================================================================================
     @Transactional
     public Order updateOrderStatus(Long orderId, OrderStatus newStatus, Long userId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
 
+        // SECURITY CHECK
         User user = userRepository.findById(userId).orElse(null);
         if (user != null && user.getUserType() == UserType.DRIVER) {
             if (order.getDriver() == null || !order.getDriver().getUserId().equals(userId)) {
@@ -246,6 +291,7 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
         logStatusChange(savedOrder, oldStatus, newStatus, "تم تحديث حالة الطلب بواسطة " + userId);
 
+        // NOTIFY CUSTOMER
         if (newStatus == OrderStatus.CONFIRMED && oldStatus == OrderStatus.PENDING) {
             try {
                 notificationService.sendNotification(
@@ -258,7 +304,6 @@ public class OrderService {
                         order.getOrderId(),
                         null);
             } catch (Exception e) {
-                System.err.println("Failed to notify customer: " + e.getMessage());
             }
         } else if (newStatus == OrderStatus.DELIVERED && oldStatus != OrderStatus.DELIVERED) {
             try {
@@ -272,11 +317,15 @@ public class OrderService {
                         order.getOrderId(),
                         null);
             } catch (Exception e) {
-                System.err.println("Failed to notify customer: " + e.getMessage());
             }
         }
 
-        webSocketService.broadcastOrderUpdated(savedOrder);
+        try {
+            webSocketService.broadcastOrderUpdated(savedOrder);
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast order update via websocket: " + e.getMessage());
+        }
+
         return savedOrder;
     }
 
@@ -310,28 +359,16 @@ public class OrderService {
             System.err.println("Failed to notify staff of cancellation: " + e.getMessage());
         }
 
-        List<Long> storeIds = order.getStores().stream().map(Store::getStoreId)
-                .collect(java.util.stream.Collectors.toList());
+        List<Long> storeIds = order.getStores().stream().map(Store::getStoreId).collect(Collectors.toList());
 
         historyRepository.deleteByOrderOrderId(orderId);
         orderRepository.delete(order);
 
-        webSocketService.broadcastOrderDeleted(orderId, storeIds);
-    }
-
-    @Transactional
-    public void deleteOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
-
-        List<Long> storeIds = order.getStores().stream().map(Store::getStoreId)
-                .collect(java.util.stream.Collectors.toList());
-
-        historyRepository.deleteByOrderOrderId(orderId);
-        couponUsageRepository.deleteByOrderId(orderId);
-        orderRepository.deleteById(orderId);
-
-        webSocketService.broadcastOrderDeleted(orderId, storeIds);
+        try {
+            webSocketService.broadcastOrderDeleted(orderId, storeIds);
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast order cancellation via websocket: " + e.getMessage());
+        }
     }
 
     private void logStatusChange(Order order, OrderStatus oldS, OrderStatus newS, String notes) {
@@ -343,6 +380,10 @@ public class OrderService {
         history.setCreatedAt(LocalDateTime.now());
         historyRepository.save(history);
     }
+
+    // =================================================================================
+    // GETTERS & UTILS
+    // =================================================================================
 
     public Page<Order> getUserOrders(Long userId, String orderNumber, Pageable pageable) {
         if (orderNumber != null && !orderNumber.trim().isEmpty()) {
@@ -384,14 +425,30 @@ public class OrderService {
         }
         if (status != null)
             return orderRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+
         return orderRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 
-    // 🟢 UPDATED: Vendor gets their orders (Active vs History)
+    @Transactional
+    public void deleteOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("الطلب غير موجود برقم: " + orderId));
+
+        List<Long> storeIds = order.getStores().stream().map(Store::getStoreId).collect(Collectors.toList());
+
+        historyRepository.deleteByOrderOrderId(orderId);
+        couponUsageRepository.deleteByOrderId(orderId);
+        orderRepository.deleteById(orderId);
+
+        try {
+            webSocketService.broadcastOrderDeleted(orderId, storeIds);
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast order deletion via websocket: " + e.getMessage());
+        }
+    }
+
     public Page<Order> getVendorOrders(Long storeId, Boolean activeOnly, Pageable pageable) {
         if (Boolean.TRUE.equals(activeOnly)) {
-            // For vendors, "Active" means they have to do something with it, or it hasn't
-            // been delivered yet.
             List<OrderStatus> activeStatuses = Arrays.asList(
                     OrderStatus.PENDING,
                     OrderStatus.CONFIRMED,
@@ -401,10 +458,13 @@ public class OrderService {
             return orderRepository.findByStores_StoreIdAndStatusInOrderByCreatedAtDesc(storeId, activeStatuses,
                     pageable);
         } else {
-            // Return everything (including DELIVERED and CANCELLED)
             return orderRepository.findByStores_StoreIdOrderByCreatedAtDesc(storeId, pageable);
         }
     }
+
+    // =================================================================================
+    // TRACKING & HELPERS
+    // =================================================================================
 
     public OrderTrackingResponse trackOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
