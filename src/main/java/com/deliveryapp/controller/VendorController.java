@@ -168,7 +168,8 @@ public class VendorController {
         Page<Product> productPage;
 
         if (storeCategoryId != null) {
-            productPage = productService.getAllProductsByStoreAndStoreCategoryForVendor(storeId, storeCategoryId, pageable);
+            productPage = productService.getAllProductsByStoreAndStoreCategoryForVendor(storeId, storeCategoryId,
+                    pageable);
         } else {
             productPage = productService.getAllProductsByStoreForVendor(storeId, pageable);
         }
