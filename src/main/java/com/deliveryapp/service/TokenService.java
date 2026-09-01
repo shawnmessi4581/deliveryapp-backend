@@ -35,7 +35,7 @@ public class TokenService {
     private static final long ACCESS_TOKEN_MINUTES = 15;
 
     // Refresh token is long-lived — stored hashed in DB, rotated on every use.
-    private static final long REFRESH_TOKEN_DAYS = 30;
+    private static final long REFRESH_TOKEN_DAYS = 300;
 
     private final JwtEncoder jwtEncoder;
     private final RefreshTokenRepository refreshTokenRepository;
