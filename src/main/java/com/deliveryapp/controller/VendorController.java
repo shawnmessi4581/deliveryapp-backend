@@ -168,9 +168,9 @@ public class VendorController {
         Page<Product> productPage;
 
         if (storeCategoryId != null) {
-            productPage = productService.getProductsByStoreAndStoreCategory(storeId, storeCategoryId, pageable);
+            productPage = productService.getAllProductsByStoreAndStoreCategoryForVendor(storeId, storeCategoryId, pageable);
         } else {
-            productPage = productService.getProductsByStore(storeId, pageable);
+            productPage = productService.getAllProductsByStoreForVendor(storeId, pageable);
         }
 
         // 🟢 Use Admin Mapper so Vendor sees raw prices (USD/SYP)

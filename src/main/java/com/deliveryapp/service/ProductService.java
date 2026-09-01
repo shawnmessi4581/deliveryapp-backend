@@ -92,6 +92,23 @@ public class ProductService {
                         storeId, storeCategoryId, withoutSort(pageable)));
     }
 
+    public Page<Product> getAllProductsByStoreForVendor(Long storeId, Pageable pageable) {
+        if (!storeRepository.existsById(storeId))
+            throw new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId);
+        return fetchPage(
+                productRepository.findIdsByStoreStoreId(storeId, withoutSort(pageable)));
+    }
+
+    public Page<Product> getAllProductsByStoreAndStoreCategoryForVendor(Long storeId, Long storeCategoryId, Pageable pageable) {
+        if (!storeRepository.existsById(storeId))
+            throw new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId);
+        if (!storeCategoryRepository.existsById(storeCategoryId))
+            throw new ResourceNotFoundException("الفئة غير موجودة برقم: " + storeCategoryId);
+        return fetchPage(productRepository
+                .findIdsByStoreStoreIdAndStoreCategoryStoreCategoryId(
+                        storeId, storeCategoryId, withoutSort(pageable)));
+    }
+
     public Page<Product> getProductsByCategory(Long categoryId, Pageable pageable) {
         if (!categoryRepository.existsById(categoryId))
             throw new ResourceNotFoundException("الفئة غير موجودة برقم: " + categoryId);

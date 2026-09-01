@@ -130,6 +130,15 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                         @Param("storeCategoryId") Long storeCategoryId,
                         Pageable pageable);
 
+        @Query(value = "SELECT p.productId FROM Product p WHERE p.store.storeId = :storeId ORDER BY p.displayOrder ASC, p.productId ASC", countQuery = "SELECT COUNT(p) FROM Product p WHERE p.store.storeId = :storeId")
+        Page<Long> findIdsByStoreStoreId(@Param("storeId") Long storeId, Pageable pageable);
+
+        @Query(value = "SELECT p.productId FROM Product p WHERE p.store.storeId = :storeId AND p.storeCategory.storeCategoryId = :storeCategoryId ORDER BY p.displayOrder ASC, p.productId ASC", countQuery = "SELECT COUNT(p) FROM Product p WHERE p.store.storeId = :storeId AND p.storeCategory.storeCategoryId = :storeCategoryId")
+        Page<Long> findIdsByStoreStoreIdAndStoreCategoryStoreCategoryId(
+                        @Param("storeId") Long storeId,
+                        @Param("storeCategoryId") Long storeCategoryId,
+                        Pageable pageable);
+
         // ── Has offer ──
         @Query(value = "SELECT p.productId FROM Product p WHERE p.hasOffer = true AND p.isAvailable = true ORDER BY p.displayOrder ASC, p.productId ASC", countQuery = "SELECT COUNT(p) FROM Product p WHERE p.hasOffer = true AND p.isAvailable = true")
         Page<Long> findIdsByHasOfferTrueAndIsAvailableTrue(Pageable pageable);
