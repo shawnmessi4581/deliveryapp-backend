@@ -32,10 +32,19 @@ import java.util.stream.Collectors;
 public class TokenService {
 
     // Access token is short-lived — if stolen, it expires quickly.
-    private static final long ACCESS_TOKEN_MINUTES = 15;
+    private static final long ACCESS_TOKEN_MINUTES = 60;
 
     // Refresh token is long-lived — stored hashed in DB, rotated on every use.
     private static final long REFRESH_TOKEN_DAYS = 300;
+
+    /**
+     * Grace window for mobile network retries:
+     * If a token was rotated within this many seconds ago and the client retries
+     * with the old (now-revoked) token, we return the already-issued replacement
+     * instead of nuking the family. This covers the case where the HTTP response
+     * was lost after the server already committed the rotation.
+     */
+    private static final long ROTATION_GRACE_SECONDS = 30;
 
     private final JwtEncoder jwtEncoder;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -113,6 +122,34 @@ public class TokenService {
 
         // ── Theft detection: token was already rotated/revoked ──
         if (stored.isRevoked()) {
+
+            // ── Grace window: was this revoked very recently by a rotation? ──
+            // Scenario: client sent refresh request → server rotated → response lost (network drop)
+            // → client retries with same (now-revoked) token. We must NOT log them out.
+            if (stored.getRotatedAt() != null &&
+                    stored.getRotatedAt().isAfter(LocalDateTime.now().minusSeconds(ROTATION_GRACE_SECONDS))) {
+
+                log.info("Grace window: revoked token reused within {}s — treating as network retry for user: {}",
+                        ROTATION_GRACE_SECONDS, stored.getUser().getUserId());
+
+                // Find the active successor in the same family
+                RefreshToken successor = refreshTokenRepository
+                        .findTopByFamilyIdAndRevokedFalseOrderByCreatedAtDesc(stored.getFamilyId())
+                        .orElse(null);
+
+                if (successor != null && !successor.isExpired()) {
+                    // Re-rotate the successor to keep the chain intact and issue a new raw token
+                    User graceUser = successor.getUser();
+                    successor.setRevoked(true);
+                    successor.setRotatedAt(LocalDateTime.now());
+                    refreshTokenRepository.save(successor);
+                    String newRawToken = issueRefreshToken(graceUser, stored.getFamilyId(), stored.getDeviceInfo());
+                    log.debug("Grace window rotation completed for user: {}", graceUser.getUserId());
+                    return new RotationResult(graceUser, newRawToken);
+                }
+                // Successor not found or expired — fall through to theft handling
+            }
+
             log.warn("SECURITY: Reuse of revoked refresh token detected. Family: {} | User: {}",
                     stored.getFamilyId(), stored.getUser().getUserId());
             // Nuke the entire family — all sessions from this login are now invalid.
@@ -128,8 +165,9 @@ public class TokenService {
             throw new InvalidDataException("انتهت صلاحية رمز التحديث. يرجى تسجيل الدخول مرة أخرى.");
         }
 
-        // ── Revoke old token ──
+        // ── Revoke old token (stamp rotatedAt so grace window can detect retries) ──
         stored.setRevoked(true);
+        stored.setRotatedAt(LocalDateTime.now());
         refreshTokenRepository.save(stored);
 
         // ── Issue new token in the same family ──

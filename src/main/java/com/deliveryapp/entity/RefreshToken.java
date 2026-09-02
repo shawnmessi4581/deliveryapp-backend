@@ -45,6 +45,14 @@ public class RefreshToken {
     @Column(nullable = false)
     private boolean revoked = false;
 
+    /**
+     * Set ONLY when this token is revoked via rotation — NOT during explicit logout.
+     * Null means it was never rotated, or was revoked by logout/theft response.
+     * Used by the grace-window logic to survive mobile network retries.
+     */
+    @Column(name = "rotated_at")
+    private LocalDateTime rotatedAt;
+
     /** Optional — useful for "manage sessions" screen. */
     @Column(length = 100)
     private String deviceInfo;

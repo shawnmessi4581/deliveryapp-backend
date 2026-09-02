@@ -25,11 +25,22 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Query("UPDATE RefreshToken rt SET rt.revoked = true WHERE rt.user.userId = :userId")
     void revokeAllForUser(@Param("userId") Long userId);
 
-    /** Scheduled cleanup — delete expired or revoked tokens older than 7 days. */
+    /**
+     * Scheduled cleanup.
+     * Revoked tokens are only deleted when they are also old (createdAt < cutoff),
+     * avoiding a race where a just-rotated token is deleted before the client confirms.
+     * Truly expired (expiresAt < now) tokens are always cleaned regardless.
+     */
     @Modifying
-    @Query("DELETE FROM RefreshToken rt WHERE rt.revoked = true OR rt.expiresAt < :cutoff")
+    @Query("DELETE FROM RefreshToken rt WHERE (rt.revoked = true AND rt.createdAt < :cutoff) OR rt.expiresAt < :cutoff")
     void deleteExpiredOrRevoked(@Param("cutoff") LocalDateTime cutoff);
 
     /** Check if a revoked token in this family exists (reuse detection). */
     boolean existsByFamilyIdAndRevoked(String familyId, boolean revoked);
+
+    /**
+     * Grace-window: find the active successor token issued for this family
+     * after a rotation. Used when a client retries with an already-rotated token.
+     */
+    Optional<RefreshToken> findTopByFamilyIdAndRevokedFalseOrderByCreatedAtDesc(String familyId);
 }
