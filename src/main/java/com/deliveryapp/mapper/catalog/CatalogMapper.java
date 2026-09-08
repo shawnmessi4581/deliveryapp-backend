@@ -121,7 +121,7 @@ public class CatalogMapper {
         dto.setName(product.getName());
         dto.setDescription(product.getDescription());
         dto.setImageUrl(urlUtil.getFullUrl(product.getImage()));
-        dto.setAvailable(product.getIsAvailable());
+        dto.setIsAvailable(product.getIsAvailable());
         dto.setIsTrending(product.getIsTrending() != null ? product.getIsTrending() : false);
         dto.setDisplayOrder(product.getDisplayOrder());
 

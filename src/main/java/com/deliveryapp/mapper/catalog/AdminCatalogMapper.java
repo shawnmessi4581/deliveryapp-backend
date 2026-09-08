@@ -25,7 +25,7 @@ public class AdminCatalogMapper {
         dto.setDescription(publicDto.getDescription());
         dto.setImageUrl(publicDto.getImageUrl());
         dto.setCalculatedPrice(publicDto.getCalculatedPrice());
-        dto.setAvailable(publicDto.isAvailable());
+        dto.setIsAvailable(publicDto.getIsAvailable());
         dto.setIsTrending(publicDto.getIsTrending());
         dto.setDisplayOrder(publicDto.getDisplayOrder());
         dto.setImages(publicDto.getImages());
