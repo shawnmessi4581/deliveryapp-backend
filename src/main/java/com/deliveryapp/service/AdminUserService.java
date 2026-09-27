@@ -16,6 +16,8 @@ import com.deliveryapp.repository.StoreRepository;
 import com.deliveryapp.repository.UserAddressRepository;
 import com.deliveryapp.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,15 +40,13 @@ public class AdminUserService {
     private final OtpVerificationRepository otpRepository;
     private final StoreRepository storeRepository; // 🟢 NEW: For linking vendors to stores
 
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
-
-    // 🔍 Search users by name, phone, or email
-    public List<User> searchUsers(String keyword) {
-        if (keyword == null || keyword.trim().isEmpty())
-            return userRepository.findAll();
-        return userRepository.searchUsers(keyword.trim());
+    /**
+     * 🔍 Admin: paginated user list with optional keyword search and optional UserType filter.
+     * All parameters are optional — null disables that filter.
+     */
+    public Page<User> getUsers(String keyword, UserType userType, Pageable pageable) {
+        String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+        return userRepository.searchUsers(kw, userType, pageable);
     }
 
     @Transactional

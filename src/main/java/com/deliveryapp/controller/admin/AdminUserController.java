@@ -6,12 +6,16 @@ import com.deliveryapp.dto.user.CreateUserRequest;
 import com.deliveryapp.dto.user.UserResponse;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.entity.User;
+import com.deliveryapp.enums.UserType;
 import com.deliveryapp.mapper.order.OrderMapper;
 import com.deliveryapp.mapper.user.UserMapper;
 import com.deliveryapp.service.AdminUserService;
 import com.deliveryapp.service.DriverOrderService;
-// import com.deliveryapp.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,22 +32,31 @@ import java.util.stream.Collectors;
 public class AdminUserController {
 
     private final AdminUserService adminUserService;
-    // private final OrderService orderService;
     private final UserMapper userMapper;
     private final OrderMapper orderMapper;
     private final DriverOrderService driverOrderService;
 
     // --- USERS ---
+
+    /**
+     * GET /api/admin/users?search=&userType=CUSTOMER&page=0&size=20&sort=createdAt,desc
+     *
+     * All params are optional:
+     *  - search    → filter by name / phone / email (case-insensitive)
+     *  - userType  → filter by CUSTOMER | DRIVER | ADMIN | EMPLOYEE | VENDOR
+     *  - page/size → pagination (default: page=0, size=20)
+     *  - sort      → any User field (default: createdAt,desc)
+     */
     @GetMapping("/users")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
-    public ResponseEntity<List<UserResponse>> getAllUsers(
-            @RequestParam(required = false) String search) {
-        List<User> users = (search != null && !search.isBlank())
-                ? adminUserService.searchUsers(search)
-                : adminUserService.getAllUsers();
-        return ResponseEntity.ok(users.stream()
-                .map(userMapper::toUserResponse)
-                .collect(Collectors.toList()));
+    public ResponseEntity<Page<UserResponse>> getAllUsers(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) UserType userType,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        Page<UserResponse> page = adminUserService
+                .getUsers(search, userType, pageable)
+                .map(userMapper::toUserResponse);
+        return ResponseEntity.ok(page);
     }
 
     @DeleteMapping("/users/{userId}")
