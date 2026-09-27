@@ -36,8 +36,12 @@ public class AdminUserController {
     // --- USERS ---
     @GetMapping("/users")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
-        return ResponseEntity.ok(adminUserService.getAllUsers().stream()
+    public ResponseEntity<List<UserResponse>> getAllUsers(
+            @RequestParam(required = false) String search) {
+        List<User> users = (search != null && !search.isBlank())
+                ? adminUserService.searchUsers(search)
+                : adminUserService.getAllUsers();
+        return ResponseEntity.ok(users.stream()
                 .map(userMapper::toUserResponse)
                 .collect(Collectors.toList()));
     }

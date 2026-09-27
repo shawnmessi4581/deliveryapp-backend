@@ -42,6 +42,13 @@ public class AdminUserService {
         return userRepository.findAll();
     }
 
+    // 🔍 Search users by name, phone, or email
+    public List<User> searchUsers(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty())
+            return userRepository.findAll();
+        return userRepository.searchUsers(keyword.trim());
+    }
+
     @Transactional
     public void deleteUser(Long userId) {
         User user = userRepository.findById(userId)

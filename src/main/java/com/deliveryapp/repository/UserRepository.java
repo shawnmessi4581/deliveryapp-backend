@@ -21,4 +21,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Find available drivers
     List<User> findByUserTypeAndIsAvailableTrue(UserType userType);
 
+    // 🔍 Admin search: match by name, phone, or email (case-insensitive)
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT u FROM User u WHERE " +
+            "LOWER(u.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+            "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+    List<User> searchUsers(String keyword);
+
 }
