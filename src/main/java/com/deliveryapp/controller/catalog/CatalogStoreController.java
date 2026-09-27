@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,9 +24,10 @@ public class CatalogStoreController {
 
     @GetMapping
     public ResponseEntity<List<StoreResponse>> getAllActiveStores() {
-        return ResponseEntity.ok(storeService.getAllActiveStores().stream()
-                .map(catalogMapper::toStoreResponse)
-                .collect(Collectors.toList()));
+        return ResponseEntity.ok(sortOpenFirst(
+                storeService.getAllActiveStores().stream()
+                        .map(catalogMapper::toStoreResponse)
+                        .collect(Collectors.toList())));
     }
 
     @GetMapping("/{storeId}")
@@ -49,15 +51,40 @@ public class CatalogStoreController {
 
     @GetMapping("/category/{categoryId}")
     public ResponseEntity<List<StoreResponse>> getStoresByCategory(@PathVariable Long categoryId) {
-        return ResponseEntity.ok(storeService.getStoresByCategory(categoryId).stream()
-                .map(catalogMapper::toStoreResponse)
-                .collect(Collectors.toList()));
+        return ResponseEntity.ok(sortOpenFirst(
+                storeService.getStoresByCategory(categoryId).stream()
+                        .map(catalogMapper::toStoreResponse)
+                        .collect(Collectors.toList())));
     }
 
     @GetMapping("/subcategory/{subCategoryId}")
     public ResponseEntity<List<StoreResponse>> getStoresBySubCategory(@PathVariable Long subCategoryId) {
-        return ResponseEntity.ok(storeService.getStoresBySubCategory(subCategoryId).stream()
-                .map(catalogMapper::toStoreResponse)
-                .collect(Collectors.toList()));
+        return ResponseEntity.ok(sortOpenFirst(
+                storeService.getStoresBySubCategory(subCategoryId).stream()
+                        .map(catalogMapper::toStoreResponse)
+                        .collect(Collectors.toList())));
+    }
+
+    /**
+     * 🆓 Public: Get all active stores offering free delivery.
+     * GET /api/catalog/stores/free-delivery
+     */
+    @GetMapping("/free-delivery")
+    public ResponseEntity<List<StoreResponse>> getFreeDeliveryStores() {
+        return ResponseEntity.ok(sortOpenFirst(
+                storeService.getFreeDeliveryStores().stream()
+                        .map(catalogMapper::toStoreResponse)
+                        .collect(Collectors.toList())));
+    }
+
+    /**
+     * 🕐 Sorts stores: open first, then closed. Preserves displayOrder within each
+     * group.
+     */
+    private List<StoreResponse> sortOpenFirst(List<StoreResponse> stores) {
+        stores.sort(Comparator
+                .comparing((StoreResponse s) -> !Boolean.TRUE.equals(s.getIsOpenNow())) // open (true) first
+                .thenComparing(s -> s.getDisplayOrder() != null ? s.getDisplayOrder() : Integer.MAX_VALUE));
+        return stores;
     }
 }

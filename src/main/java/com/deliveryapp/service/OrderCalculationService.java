@@ -39,6 +39,27 @@ public class OrderCalculationService {
         UserAddress address = addressRepository.findById(addressId)
                 .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود"));
 
+        // 🆓 If store offers free delivery, return 0 fee but still calculate real distance
+        if (Boolean.TRUE.equals(store.getFreeDelivery())) {
+            double distance = calculateOptimizedDistance(
+                    List.of(store),
+                    address.getLatitude(),
+                    address.getLongitude());
+
+            DeliveryFeeResponse response = new DeliveryFeeResponse();
+            response.setDeliveryFee(0.0);
+            response.setEstimatedTime(store.getEstimatedDeliveryTime());
+            response.setMaxMinimumDeliveryFee(0.0);
+            response.setTotalDistanceKm(distance);
+            response.setRouteSegments(List.of(
+                    new DeliveryFeeResponse.RouteSegmentResponse(
+                            store.getName(),
+                            address.getLabel() != null ? address.getLabel() : "User",
+                            distance,
+                            "FREE_DELIVERY")));
+            return response;
+        }
+
         double distance = calculateOptimizedDistance(
                 List.of(store),
                 address.getLatitude(),

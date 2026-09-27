@@ -35,4 +35,6 @@ public class StoreRequest {
     // 🔔 Telegram: Chat/Group/Channel ID for order notifications
     private String telegramChatId;
 
+    // 🆓 Free Delivery toggle
+    private Boolean freeDelivery;
 }

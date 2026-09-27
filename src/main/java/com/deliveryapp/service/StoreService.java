@@ -101,6 +101,8 @@ public class StoreService {
         // 🔔 Telegram Chat ID
         if (request.getTelegramChatId() != null)
             store.setTelegramChatId(request.getTelegramChatId());
+        // 🆓 Free Delivery
+        store.setFreeDelivery(Boolean.TRUE.equals(request.getFreeDelivery()));
         return storeRepository.save(store);
     }
 
@@ -172,6 +174,9 @@ public class StoreService {
         // 🔔 Telegram Chat ID (pass empty string to clear, or null to leave unchanged)
         if (request.getTelegramChatId() != null)
             store.setTelegramChatId(request.getTelegramChatId().isBlank() ? null : request.getTelegramChatId());
+        // 🆓 Free Delivery (explicit null check: only update if provided)
+        if (request.getFreeDelivery() != null)
+            store.setFreeDelivery(request.getFreeDelivery());
         return storeRepository.save(store);
     }
 
@@ -192,6 +197,20 @@ public class StoreService {
 
         store.setIsBusy(isBusy);
         return storeRepository.save(store);
+    }
+
+    // 🆓 Toggle free delivery on/off for a specific store
+    @Transactional
+    public Store toggleFreeDelivery(Long storeId, Boolean freeDelivery) {
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId));
+        store.setFreeDelivery(freeDelivery);
+        return storeRepository.save(store);
+    }
+
+    // 🆓 Public: all active stores offering free delivery
+    public List<Store> getFreeDeliveryStores() {
+        return storeRepository.findByFreeDeliveryTrueAndIsActiveTrueOrderByDisplayOrderAsc();
     }
 
 }

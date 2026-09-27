@@ -63,4 +63,8 @@ public class Store {
 
     // 🔔 Telegram Integration: Each store's own chat/group/channel ID for order notifications
     private String telegramChatId;
+
+    // 🆓 FREE DELIVERY: If true, the delivery fee for this store is always 0
+    @Column(columnDefinition = "boolean default false")
+    private Boolean freeDelivery = false;
 }

@@ -56,4 +56,16 @@ public class AdminStoreController {
         storeService.deleteStore(id);
         return ResponseEntity.ok("تم حذف المتجر");
     }
+
+    /**
+     * 🆓 Toggle free delivery for a store (Admin only).
+     * PATCH /api/admin/stores/{id}/free-delivery?enabled=true|false
+     */
+    @PatchMapping("/{id}/free-delivery")
+    public ResponseEntity<StoreResponse> toggleFreeDelivery(
+            @PathVariable Long id,
+            @RequestParam Boolean enabled) {
+        Store store = storeService.toggleFreeDelivery(id, enabled);
+        return ResponseEntity.ok(catalogMapper.toStoreResponse(store));
+    }
 }

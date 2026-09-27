@@ -51,4 +51,6 @@ public class StoreResponse {
     private Double minimumDeliveryFee;
     private String telegramChatId;
 
+    // 🆓 Free Delivery
+    private Boolean freeDelivery;
 }

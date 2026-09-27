@@ -110,6 +110,8 @@ public class CatalogMapper {
             dto.setStoreCategories(Collections.emptyList());
         }
         dto.setMinimumDeliveryFee(store.getMinimumDeliveryFee());
+        // 🆓 Free Delivery
+        dto.setFreeDelivery(Boolean.TRUE.equals(store.getFreeDelivery()));
         return dto;
     }
 

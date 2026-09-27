@@ -38,4 +38,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
             "ORDER BY s.rating DESC, s.totalOrders DESC")
     List<Store> searchStoresGlobal(String keyword);
 
+    // 🆓 Free delivery stores: active + freeDelivery = true
+    List<Store> findByFreeDeliveryTrueAndIsActiveTrueOrderByDisplayOrderAsc();
+
 }
