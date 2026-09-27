@@ -242,4 +242,37 @@ public class OrderCalculationService {
 
         return totalDistance;
     }
+
+    /**
+     * 💰 Computes the estimated delivery fee for a single store given raw GPS coordinates.
+     * This is the single source of truth for fee calculation across the entire app.
+     *
+     * Rules applied in order:
+     *  1. freeDelivery = true  → 0
+     *  2. Missing coordinates  → 0
+     *  3. distance × feePerKm → rounded up to nearest 10
+     *  4. Apply minimumDeliveryFee as floor
+     */
+    public double computeFeeForStore(Store store, Double userLat, Double userLng) {
+        // Rule 1: free delivery
+        if (Boolean.TRUE.equals(store.getFreeDelivery())) return 0.0;
+
+        // Rule 2: missing coordinates
+        if (userLat == null || userLng == null
+                || store.getLatitude() == null || store.getLongitude() == null) {
+            return 0.0;
+        }
+
+        double distance = distanceUtil.calculateDistance(
+                userLat, userLng, store.getLatitude(), store.getLongitude());
+
+        double feePerKm = store.getDeliveryFeeKM() != null ? store.getDeliveryFeeKM() : 0.0;
+        double minFee   = store.getMinimumDeliveryFee() != null ? store.getMinimumDeliveryFee() : 0.0;
+
+        // Rule 3: round up to nearest 10
+        double fee = mathUtil.roundUpToNearestTen(distance * feePerKm);
+
+        // Rule 4: minimum fee floor
+        return Math.max(fee, minFee);
+    }
 }
