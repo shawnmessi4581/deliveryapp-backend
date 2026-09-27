@@ -15,36 +15,37 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
 
-    // Login / Auth lookups
-    Optional<User> findByPhoneNumber(String phoneNumber);
-    Optional<User> findByEmail(String email);
+        // Login / Auth lookups
+        Optional<User> findByPhoneNumber(String phoneNumber);
 
-    // Find specific types of users
-    List<User> findByUserType(UserType userType);
+        Optional<User> findByEmail(String email);
 
-    // Find available drivers
-    List<User> findByUserTypeAndIsAvailableTrue(UserType userType);
+        // Find specific types of users
+        List<User> findByUserType(UserType userType);
 
-    /**
-     * 🔍 Admin: paginated search with optional keyword + optional UserType filter.
-     * Passing null for keyword or userType disables that filter.
-     */
-    @Query("SELECT u FROM User u WHERE " +
-            "(:keyword IS NULL OR " +
-            "  LOWER(u.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-            "  LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-            "  LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
-            "AND (:userType IS NULL OR u.userType = :userType)")
-    Page<User> searchUsers(
-            @Param("keyword") String keyword,
-            @Param("userType") UserType userType,
-            Pageable pageable);
+        // Find available drivers
+        List<User> findByUserTypeAndIsAvailableTrue(UserType userType);
 
-    // Legacy non-paginated search (kept for backward-compat if used elsewhere)
-    @Query("SELECT u FROM User u WHERE " +
-            "LOWER(u.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-            "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-            "LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%'))")
-    List<User> searchUsers(@Param("keyword") String keyword);
+        /**
+         * 🔍 Admin: paginated search with optional keyword + optional UserType filter.
+         * Passing null for keyword or userType disables that filter.
+         */
+        @Query("SELECT u FROM User u WHERE " +
+                        "(:keyword IS NULL OR " +
+                        "  LOWER(u.name) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR " +
+                        "  LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR " +
+                        "  LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))) " +
+                        "AND (:userType IS NULL OR u.userType = :userType)")
+        Page<User> searchUsers(
+                        @Param("keyword") String keyword,
+                        @Param("userType") UserType userType,
+                        Pageable pageable);
 
-}
+        // Legacy non-paginated search (kept for backward-compat if used elsewhere)
+        @Query("SELECT u FROM User u WHERE " +
+                        "LOWER(u.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+                        "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+                        "LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+        List<User> searchUsers(@Param("keyword") String keyword);
+
+}
