@@ -37,4 +37,10 @@ public class StoreRequest {
 
     // 🆓 Free Delivery toggle
     private Boolean freeDelivery;
+
+    // 🛒 Free Delivery Threshold (e.g. 10000.0 SYP) — null = disabled
+    private Double freeDeliveryThreshold;
+
+    // 🔘 Toggle threshold on/off without losing the saved value
+    private Boolean freeDeliveryThresholdEnabled;
 }

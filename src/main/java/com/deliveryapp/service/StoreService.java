@@ -103,6 +103,10 @@ public class StoreService {
             store.setTelegramChatId(request.getTelegramChatId());
         // 🆓 Free Delivery
         store.setFreeDelivery(Boolean.TRUE.equals(request.getFreeDelivery()));
+        // 🛒 Free Delivery Threshold (null = disabled)
+        store.setFreeDeliveryThreshold(request.getFreeDeliveryThreshold());
+        // 🔘 Threshold enabled flag
+        store.setFreeDeliveryThresholdEnabled(Boolean.TRUE.equals(request.getFreeDeliveryThresholdEnabled()));
         return storeRepository.save(store);
     }
 
@@ -177,6 +181,12 @@ public class StoreService {
         // 🆓 Free Delivery (explicit null check: only update if provided)
         if (request.getFreeDelivery() != null)
             store.setFreeDelivery(request.getFreeDelivery());
+        // 🛒 Free Delivery Threshold: always overwrite (send null to clear/disable)
+        if (request.getFreeDeliveryThreshold() != null)
+            store.setFreeDeliveryThreshold(request.getFreeDeliveryThreshold());
+        // 🔘 Threshold enabled flag
+        if (request.getFreeDeliveryThresholdEnabled() != null)
+            store.setFreeDeliveryThresholdEnabled(request.getFreeDeliveryThresholdEnabled());
         return storeRepository.save(store);
     }
 
@@ -208,9 +218,10 @@ public class StoreService {
         return storeRepository.save(store);
     }
 
-    // 🆓 Public: all active stores offering free delivery
+    // 🆓 Public: all active stores with any free delivery option
+    // (freeDelivery=true OR freeDeliveryThresholdEnabled=true)
     public List<Store> getFreeDeliveryStores() {
-        return storeRepository.findByFreeDeliveryTrueAndIsActiveTrueOrderByDisplayOrderAsc();
+        return storeRepository.findFreeDeliveryOrThresholdStores();
     }
 
 }

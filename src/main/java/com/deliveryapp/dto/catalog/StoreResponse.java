@@ -53,4 +53,10 @@ public class StoreResponse {
 
     // 🆓 Free Delivery
     private Boolean freeDelivery;
+
+    // 🛒 Free Delivery Threshold — null means disabled; if set, UI shows "Free delivery on orders over X"
+    private Double freeDeliveryThreshold;
+
+    // 🔘 Whether the threshold is currently active
+    private Boolean freeDeliveryThresholdEnabled;
 }

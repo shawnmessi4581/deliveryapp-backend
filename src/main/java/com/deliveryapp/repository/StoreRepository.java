@@ -38,7 +38,10 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
             "ORDER BY s.rating DESC, s.totalOrders DESC")
     List<Store> searchStoresGlobal(String keyword);
 
-    // 🆓 Free delivery stores: active + freeDelivery = true
-    List<Store> findByFreeDeliveryTrueAndIsActiveTrueOrderByDisplayOrderAsc();
+    // 🆓 Free delivery stores: active + (freeDelivery=true OR freeDeliveryThresholdEnabled=true)
+    @Query("SELECT s FROM Store s WHERE s.isActive = true AND " +
+            "(s.freeDelivery = true OR s.freeDeliveryThresholdEnabled = true) " +
+            "ORDER BY s.displayOrder ASC")
+    List<Store> findFreeDeliveryOrThresholdStores();
 
 }

@@ -112,6 +112,10 @@ public class CatalogMapper {
         dto.setMinimumDeliveryFee(store.getMinimumDeliveryFee());
         // 🆓 Free Delivery
         dto.setFreeDelivery(Boolean.TRUE.equals(store.getFreeDelivery()));
+        // 🛒 Free Delivery Threshold
+        dto.setFreeDeliveryThreshold(store.getFreeDeliveryThreshold());
+        // 🔘 Threshold enabled flag
+        dto.setFreeDeliveryThresholdEnabled(Boolean.TRUE.equals(store.getFreeDeliveryThresholdEnabled()));
         return dto;
     }
 

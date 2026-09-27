@@ -142,26 +142,41 @@ public class OrderService {
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
 
-        // 5. CALCULATE BEST ROUTE FEE
-        double maxFeePerKm = uniqueStores.stream()
-                .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
-                .max().orElse(0.0);
+        // 5. CALCULATE DELIVERY FEE — applying all store-level rules
+        // Rule A: any store in the order has unconditional free delivery
+        boolean hasFreeDeliveryStore = uniqueStores.stream()
+                .anyMatch(s -> Boolean.TRUE.equals(s.getFreeDelivery()));
 
-        double maxMinimumDeliveryFee = uniqueStores.stream()
-                .mapToDouble(s -> s.getMinimumDeliveryFee() != null ? s.getMinimumDeliveryFee() : 0.0)
-                .max().orElse(0.0);
+        // Rule B: subtotal meets the free delivery threshold of any store (only if enabled)
+        final double finalSubtotal = subtotal; // must be effectively final for lambda
+        boolean meetsThreshold = uniqueStores.stream()
+                .filter(s -> Boolean.TRUE.equals(s.getFreeDeliveryThresholdEnabled()))
+                .filter(s -> s.getFreeDeliveryThreshold() != null)
+                .anyMatch(s -> finalSubtotal >= s.getFreeDeliveryThreshold());
 
-        double totalDistanceKm = calculationService.calculateOptimizedDistance(
-                new ArrayList<>(uniqueStores),
-                userAddress.getLatitude(),
-                userAddress.getLongitude());
+        double deliveryFee;
+        if (hasFreeDeliveryStore || meetsThreshold) {
+            deliveryFee = 0.0;
+        } else {
+            double maxFeePerKm = uniqueStores.stream()
+                    .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
+                    .max().orElse(0.0);
 
-        double rawDeliveryFee = totalDistanceKm * maxFeePerKm;
+            double maxMinimumDeliveryFee = uniqueStores.stream()
+                    .mapToDouble(s -> s.getMinimumDeliveryFee() != null ? s.getMinimumDeliveryFee() : 0.0)
+                    .max().orElse(0.0);
 
-        double deliveryFee = mathUtil.roundUpToNearestTen(rawDeliveryFee);
+            double totalDistanceKm = calculationService.calculateOptimizedDistance(
+                    new ArrayList<>(uniqueStores),
+                    userAddress.getLatitude(),
+                    userAddress.getLongitude());
 
-        if (deliveryFee < maxMinimumDeliveryFee) {
-            deliveryFee = maxMinimumDeliveryFee;
+            double rawDeliveryFee = totalDistanceKm * maxFeePerKm;
+            deliveryFee = mathUtil.roundUpToNearestTen(rawDeliveryFee);
+
+            if (deliveryFee < maxMinimumDeliveryFee) {
+                deliveryFee = maxMinimumDeliveryFee;
+            }
         }
 
         // 6. Handle Coupon Logic

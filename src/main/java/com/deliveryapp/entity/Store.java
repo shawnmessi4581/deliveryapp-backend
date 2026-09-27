@@ -21,13 +21,8 @@ public class Store {
     private Category category;
 
     @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-        name = "store_subcategories",
-        joinColumns = @JoinColumn(name = "store_id"),
-        inverseJoinColumns = @JoinColumn(name = "subcategory_id")
-    )
+    @JoinTable(name = "store_subcategories", joinColumns = @JoinColumn(name = "store_id"), inverseJoinColumns = @JoinColumn(name = "subcategory_id"))
     private List<SubCategory> subCategories;
-
     private String name;
     private String description;
     private String logo;
@@ -55,16 +50,28 @@ public class Store {
     @OneToMany(mappedBy = "store", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @OrderBy("displayOrder ASC") // Ensures they are ordered automatically from the DB
     private List<StoreCategory> storeCategories;
-       // 🟢 NEW: Minimum fee to deliver from this store (e.g. 5000 SYP)
+    // 🟢 NEW: Minimum fee to deliver from this store (e.g. 5000 SYP)
     @Column(columnDefinition = "numeric(10,2) default 0.0")
     private Double minimumDeliveryFee = 0.0;
 
     private LocalDateTime createdAt;
 
-    // 🔔 Telegram Integration: Each store's own chat/group/channel ID for order notifications
+    // 🔔 Telegram Integration: Each store's own chat/group/channel ID for order
+    // notifications
     private String telegramChatId;
 
     // 🆓 FREE DELIVERY: If true, the delivery fee for this store is always 0
     @Column(columnDefinition = "boolean default false")
     private Boolean freeDelivery = false;
+
+    // 🛒 FREE DELIVERY THRESHOLD: If order subtotal >= this value, delivery is
+    // free.
+    // Null means the feature is disabled for this store.
+    @Column(name = "free_delivery_threshold")
+    private Double freeDeliveryThreshold;
+
+    // 🔘 Controls whether the threshold is currently active (on/off switch).
+    // Allows admin to disable the threshold without losing its value.
+    @Column(columnDefinition = "boolean default false")
+    private Boolean freeDeliveryThresholdEnabled = false;
 }

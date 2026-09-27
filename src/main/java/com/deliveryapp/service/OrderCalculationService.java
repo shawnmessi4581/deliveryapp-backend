@@ -247,17 +247,29 @@ public class OrderCalculationService {
      * 💰 Computes the estimated delivery fee for a single store given raw GPS coordinates.
      * This is the single source of truth for fee calculation across the entire app.
      *
+     * @param subtotal Pass the order subtotal at checkout to enforce freeDeliveryThreshold.
+     *                 Pass null for store listing (threshold shown on UI but not enforced).
+     *
      * Rules applied in order:
-     *  1. freeDelivery = true  → 0
-     *  2. Missing coordinates  → 0
-     *  3. distance × feePerKm → rounded up to nearest 10
-     *  4. Apply minimumDeliveryFee as floor
+     *  1. freeDelivery = true               → 0
+     *  2. subtotal >= freeDeliveryThreshold  → 0
+     *  3. Missing coordinates               → 0
+     *  4. distance × feePerKm → rounded up to nearest 10
+     *  5. Apply minimumDeliveryFee as floor
      */
-    public double computeFeeForStore(Store store, Double userLat, Double userLng) {
-        // Rule 1: free delivery
+    public double computeFeeForStore(Store store, Double userLat, Double userLng, Double subtotal) {
+        // Rule 1: unconditional free delivery
         if (Boolean.TRUE.equals(store.getFreeDelivery())) return 0.0;
 
-        // Rule 2: missing coordinates
+        // Rule 2: order subtotal meets free delivery threshold (only if enabled)
+        if (subtotal != null
+                && Boolean.TRUE.equals(store.getFreeDeliveryThresholdEnabled())
+                && store.getFreeDeliveryThreshold() != null
+                && subtotal >= store.getFreeDeliveryThreshold()) {
+            return 0.0;
+        }
+
+        // Rule 3: missing coordinates
         if (userLat == null || userLng == null
                 || store.getLatitude() == null || store.getLongitude() == null) {
             return 0.0;
@@ -269,10 +281,17 @@ public class OrderCalculationService {
         double feePerKm = store.getDeliveryFeeKM() != null ? store.getDeliveryFeeKM() : 0.0;
         double minFee   = store.getMinimumDeliveryFee() != null ? store.getMinimumDeliveryFee() : 0.0;
 
-        // Rule 3: round up to nearest 10
+        // Rule 4: round up to nearest 10
         double fee = mathUtil.roundUpToNearestTen(distance * feePerKm);
 
-        // Rule 4: minimum fee floor
+        // Rule 5: minimum fee floor
         return Math.max(fee, minFee);
+    }
+
+    /**
+     * Convenience overload for store listing — subtotal not known yet.
+     */
+    public double computeFeeForStore(Store store, Double userLat, Double userLng) {
+        return computeFeeForStore(store, userLat, userLng, null);
     }
 }
