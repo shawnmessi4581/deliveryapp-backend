@@ -35,10 +35,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
                         "  LOWER(u.name) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR " +
                         "  LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR " +
                         "  LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))) " +
-                        "AND (:userType IS NULL OR u.userType = :userType)")
+                        "AND (:userType IS NULL OR u.userType = :userType) " +
+                        "AND (:isActive IS NULL OR u.isActive = :isActive)")
         Page<User> searchUsers(
                         @Param("keyword") String keyword,
                         @Param("userType") UserType userType,
+                        @Param("isActive") Boolean isActive,
                         Pageable pageable);
 
         // Legacy non-paginated search (kept for backward-compat if used elsewhere)

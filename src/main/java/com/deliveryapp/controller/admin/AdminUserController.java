@@ -52,9 +52,10 @@ public class AdminUserController {
     public ResponseEntity<Page<UserResponse>> getAllUsers(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) UserType userType,
+            @RequestParam(required = false) Boolean isActive,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         Page<UserResponse> page = adminUserService
-                .getUsers(search, userType, pageable)
+                .getUsers(search, userType, isActive, pageable)
                 .map(userMapper::toUserResponse);
         return ResponseEntity.ok(page);
     }

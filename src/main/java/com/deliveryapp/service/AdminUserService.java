@@ -44,9 +44,9 @@ public class AdminUserService {
      * 🔍 Admin: paginated user list with optional keyword search and optional UserType filter.
      * All parameters are optional — null disables that filter.
      */
-    public Page<User> getUsers(String keyword, UserType userType, Pageable pageable) {
+    public Page<User> getUsers(String keyword, UserType userType, Boolean isActive, Pageable pageable) {
         String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
-        return userRepository.searchUsers(kw, userType, pageable);
+        return userRepository.searchUsers(kw, userType, isActive, pageable);
     }
 
     @Transactional
