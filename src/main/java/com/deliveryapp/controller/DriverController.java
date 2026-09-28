@@ -2,6 +2,7 @@ package com.deliveryapp.controller;
 
 import com.deliveryapp.dto.PagedResponse;
 import com.deliveryapp.dto.order.OrderResponse;
+import com.deliveryapp.dto.order.UpdateOrderStatusRequest;
 import com.deliveryapp.dto.user.DriverLocationResponse;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.enums.OrderStatus;
@@ -99,6 +100,16 @@ public class DriverController {
         // Call the existing OrderService method
         Order updatedOrder = orderService.updateOrderStatus(orderId, OrderStatus.DELIVERED, driverId);
 
+        return ResponseEntity.ok(orderMapper.toOrderResponse(updatedOrder));
+    }
+
+    @PatchMapping("/{driverId}/orders/{orderId}/status")
+    public ResponseEntity<OrderResponse> updateOrderStatus(
+            @PathVariable Long driverId,
+            @PathVariable Long orderId,
+            @RequestBody UpdateOrderStatusRequest request) {
+
+        Order updatedOrder = orderService.updateOrderStatus(orderId, request.getNewStatus(), driverId);
         return ResponseEntity.ok(orderMapper.toOrderResponse(updatedOrder));
     }
 }

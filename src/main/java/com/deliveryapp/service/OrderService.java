@@ -222,7 +222,7 @@ public class OrderService {
 
         // 1. Notify Admins and Employees
         try {
-            notificationService.notifyStaffOfNewOrder(savedOrder.getOrderNumber(), savedOrder.getOrderId());
+            notificationService.notifyStaffOfNewOrder(savedOrder.getOrderNumber(), savedOrder.getOrderId(), savedOrder.getUser().getName());
         } catch (Exception e) {
             System.err.println("Failed to notify staff: " + e.getMessage());
         }
@@ -369,7 +369,7 @@ public class OrderService {
         }
 
         try {
-            notificationService.notifyStaffOfCancelledOrder(order.getOrderNumber(), orderId);
+            notificationService.notifyStaffOfCancelledOrder(order.getOrderNumber(), orderId, order.getUser().getName());
         } catch (Exception e) {
             System.err.println("Failed to notify staff of cancellation: " + e.getMessage());
         }

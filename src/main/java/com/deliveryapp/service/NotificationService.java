@@ -165,9 +165,9 @@ public class NotificationService {
     // 3. AUTO-NOTIFY STAFF ON NEW ORDER
     @Async
     @Transactional
-    public void notifyStaffOfNewOrder(String orderNumber, Long orderId) {
+    public void notifyStaffOfNewOrder(String orderNumber, Long orderId, String customerName) {
         String title = "طلب جديد! 🛒";
-        String message = "تم استلام الطلب رقم " + orderNumber + " وهو بانتظار التأكيد.";
+        String message = "تم استلام الطلب رقم " + orderNumber + " من العميل " + customerName + " وهو بانتظار التأكيد.";
 
         List<User> staff = new ArrayList<>();
         staff.addAll(userRepository.findByUserType(UserType.ADMIN));
@@ -220,12 +220,12 @@ public class NotificationService {
 
     @Async
     @Transactional
-    public void notifyStaffOfCancelledOrder(String orderNumber, Long orderId) {
+    public void notifyStaffOfCancelledOrder(String orderNumber, Long orderId, String customerName) {
         System.out.println("🔔 Notifying staff of Cancelled Order #" + orderNumber);
 
         // 🔴 Arabic text for cancellation
         String title = "تم إلغاء طلب! ❌";
-        String message = "قام العميل بإلغاء الطلب رقم " + orderNumber + ".";
+        String message = "قام العميل " + customerName + " بإلغاء الطلب رقم " + orderNumber + ".";
 
         // Find Admins and Employees
         List<User> staff = new ArrayList<>();
