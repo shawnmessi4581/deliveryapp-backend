@@ -80,6 +80,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/store-categories/**")
                         .permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/offers/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/flash-sales/**").permitAll()
                         // WebSocket endpoint
                         .requestMatchers("/ws/**").permitAll()
                         // Everything else requires a valid access token
