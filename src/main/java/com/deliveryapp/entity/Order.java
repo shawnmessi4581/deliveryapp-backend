@@ -54,6 +54,11 @@ public class Order {
     private Long couponId;
     private Double discountAmount; // Stored as Double to match your existing financial fields
 
+    // Promotional Offer Info
+    /** Total SYP discount awarded by promotional offers across all line-items in this order. */
+    @Column(columnDefinition = "numeric(15,2) default 0")
+    private Double offerDiscountAmount = 0.0;
+
     private String notes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

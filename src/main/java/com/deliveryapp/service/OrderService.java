@@ -1,5 +1,6 @@
 package com.deliveryapp.service;
 
+import com.deliveryapp.dto.offer.OfferApplicationResult;
 import com.deliveryapp.dto.order.*;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.enums.OrderStatus;
@@ -44,6 +45,7 @@ public class OrderService {
     private final TelegramService telegramService;
     private final OrderCalculationService calculationService;
     private final OrderWebSocketService webSocketService;
+    private final PromotionalOfferService promotionalOfferService;
 
     private final UrlUtil urlUtil;
     private final MathUtil mathUtil;
@@ -126,9 +128,22 @@ public class OrderService {
             orderItem.setUnitPrice(price);
             orderItem.setTotalPrice(price * itemReq.getQuantity());
 
+            // ── Apply Promotional Offer ───────────────────────────────────────────────
+            OfferApplicationResult offerResult =
+                    promotionalOfferService.applyOfferToItem(product.getProductId(), itemReq.getQuantity(), price);
+            if (offerResult.getOfferId() != null) {
+                orderItem.setAppliedOfferId(offerResult.getOfferId());
+                orderItem.setOfferDiscountAmount(offerResult.getDiscountAmount());
+            }
+
             subtotal += orderItem.getTotalPrice();
             orderItems.add(orderItem);
         }
+
+        // ── Sum total offer discount across all line-items ─────────────────────────
+        double totalOfferDiscount = orderItems.stream()
+                .mapToDouble(item -> item.getOfferDiscountAmount() != null ? item.getOfferDiscountAmount() : 0.0)
+                .sum();
 
         order.setStores(new ArrayList<>(uniqueStores));
         order.setOrderItems(orderItems);
@@ -200,12 +215,15 @@ public class OrderService {
 
         order.setDeliveryFee(deliveryFee);
 
-        // 7. Final Total
+        // ── Save offer discount on the order ──────────────────────────────────────
+        order.setOfferDiscountAmount(totalOfferDiscount);
+
+        // 7. Final Total (subtotal − offerDiscount + deliveryFee − couponDiscount)
         double finalTotal;
         if (validCoupon != null && validCoupon.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY) {
-            finalTotal = subtotal;
+            finalTotal = subtotal - totalOfferDiscount;
         } else {
-            finalTotal = (subtotal + deliveryFee) - discountAmount;
+            finalTotal = (subtotal - totalOfferDiscount + deliveryFee) - discountAmount;
         }
 
         order.setTotalAmount(Math.max(finalTotal, 0.0));

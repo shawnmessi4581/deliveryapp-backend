@@ -17,4 +17,11 @@ public class OrderItemResponse {
     private Long storeId;
     private String storeName;
     private Double storeCommissionPercentage; // e.g., 10.0 for 10%
-}
+
+    // --- PROMOTIONAL OFFER INFO ---
+    /** ID of the applied promotional offer, or null if none. */
+    private Long appliedOfferId;
+
+    /** Total SYP discount awarded by the promotional offer for this line-item. */
+    private Double offerDiscountAmount;
+}

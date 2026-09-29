@@ -35,4 +35,12 @@ public class OrderItem {
     private Double unitPrice;
     private Double totalPrice;
     private String notes;
+
+    // ── Promotional Offer tracking ────────────────────────────────────────────
+    /** ID of the PromotionalOffer applied to this line-item, or null if none. */
+    private Long appliedOfferId;
+
+    /** Total SYP discount awarded by the promotional offer for this line-item. Defaults to 0. */
+    @Column(columnDefinition = "numeric(15,2) default 0")
+    private Double offerDiscountAmount = 0.0;
 }

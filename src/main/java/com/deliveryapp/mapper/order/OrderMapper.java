@@ -140,6 +140,7 @@ public class OrderMapper {
         response.setDeliveryFee(order.getDeliveryFee());
         response.setDiscountAmount(order.getDiscountAmount() != null ? order.getDiscountAmount() : 0.0);
         response.setCouponId(order.getCouponId());
+        response.setOfferDiscountAmount(order.getOfferDiscountAmount() != null ? order.getOfferDiscountAmount() : 0.0);
         response.setTotalAmount(order.getTotalAmount());
 
         // --- Order Items ---
@@ -159,6 +160,8 @@ public class OrderMapper {
                 r.setTotalPrice(item.getTotalPrice());
                 r.setNotes(item.getNotes());
                 r.setSelectedColor(item.getSelectedColor());
+                r.setAppliedOfferId(item.getAppliedOfferId());
+                r.setOfferDiscountAmount(item.getOfferDiscountAmount() != null ? item.getOfferDiscountAmount() : 0.0);
 
                 // 👉 Map Store details for grouping and payout math
                 if (item.getProduct() != null && item.getProduct().getStore() != null) {

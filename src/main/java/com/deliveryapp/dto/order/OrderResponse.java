@@ -54,7 +54,11 @@ public class OrderResponse {
     private OrderCustomerResponse customerDetails;
 
     // FIELDS FOR COUPONS
-    private Double discountAmount; // How much was saved
+    private Double discountAmount; // How much was saved via coupon
     private Long couponId; // Which coupon was used (optional)
+
+    // FIELDS FOR PROMOTIONAL OFFERS
+    /** Total SYP saved through promotional offers (e.g. Buy 1 Get 1 Free). */
+    private Double offerDiscountAmount;
 
 }
