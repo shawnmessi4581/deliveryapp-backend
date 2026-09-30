@@ -1,4 +1,4 @@
-package com.deliveryapp.controller;
+package com.deliveryapp.controller.admin;
 
 import com.deliveryapp.dto.banners.BannerRequest;
 import com.deliveryapp.dto.banners.BannerResponse;

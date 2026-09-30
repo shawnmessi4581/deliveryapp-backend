@@ -1,4 +1,4 @@
-package com.deliveryapp.controller;
+package com.deliveryapp.controller.admin;
 
 import com.deliveryapp.dto.PagedResponse;
 import com.deliveryapp.dto.flashsale.FlashSaleRequest;
@@ -62,11 +62,9 @@ public class AdminFlashSaleController {
     // ── CREATE ───────────────────────────────────────────────────────────────
 
     @PostMapping
-    @Operation(
-        summary = "Create a flash sale",
-        description = "Creates a new flash sale and auto-generates (or uses the provided) coupon code. " +
-                      "The backing Coupon entity is created and managed automatically."
-    )
+    @Operation(summary = "Create a flash sale", description = "Creates a new flash sale and auto-generates (or uses the provided) coupon code. "
+            +
+            "The backing Coupon entity is created and managed automatically.")
     public ResponseEntity<FlashSaleResponse> create(@Valid @RequestBody FlashSaleRequest request) {
         return ResponseEntity.ok(flashSaleService.adminCreate(request, currentAdminId()));
     }
@@ -74,10 +72,7 @@ public class AdminFlashSaleController {
     // ── UPDATE ───────────────────────────────────────────────────────────────
 
     @PutMapping("/{flashSaleId}")
-    @Operation(
-        summary = "Update a flash sale",
-        description = "Updates the flash sale and keeps the backing Coupon in sync automatically."
-    )
+    @Operation(summary = "Update a flash sale", description = "Updates the flash sale and keeps the backing Coupon in sync automatically.")
     public ResponseEntity<FlashSaleResponse> update(
             @PathVariable Long flashSaleId,
             @Valid @RequestBody FlashSaleRequest request) {
@@ -87,10 +82,7 @@ public class AdminFlashSaleController {
     // ── TOGGLE STATUS ────────────────────────────────────────────────────────
 
     @PatchMapping("/{flashSaleId}/status")
-    @Operation(
-        summary = "Toggle flash sale active/inactive",
-        description = "Syncs the backing Coupon active status as well."
-    )
+    @Operation(summary = "Toggle flash sale active/inactive", description = "Syncs the backing Coupon active status as well.")
     public ResponseEntity<FlashSaleResponse> toggleStatus(@PathVariable Long flashSaleId) {
         return ResponseEntity.ok(flashSaleService.adminToggleStatus(flashSaleId));
     }
@@ -98,10 +90,7 @@ public class AdminFlashSaleController {
     // ── DELETE ───────────────────────────────────────────────────────────────
 
     @DeleteMapping("/{flashSaleId}")
-    @Operation(
-        summary = "Delete a flash sale",
-        description = "Deletes the flash sale AND its backing Coupon entity permanently."
-    )
+    @Operation(summary = "Delete a flash sale", description = "Deletes the flash sale AND its backing Coupon entity permanently.")
     public ResponseEntity<String> delete(@PathVariable Long flashSaleId) {
         flashSaleService.adminDelete(flashSaleId);
         return ResponseEntity.ok("تم حذف الفلاش سيل والكوبون المرتبط به بنجاح");

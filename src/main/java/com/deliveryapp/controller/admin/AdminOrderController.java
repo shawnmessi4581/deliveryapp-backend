@@ -1,4 +1,4 @@
-package com.deliveryapp.controller;
+package com.deliveryapp.controller.admin;
 
 import com.deliveryapp.dto.PagedResponse;
 import com.deliveryapp.dto.order.OrderResponse;
