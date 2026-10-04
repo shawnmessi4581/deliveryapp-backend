@@ -119,6 +119,13 @@ public class CatalogMapper {
         return dto;
     }
 
+    /** Admin / vendor view of a store: also carries the price markup, which customers must never see. */
+    public StoreResponse toAdminStoreResponse(Store store) {
+        StoreResponse dto = toStoreResponse(store);
+        dto.setPriceMarkupPercentage(pricingService.getMarkupPercentage(store));
+        return dto;
+    }
+
     // --- PRODUCT ---
 
     public ProductResponse toProductResponse(Product product) {
@@ -131,8 +138,8 @@ public class CatalogMapper {
         dto.setIsTrending(product.getIsTrending() != null ? product.getIsTrending() : false);
         dto.setDisplayOrder(product.getDisplayOrder());
 
-        // 🔴 Calculate SYP price using today's exchange rate
-        dto.setCalculatedPrice(pricingService.getFinalPriceInSYP(product));
+        // 🔴 Calculate SYP price using today's exchange rate — customer price (store markup included)
+        dto.setCalculatedPrice(pricingService.getCustomerFinalPrice(product));
 
         // --- MAP GALLERY IMAGES ---
         if (product.getImages() != null && !product.getImages().isEmpty()) {
@@ -181,7 +188,7 @@ public class CatalogMapper {
                 ProductVariantResponse vDto = new ProductVariantResponse();
                 vDto.setVariantId(v.getVariantId());
                 vDto.setVariantName(v.getVariantValue());
-                vDto.setCalculatedPriceAdjustment(pricingService.getVariantFinalPriceInSYP(v));
+                vDto.setCalculatedPriceAdjustment(pricingService.getCustomerVariantPrice(v));
                 return vDto;
             }).collect(Collectors.toList()));
         } else {
@@ -195,12 +202,14 @@ public class CatalogMapper {
         // 🟢 NEW: Map USD Fields
         dto.setIsUsd(product.getIsUsd() != null ? product.getIsUsd() : false);
         if (dto.getIsUsd()) {
+            // USD prices get the store markup too, so they match the SYP price the customer pays
+            Store store = product.getStore();
             // If it has an offer, usdPrice should reflect the discounted USD price
             if (Boolean.TRUE.equals(product.getHasOffer()) && product.getOfferUsdPrice() != null) {
-                dto.setUsdPrice(product.getOfferUsdPrice());
-                dto.setOriginalUsdPrice(product.getUsdPrice()); // Old price
+                dto.setUsdPrice(pricingService.applyStoreMarkupToUsd(product.getOfferUsdPrice(), store));
+                dto.setOriginalUsdPrice(pricingService.applyStoreMarkupToUsd(product.getUsdPrice(), store)); // Old price
             } else {
-                dto.setUsdPrice(product.getUsdPrice());
+                dto.setUsdPrice(pricingService.applyStoreMarkupToUsd(product.getUsdPrice(), store));
                 dto.setOriginalUsdPrice(null);
             }
         }
@@ -209,7 +218,7 @@ public class CatalogMapper {
 
         if (dto.getHasOffer()) {
             // If there is an offer, we need to show the old crossed-out price
-            dto.setOriginalPrice(pricingService.getRegularPriceInSYP(product));
+            dto.setOriginalPrice(pricingService.getCustomerRegularPrice(product));
             // And calculate the percentage badge
             dto.setDiscountPercentage(pricingService.getDiscountPercentage(product));
         } else {

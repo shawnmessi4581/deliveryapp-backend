@@ -61,4 +61,10 @@ public class OrderResponse {
     /** Total SYP saved through promotional offers (e.g. Buy 1 Get 1 Free). */
     private Double offerDiscountAmount;
 
+    /**
+     * What each store is owed (store-paid discounts and commission already applied).
+     * Drivers/admins should use this instead of recomputing from item totals.
+     */
+    private List<StorePayoutResponse> storePayouts;
+
 }

@@ -61,6 +61,13 @@ public class OfferRequest {
      */
     private Double discountValue;
 
+    /**
+     * Admin only — who pays the discount: true = the product's store (deducted from its payout),
+     * false = the platform. Optional: defaults to the platform on create and keeps the current value
+     * on update. Ignored for vendors: their offers are always paid by their own store.
+     */
+    private Boolean fundedByStore;
+
     // ── Scheduling ───────────────────────────────────────────────────────────
 
     /** Optional: when the offer becomes active. Null = immediate. */

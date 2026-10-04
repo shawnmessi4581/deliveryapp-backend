@@ -4,6 +4,7 @@ import com.deliveryapp.dto.catalog.StoreRequest;
 import com.deliveryapp.entity.Category;
 import com.deliveryapp.entity.Store;
 import com.deliveryapp.entity.SubCategory;
+import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.CategoryRepository;
 import com.deliveryapp.repository.StoreRepository;
@@ -107,6 +108,10 @@ public class StoreService {
         store.setFreeDeliveryThreshold(request.getFreeDeliveryThreshold());
         // 🔘 Threshold enabled flag
         store.setFreeDeliveryThresholdEnabled(Boolean.TRUE.equals(request.getFreeDeliveryThresholdEnabled()));
+        validateFreeDeliveryThreshold(store, request);
+        // 💹 Price markup for customers (null = none)
+        store.setPriceMarkupPercentage(validMarkup(
+                request.getPriceMarkupPercentage() != null ? request.getPriceMarkupPercentage() : 0.0));
         return storeRepository.save(store);
     }
 
@@ -181,13 +186,43 @@ public class StoreService {
         // 🆓 Free Delivery (explicit null check: only update if provided)
         if (request.getFreeDelivery() != null)
             store.setFreeDelivery(request.getFreeDelivery());
-        // 🛒 Free Delivery Threshold: always overwrite (send null to clear/disable)
+        // 🛒 Free Delivery Threshold: only updated when sent (use freeDeliveryThresholdEnabled=false to turn it off)
         if (request.getFreeDeliveryThreshold() != null)
             store.setFreeDeliveryThreshold(request.getFreeDeliveryThreshold());
         // 🔘 Threshold enabled flag
         if (request.getFreeDeliveryThresholdEnabled() != null)
             store.setFreeDeliveryThresholdEnabled(request.getFreeDeliveryThresholdEnabled());
+        validateFreeDeliveryThreshold(store, request);
+        // 💹 Price markup (the vendor endpoint clears this field, so only admins reach here with it)
+        if (request.getPriceMarkupPercentage() != null)
+            store.setPriceMarkupPercentage(validMarkup(request.getPriceMarkupPercentage()));
         return storeRepository.save(store);
+    }
+
+    // 💹 Admin: set the % customers pay on top of this store's prices (0 turns it off)
+    @Transactional
+    public Store setPriceMarkup(Long storeId, Double percentage) {
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId));
+        store.setPriceMarkupPercentage(validMarkup(percentage));
+        return storeRepository.save(store);
+    }
+
+    private double validMarkup(Double percentage) {
+        if (percentage == null || percentage < 0 || percentage > 100) {
+            throw new InvalidDataException("نسبة زيادة السعر يجب أن تكون بين 0 و 100");
+        }
+        return percentage;
+    }
+
+    // A threshold of 0 (or none) while enabled would silently make every order free
+    private void validateFreeDeliveryThreshold(Store store, StoreRequest request) {
+        if (request.getFreeDeliveryThreshold() != null && request.getFreeDeliveryThreshold() <= 0) {
+            throw new InvalidDataException("الحد الأدنى للتوصيل المجاني يجب أن يكون أكبر من صفر");
+        }
+        if (Boolean.TRUE.equals(request.getFreeDeliveryThresholdEnabled()) && store.getFreeDeliveryThreshold() == null) {
+            throw new InvalidDataException("يجب تحديد قيمة الحد الأدنى قبل تفعيل التوصيل المجاني عند الحد");
+        }
     }
 
     public void deleteStore(Long id) {

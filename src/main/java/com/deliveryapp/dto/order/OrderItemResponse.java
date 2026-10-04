@@ -5,12 +5,18 @@ import lombok.Data;
 
 @Data
 public class OrderItemResponse {
+    private Long productId;
+    private Long variantId;
     private String productName;
     private String variantDetails;
     private Integer quantity;
-    private Double unitPrice;
+    private Double unitPrice;  // customer price (markup included)
     private Double totalPrice;
     private String notes;
+
+    // 💹 Store's own price — admin, driver & vendor only (null in customer responses)
+    private Double storeUnitPrice;
+    private Double storeTotalPrice;
     private Color selectedColor;
 
     // --- STORE INFO FOR DRIVER PAYOUT CALCULATIONS ---
@@ -24,4 +30,10 @@ public class OrderItemResponse {
 
     /** Total SYP discount awarded by the promotional offer for this line-item. */
     private Double offerDiscountAmount;
-}
+
+    /** True when the store (not the platform) pays this offer discount. */
+    private Boolean offerFundedByStore;
+
+    /** The offer discount at the store's own price (what the store pays when offerFundedByStore). */
+    private Double storeOfferDiscountAmount;
+}

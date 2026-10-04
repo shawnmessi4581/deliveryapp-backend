@@ -2,6 +2,9 @@ package com.deliveryapp.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.multipart.MultipartException;
@@ -52,6 +55,24 @@ public class GlobalExceptionHandler {
         }
         return buildResponse(HttpStatus.BAD_REQUEST, "طلب غير صالح", ex.getMessage(), request);
 
+    }
+
+    // @Valid failures (e.g. offer / flash sale requests) — return the field's own message instead of a 500
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> handleValidationException(
+            MethodArgumentNotValidException ex, WebRequest request) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .findFirst()
+                .orElse("البيانات المرسلة غير صالحة");
+        return buildResponse(HttpStatus.BAD_REQUEST, "طلب غير صالح", message, request);
+    }
+
+    // Malformed JSON or an unknown enum value (e.g. a wrong offerType)
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleUnreadableMessage(
+            HttpMessageNotReadableException ex, WebRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "طلب غير صالح", "صيغة البيانات المرسلة غير صحيحة", request);
     }
 
     @ExceptionHandler(Exception.class)

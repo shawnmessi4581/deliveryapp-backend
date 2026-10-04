@@ -2,12 +2,18 @@ package com.deliveryapp.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.DynamicUpdate;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+// currentUsageCount is changed only through atomic UPDATE queries (CouponRepository.claimUsage /
+// releaseUsage). @DynamicUpdate keeps unrelated saves (admin edits, flash sale sync/expiry) from
+// writing back a stale counter.
 @Entity
 @Table(name = "coupons")
 @Data
+@DynamicUpdate
 public class Coupon {
 
     @Id

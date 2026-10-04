@@ -20,6 +20,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -62,6 +63,7 @@ public class FlashSaleService {
     private final CouponRepository couponRepository;
     private final StoreRepository storeRepository;
     private final FlashSaleMapper flashSaleMapper;
+    private final CouponService couponService;
 
     // =================================================================================
     // ADMIN CRUD
@@ -69,7 +71,7 @@ public class FlashSaleService {
 
     @Transactional
     public FlashSaleResponse adminCreate(FlashSaleRequest request, Long adminUserId) {
-        validateDates(request);
+        validateRequest(request);
         String code = resolveCode(request.getCouponCode());
 
         Coupon coupon = buildCoupon(request, code, adminUserId, null);
@@ -92,7 +94,7 @@ public class FlashSaleService {
 
     @Transactional
     public FlashSaleResponse adminUpdate(Long flashSaleId, FlashSaleRequest request, Long adminUserId) {
-        validateDates(request);
+        validateRequest(request);
         FlashSale fs = findById(flashSaleId);
         Coupon coupon = findBackingCoupon(fs);
 
@@ -133,13 +135,13 @@ public class FlashSaleService {
 
     @Transactional
     public FlashSaleResponse vendorCreate(FlashSaleRequest request, Long vendorStoreId, Long vendorUserId) {
-        validateDates(request);
         Store store = storeRepository.findById(vendorStoreId)
                 .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود"));
 
         // Force vendor scope
         request.setApplicableTo(Coupon.ApplicableTo.STORE);
         request.setApplicableId(vendorStoreId);
+        validateRequest(request);
 
         String code = resolveCode(request.getCouponCode());
 
@@ -166,13 +168,13 @@ public class FlashSaleService {
     @Transactional
     public FlashSaleResponse vendorUpdate(Long flashSaleId, FlashSaleRequest request,
             Long vendorStoreId, Long vendorUserId) {
-        validateDates(request);
         FlashSale fs = findById(flashSaleId);
         assertOwnership(fs, vendorStoreId);
 
         // Always keep vendor scope locked
         request.setApplicableTo(Coupon.ApplicableTo.STORE);
         request.setApplicableId(vendorStoreId);
+        validateRequest(request);
 
         Coupon coupon = findBackingCoupon(fs);
         syncCoupon(coupon, request, fs.getStore());
@@ -289,7 +291,7 @@ public class FlashSaleService {
         coupon.setTitle(req.getTitle());
         coupon.setDescription(req.getDescription());
         coupon.setDiscountType(req.getDiscountType());
-        coupon.setDiscountValue(req.getDiscountValue());
+        coupon.setDiscountValue(discountValueOf(req));
         coupon.setMinOrderAmount(req.getMinOrderAmount());
         coupon.setMaxDiscountAmount(req.getMaxDiscountAmount());
         coupon.setApplicableTo(req.getApplicableTo() != null ? req.getApplicableTo() : Coupon.ApplicableTo.ALL);
@@ -310,7 +312,7 @@ public class FlashSaleService {
         coupon.setTitle(req.getTitle());
         coupon.setDescription(req.getDescription());
         coupon.setDiscountType(req.getDiscountType());
-        coupon.setDiscountValue(req.getDiscountValue());
+        coupon.setDiscountValue(discountValueOf(req));
         coupon.setMinOrderAmount(req.getMinOrderAmount());
         coupon.setMaxDiscountAmount(req.getMaxDiscountAmount());
         coupon.setApplicableTo(req.getApplicableTo() != null ? req.getApplicableTo() : Coupon.ApplicableTo.ALL);
@@ -340,7 +342,7 @@ public class FlashSaleService {
         fs.setDescription(req.getDescription());
         fs.setBannerImage(req.getBannerImage());
         fs.setDiscountType(req.getDiscountType());
-        fs.setDiscountValue(req.getDiscountValue());
+        fs.setDiscountValue(discountValueOf(req));
         fs.setMinOrderAmount(req.getMinOrderAmount());
         fs.setMaxDiscountAmount(req.getMaxDiscountAmount());
         fs.setApplicableTo(req.getApplicableTo() != null ? req.getApplicableTo() : Coupon.ApplicableTo.ALL);
@@ -359,6 +361,21 @@ public class FlashSaleService {
             couponRepository.findById(fs.getBackingCouponId()).ifPresent(couponRepository::delete);
         }
         flashSaleRepository.delete(fs);
+    }
+
+    private void validateRequest(FlashSaleRequest req) {
+        validateDates(req);
+        // Same rules as admin coupons: PERCENTAGE 1–100, FIXED_AMOUNT > 0, scoped sales need a target id
+        couponService.validateDiscountSettings(req.getDiscountType(), req.getDiscountValue(),
+                req.getApplicableTo(), req.getApplicableId());
+    }
+
+    /** FREE_DELIVERY has no amount; store 0 to satisfy the NOT NULL column. */
+    private BigDecimal discountValueOf(FlashSaleRequest req) {
+        if (req.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY || req.getDiscountValue() == null) {
+            return BigDecimal.ZERO;
+        }
+        return req.getDiscountValue();
     }
 
     private void validateDates(FlashSaleRequest req) {

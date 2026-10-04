@@ -3,13 +3,17 @@ package com.deliveryapp.mapper.order;
 import com.deliveryapp.dto.catalog.StoreResponse;
 import com.deliveryapp.dto.order.DeliveryFeeResponse;
 import com.deliveryapp.dto.order.OrderItemResponse;
+import com.deliveryapp.dto.order.OrderQuote;
+import com.deliveryapp.dto.order.OrderQuoteResponse;
 import com.deliveryapp.dto.order.OrderResponse;
+import com.deliveryapp.dto.order.StorePayoutResponse;
 import com.deliveryapp.dto.order.VendorOrderResponse;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.entity.OrderItem;
 import com.deliveryapp.entity.Store;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.mapper.user.UserMapper;
+import com.deliveryapp.service.StorePayoutService;
 import com.deliveryapp.util.DistanceUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -26,6 +30,7 @@ public class OrderMapper {
     private final CatalogMapper catalogMapper;
     private final UserMapper userMapper;
     private final DistanceUtil distanceUtil;
+    private final StorePayoutService storePayoutService;
 
     public OrderResponse toOrderResponse(Order order) {
         OrderResponse response = new OrderResponse();
@@ -143,42 +148,107 @@ public class OrderMapper {
         response.setOfferDiscountAmount(order.getOfferDiscountAmount() != null ? order.getOfferDiscountAmount() : 0.0);
         response.setTotalAmount(order.getTotalAmount());
 
+        // --- What each store is owed (store-paid discounts + commission applied server-side) ---
+        if (order.getStores() != null) {
+            response.setStorePayouts(order.getStores().stream()
+                    .map(store -> storePayoutService.calculate(order, store))
+                    .collect(Collectors.toList()));
+        } else {
+            response.setStorePayouts(Collections.emptyList());
+        }
+
         // --- Order Items ---
         if (order.getOrderItems() != null) {
-            response.setItems(order.getOrderItems().stream().map(item -> {
-                OrderItemResponse r = new OrderItemResponse();
-
-                // Map Product details
-                r.setProductName(item.getProductName());
-                String variantDetails = item.getVariantDetails();
-                if ((variantDetails == null || variantDetails.isBlank()) && item.getVariant() != null) {
-                    variantDetails = item.getVariant().getVariantValue();
-                }
-                r.setVariantDetails(variantDetails);
-                r.setQuantity(item.getQuantity());
-                r.setUnitPrice(item.getUnitPrice());
-                r.setTotalPrice(item.getTotalPrice());
-                r.setNotes(item.getNotes());
-                r.setSelectedColor(item.getSelectedColor());
-                r.setAppliedOfferId(item.getAppliedOfferId());
-                r.setOfferDiscountAmount(item.getOfferDiscountAmount() != null ? item.getOfferDiscountAmount() : 0.0);
-
-                // 👉 Map Store details for grouping and payout math
-                if (item.getProduct() != null && item.getProduct().getStore() != null) {
-                    r.setStoreId(item.getProduct().getStore().getStoreId());
-                    r.setStoreName(item.getProduct().getStore().getName());
-
-                    // Safely get commission (default to 0.0 if null)
-                    Double commission = item.getProduct().getStore().getCommissionPercentage();
-                    r.setStoreCommissionPercentage(commission != null ? commission : 0.0);
-                }
-
-                return r;
-            }).collect(Collectors.toList()));
+            response.setItems(order.getOrderItems().stream()
+                    .map(this::toOrderItemResponse)
+                    .collect(Collectors.toList()));
         } else {
             response.setItems(Collections.emptyList());
         }
 
+        return response;
+    }
+
+    public OrderItemResponse toOrderItemResponse(OrderItem item) {
+        OrderItemResponse r = new OrderItemResponse();
+
+        // Map Product details
+        if (item.getProduct() != null) {
+            r.setProductId(item.getProduct().getProductId());
+        }
+        if (item.getVariant() != null) {
+            r.setVariantId(item.getVariant().getVariantId());
+        }
+        r.setProductName(item.getProductName());
+        String variantDetails = item.getVariantDetails();
+        if ((variantDetails == null || variantDetails.isBlank()) && item.getVariant() != null) {
+            variantDetails = item.getVariant().getVariantValue();
+        }
+        r.setVariantDetails(variantDetails);
+        r.setQuantity(item.getQuantity());
+        r.setUnitPrice(item.getUnitPrice());
+        r.setTotalPrice(item.getTotalPrice());
+        r.setStoreUnitPrice(item.getEffectiveStoreUnitPrice());
+        r.setStoreTotalPrice(item.getEffectiveStoreTotalPrice());
+        r.setNotes(item.getNotes());
+        r.setSelectedColor(item.getSelectedColor());
+        r.setAppliedOfferId(item.getAppliedOfferId());
+        r.setOfferDiscountAmount(item.getOfferDiscountAmount() != null ? item.getOfferDiscountAmount() : 0.0);
+        r.setOfferFundedByStore(Boolean.TRUE.equals(item.getOfferFundedByStore()));
+        r.setStoreOfferDiscountAmount(item.getEffectiveStoreOfferDiscount());
+
+        // 👉 Map Store details for grouping and payout math
+        if (item.getProduct() != null && item.getProduct().getStore() != null) {
+            r.setStoreId(item.getProduct().getStore().getStoreId());
+            r.setStoreName(item.getProduct().getStore().getName());
+
+            // Safely get commission (default to 0.0 if null)
+            Double commission = item.getProduct().getStore().getCommissionPercentage();
+            r.setStoreCommissionPercentage(commission != null ? commission : 0.0);
+        }
+
+        return r;
+    }
+
+    /**
+     * What customers get: no store prices, payouts or commission — the price markup is platform profit
+     * and must stay invisible to them. Admin, employee and driver use {@link #toOrderResponse}.
+     */
+    public OrderResponse toCustomerOrderResponse(Order order) {
+        OrderResponse response = toOrderResponse(order);
+        response.setStorePayouts(null);
+        response.getItems().forEach(this::hideStoreSide);
+        return response;
+    }
+
+    private OrderItemResponse hideStoreSide(OrderItemResponse item) {
+        item.setStoreUnitPrice(null);
+        item.setStoreTotalPrice(null);
+        item.setStoreOfferDiscountAmount(null);
+        item.setOfferFundedByStore(null);
+        item.setStoreCommissionPercentage(null);
+        return item;
+    }
+
+    /** Checkout preview — the same numbers placeOrder will save (customer view). */
+    public OrderQuoteResponse toQuoteResponse(OrderQuote quote) {
+        OrderQuoteResponse response = new OrderQuoteResponse();
+        response.setSubtotal(quote.getSubtotal());
+        response.setOfferDiscountAmount(quote.getOfferDiscountAmount());
+        response.setDeliveryFee(quote.getDeliveryFee());
+        response.setFreeDeliveryStoreIds(new ArrayList<>(quote.getFreeDeliveryStoreIds()));
+        if (quote.isCouponApplied()) {
+            response.setCouponId(quote.getCoupon().getCouponId());
+            response.setCouponDiscountType(quote.getCoupon().getDiscountType().name());
+            response.setDiscountAmount(quote.getCouponDiscountAmount());
+        } else {
+            response.setDiscountAmount(0.0);
+        }
+        response.setTotalAmount(quote.getTotalAmount());
+        response.setItems(quote.getItems().stream()
+                .map(this::toOrderItemResponse)
+                .map(this::hideStoreSide)
+                .collect(Collectors.toList()));
         return response;
     }
 
@@ -203,37 +273,31 @@ public class OrderMapper {
                 .collect(Collectors.toList());
 
         // 2. Map the filtered items to DTOs
-        List<OrderItemResponse> itemDtos = vendorItems.stream().map(item -> {
-            OrderItemResponse r = new OrderItemResponse();
-            r.setProductName(item.getProductName());
-            r.setVariantDetails(item.getVariantDetails());
-            r.setQuantity(item.getQuantity());
-            r.setUnitPrice(item.getUnitPrice());
-            r.setTotalPrice(item.getTotalPrice());
-            r.setNotes(item.getNotes());
-            r.setSelectedColor(item.getSelectedColor());
-            return r;
-        }).collect(Collectors.toList());
+        response.setItems(vendorItems.stream()
+                .map(this::toOrderItemResponse)
+                .collect(Collectors.toList()));
 
-        response.setItems(itemDtos);
-
-        // 3. Calculate Vendor Financials (Store Subtotal & Payout)
-        double storeSubtotal = vendorItems.stream().mapToDouble(OrderItem::getTotalPrice).sum();
-
-        // Get the commission rate from the first item (all belong to same store anyway)
-        double commissionRate = 0.0;
-        if (!vendorItems.isEmpty()) {
-            Double rate = vendorItems.get(0).getProduct().getStore().getCommissionPercentage();
-            if (rate != null)
-                commissionRate = rate;
+        // 3. Vendor Financials — shared with Telegram so both always show the same payout
+        Store vendorStore = order.getStores() == null ? null : order.getStores().stream()
+                .filter(store -> store.getStoreId().equals(vendorStoreId))
+                .findFirst()
+                .orElse(null);
+        if (vendorStore == null && !vendorItems.isEmpty()) {
+            vendorStore = vendorItems.get(0).getProduct().getStore();
         }
 
-        double commissionAmount = storeSubtotal * (commissionRate / 100.0);
-        double storePayout = Math.ceil(storeSubtotal - commissionAmount); // Round up for SYP
-
-        response.setStoreSubtotal(storeSubtotal);
-        response.setCommissionAmount(commissionAmount);
-        response.setStorePayout(storePayout);
+        if (vendorStore != null) {
+            StorePayoutResponse payout = storePayoutService.calculate(order, vendorStore);
+            response.setStoreSubtotal(payout.getItemsSubtotal());
+            response.setStoreDiscountAmount(payout.getStoreDiscountAmount());
+            response.setCommissionAmount(payout.getCommissionAmount());
+            response.setStorePayout(payout.getStorePayout());
+        } else {
+            response.setStoreSubtotal(0.0);
+            response.setStoreDiscountAmount(0.0);
+            response.setCommissionAmount(0.0);
+            response.setStorePayout(0.0);
+        }
 
         return response;
     }

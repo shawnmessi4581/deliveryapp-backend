@@ -18,10 +18,13 @@ import java.time.LocalDateTime;
  *       with {@code discountValue} SYP off each rewarded unit.</li>
  * </ul>
  *
- * <h3>Ownership model</h3>
+ * <h3>Ownership & funding</h3>
  * <ul>
- *   <li>Admin offers: {@code storeId} is {@code null}, applying globally or store-wide.</li>
- *   <li>Vendor offers: {@code storeId} is set; only products of that store can hold the offer.</li>
+ *   <li>{@code store} is the store whose product carries the offer.</li>
+ *   <li>{@code fundedByStore} decides who pays: the store (deducted from its payout) or the platform.
+ *       Vendor offers are always paid by their store; an admin can choose either.</li>
+ *   <li>Vendors can only manage offers they created ({@code createdBy}); admin offers are read-only
+ *       for them, even when their store pays.</li>
  * </ul>
  */
 @Entity
@@ -85,13 +88,19 @@ public class PromotionalOffer {
     private Product product;
 
     /**
-     * The store that owns this offer.
-     * {@code null} means the offer was created by an Admin (super-scope).
-     * Non-{@code null} means a Vendor created it for their own store.
+     * The store of the offer's product (the one that pays when {@code fundedByStore} is true).
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "store_id")
     private Store store;
+
+    /**
+     * Who pays the discount: true = the store (deducted from its payout), false = the platform.
+     * Vendor offers are always true; admins choose (default false).
+     * Null on offers created before this field existed — those fall back to who created them.
+     */
+    @Column(name = "funded_by_store")
+    private Boolean fundedByStore;
 
     // ── Scheduling & lifecycle ───────────────────────────────────────────────
 

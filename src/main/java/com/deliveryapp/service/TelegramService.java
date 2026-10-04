@@ -1,5 +1,6 @@
 package com.deliveryapp.service;
 
+import com.deliveryapp.dto.order.StorePayoutResponse;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.entity.OrderItem;
 import com.deliveryapp.entity.Store;
@@ -31,6 +32,8 @@ public class TelegramService {
 
     @Value("${telegram.bot.token}")
     private String botToken;
+
+    private final StorePayoutService storePayoutService;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -88,8 +91,6 @@ public class TelegramService {
         sb.append("🏪 *المتجر:* ").append(escapeMarkdown(store.getName())).append("\n");
         sb.append("📦 *المنتجات:*\n");
 
-        double storeSubtotal = 0.0;
-
         for (OrderItem item : storeItems) {
             sb.append("\n");
 
@@ -107,36 +108,48 @@ public class TelegramService {
                 sb.append("    🎨 اللون: ").append(escapeMarkdown(item.getSelectedColor().getName())).append("\n");
             }
 
+            // The store's own prices — its payout is based on them
             sb.append("    الكمية: ×").append(item.getQuantity())
-                    .append("  \\|  السعر: ").append(formatPrice(item.getUnitPrice()))
-                    .append("  ←  *").append(formatPrice(item.getTotalPrice())).append("*\n");
+                    .append("  \\|  السعر: ").append(formatPrice(item.getEffectiveStoreUnitPrice()))
+                    .append("  ←  *").append(formatPrice(item.getEffectiveStoreTotalPrice())).append("*\n");
+
+            // 💹 What the customer paid, when the admin added a markup
+            if (item.getUnitPrice() != null && item.getUnitPrice() > item.getEffectiveStoreUnitPrice()) {
+                sb.append("    👤 سعر الزبون: ").append(formatPrice(item.getUnitPrice())).append("\n");
+            }
+
+            // Only discounts the store pays for are shown — they lower its payout
+            if (Boolean.TRUE.equals(item.getOfferFundedByStore()) && item.getEffectiveStoreOfferDiscount() > 0) {
+                sb.append("    🎁 خصم عرض المتجر: \\-").append(formatPrice(item.getEffectiveStoreOfferDiscount())).append("\n");
+            }
 
             if (item.getNotes() != null && !item.getNotes().isBlank()) {
                 sb.append("    📝 _").append(escapeMarkdown(item.getNotes())).append("_\n");
             }
-
-            storeSubtotal += item.getTotalPrice() != null ? item.getTotalPrice() : 0.0;
         }
 
         sb.append("\n").append(DIVIDER).append("\n");
 
         // ====================================================================
-        // CALCULATE STORE COMMISSION & FINAL PAYOUT
+        // STORE COMMISSION & FINAL PAYOUT (same numbers as the vendor app)
         // ====================================================================
 
-        double commissionRate = store.getCommissionPercentage() != null ? store.getCommissionPercentage() : 0.0;
-        double commissionAmount = storeSubtotal * (commissionRate / 100.0);
-        double storePayout = storeSubtotal - commissionAmount; // What the driver gives the store
+        StorePayoutResponse payout = storePayoutService.calculate(order, store);
 
-        sb.append("💰 *إجمالي قيمة المنتجات:* ").append(formatPrice(storeSubtotal)).append("\n");
+        sb.append("💰 *إجمالي قيمة المنتجات:* ").append(formatPrice(payout.getItemsSubtotal())).append("\n");
 
-        if (commissionRate > 0) {
-            String commissionText = String.format("%.1f", commissionRate).replace(".0", "");
-            sb.append("📉 *عمولة التطبيق \\(").append(escapeMarkdown(commissionText)).append("%\\):* \\-")
-                    .append(formatPrice(commissionAmount)).append("\n");
+        if (payout.getStoreDiscountAmount() > 0) {
+            sb.append("🎁 *خصومات على حساب المتجر:* \\-")
+                    .append(formatPrice(payout.getStoreDiscountAmount())).append("\n");
         }
 
-        sb.append("💵 *المبلغ المطلوب تسليمه لكم \\(من السائق\\):* *").append(formatPrice(storePayout)).append("*\n");
+        if (payout.getCommissionPercentage() > 0) {
+            String commissionText = String.format("%.1f", payout.getCommissionPercentage()).replace(".0", "");
+            sb.append("📉 *عمولة التطبيق \\(").append(escapeMarkdown(commissionText)).append("%\\):* \\-")
+                    .append(formatPrice(payout.getCommissionAmount())).append("\n");
+        }
+
+        sb.append("💵 *المبلغ المطلوب تسليمه لكم \\(من السائق\\):* *").append(formatPrice(payout.getStorePayout())).append("*\n");
         sb.append(DIVIDER).append("\n\n");
 
         // ====================================================================

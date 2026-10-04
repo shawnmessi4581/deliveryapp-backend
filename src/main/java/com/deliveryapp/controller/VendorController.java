@@ -104,7 +104,7 @@ public class VendorController {
     public ResponseEntity<StoreResponse> toggleStoreBusy(@RequestParam Boolean isBusy) {
         Long storeId = getVendorStoreId();
         Store updatedStore = storeService.toggleStoreBusyStatus(storeId, isBusy);
-        return ResponseEntity.ok(catalogMapper.toStoreResponse(updatedStore));
+        return ResponseEntity.ok(catalogMapper.toAdminStoreResponse(updatedStore));
     }
 
     // 🟢 NEW: Update Vendor's Store Info
@@ -125,11 +125,12 @@ public class VendorController {
         request.setSubCategoryIds(null);
         request.setCommissionPercentage(null);
         request.setDeliveryFeeKM(null); // Optional: Do you want vendors setting their own delivery fee? Usually no.
+        request.setPriceMarkupPercentage(null); // 💹 Markup is set by the admin only
 
         // Call the same update method used by Admin
         Store updatedStore = storeService.updateStore(storeId, request, isActive, logo, cover);
 
-        return ResponseEntity.ok(catalogMapper.toStoreResponse(updatedStore));
+        return ResponseEntity.ok(catalogMapper.toAdminStoreResponse(updatedStore));
     }
 
     // ==========================================
@@ -267,6 +268,7 @@ public class VendorController {
         responseDto.setVariantName(variant.getVariantValue());
         responseDto.setPriceAdjustment(variant.getPriceAdjustment());
         responseDto.setCalculatedPriceAdjustment(pricingService.getVariantFinalPriceInSYP(variant));
+        responseDto.setCustomerPriceAdjustment(pricingService.getCustomerVariantPrice(variant));
 
         return ResponseEntity.ok(responseDto);
     } // 🟢 NEW: Delete Product Variant (Vendor)

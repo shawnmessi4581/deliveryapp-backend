@@ -42,15 +42,16 @@ public interface PromotionalOfferRepository extends JpaRepository<PromotionalOff
     // ── Offer lookup per product (used by OrderService engine) ───────────────
 
     /**
-     * Find the best active & valid offer for a given product at checkout time.
-     * Preference: vendor-scoped offers first (ordered by ID desc so latest wins).
+     * All active & valid offers for a product at checkout time, latest first.
+     * The engine evaluates every candidate and applies the one worth the most to the customer
+     * (ties go to the latest).
      */
     @Query("SELECT o FROM PromotionalOffer o " +
            "WHERE o.product.productId = :productId " +
            "  AND o.isActive = true " +
            "  AND (o.startDate IS NULL OR o.startDate <= :now) " +
            "  AND (o.endDate   IS NULL OR o.endDate   >= :now) " +
-           "ORDER BY o.store.storeId DESC NULLS LAST, o.offerId DESC")
+           "ORDER BY o.offerId DESC")
     List<PromotionalOffer> findActiveOffersForProduct(@Param("productId") Long productId,
                                                        @Param("now") LocalDateTime now);
 

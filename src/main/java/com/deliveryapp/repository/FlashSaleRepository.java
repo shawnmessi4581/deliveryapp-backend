@@ -31,12 +31,13 @@ public interface FlashSaleRepository extends JpaRepository<FlashSale, Long> {
      * Matches flash sales where {@code store.storeId = storeId}
      * (vendor-created) OR where {@code applicableTo = STORE AND applicableId = storeId}.
      */
-    @Query("SELECT fs FROM FlashSale fs " +
+    // LEFT JOIN: admin flash sales have no store but can still be scoped to one via applicableId
+    @Query("SELECT fs FROM FlashSale fs LEFT JOIN fs.store s " +
            "WHERE fs.isActive = true " +
            "  AND fs.startDate        <= :now " +
            "  AND fs.countdownEndsAt  >= :now " +
            "  AND (" +
-           "      fs.store.storeId = :storeId " +
+           "      s.storeId = :storeId " +
            "      OR (fs.applicableTo = 'STORE' AND fs.applicableId = :storeId)" +
            "  ) " +
            "ORDER BY fs.countdownEndsAt ASC")
@@ -67,4 +68,7 @@ public interface FlashSaleRepository extends JpaRepository<FlashSale, Long> {
 
     /** Check for duplicate coupon code (case-insensitive). */
     boolean existsByCouponCodeIgnoreCase(String couponCode);
+
+    /** The flash sale behind a coupon, if any — used at checkout to see who pays the discount. */
+    Optional<FlashSale> findFirstByBackingCouponId(Long backingCouponId);
 }

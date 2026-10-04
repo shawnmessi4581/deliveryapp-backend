@@ -18,4 +18,9 @@ public class AdminProductResponse extends ProductResponse {
     private Boolean hasOffer;
     private Double offerBasePrice;
     private Double offerUsdPrice;
+
+    // 💹 Both prices for admin & vendor: calculatedPrice is the store's own final price (what the
+    // store is paid on); customerPrice is what customers see and pay (store markup included).
+    private Double customerPrice;
+    private Double priceMarkupPercentage;
 }

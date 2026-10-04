@@ -94,6 +94,7 @@ public class AdminProductController {
         responseDto.setVariantName(variant.getVariantValue());
         responseDto.setPriceAdjustment(variant.getPriceAdjustment());
         responseDto.setCalculatedPriceAdjustment(pricingService.getVariantFinalPriceInSYP(variant));
+        responseDto.setCustomerPriceAdjustment(pricingService.getCustomerVariantPrice(variant));
 
         return ResponseEntity.ok(responseDto);
     }

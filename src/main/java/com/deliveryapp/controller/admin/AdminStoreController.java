@@ -27,7 +27,7 @@ public class AdminStoreController {
     @GetMapping
     public ResponseEntity<List<StoreResponse>> getAllStores() {
         return ResponseEntity.ok(storeService.getAllStores().stream()
-                .map(catalogMapper::toStoreResponse)
+                .map(catalogMapper::toAdminStoreResponse)
                 .collect(Collectors.toList()));
     }
 
@@ -37,7 +37,7 @@ public class AdminStoreController {
             @RequestParam(value = "logo", required = false) MultipartFile logo,
             @RequestParam(value = "cover", required = false) MultipartFile cover) {
         Store store = storeService.createStore(request, logo, cover);
-        return ResponseEntity.ok(catalogMapper.toStoreResponse(store));
+        return ResponseEntity.ok(catalogMapper.toAdminStoreResponse(store));
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -48,7 +48,7 @@ public class AdminStoreController {
             @RequestParam(value = "logo", required = false) MultipartFile logo,
             @RequestParam(value = "cover", required = false) MultipartFile cover) {
         Store store = storeService.updateStore(id, request, isActive, logo, cover);
-        return ResponseEntity.ok(catalogMapper.toStoreResponse(store));
+        return ResponseEntity.ok(catalogMapper.toAdminStoreResponse(store));
     }
 
     @DeleteMapping("/{id}")
@@ -66,6 +66,18 @@ public class AdminStoreController {
             @PathVariable Long id,
             @RequestParam Boolean enabled) {
         Store store = storeService.toggleFreeDelivery(id, enabled);
-        return ResponseEntity.ok(catalogMapper.toStoreResponse(store));
+        return ResponseEntity.ok(catalogMapper.toAdminStoreResponse(store));
+    }
+
+    /**
+     * 💹 Set the price markup customers pay on top of this store's prices (0–100, 0 = none).
+     * PATCH /api/admin/stores/{id}/price-markup?percentage=10
+     */
+    @PatchMapping("/{id}/price-markup")
+    public ResponseEntity<StoreResponse> setPriceMarkup(
+            @PathVariable Long id,
+            @RequestParam Double percentage) {
+        Store store = storeService.setPriceMarkup(id, percentage);
+        return ResponseEntity.ok(catalogMapper.toAdminStoreResponse(store));
     }
 }

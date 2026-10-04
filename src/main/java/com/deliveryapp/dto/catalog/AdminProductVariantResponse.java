@@ -9,4 +9,7 @@ public class AdminProductVariantResponse extends ProductVariantResponse {
     // This is the RAW price stored in the DB (can be USD or SYP)
     // The Admin needs to see this!
     private Double priceAdjustment;
+
+    // 💹 calculatedPriceAdjustment = store's own price in SYP; this = what customers pay (markup included)
+    private Double customerPriceAdjustment;
 }

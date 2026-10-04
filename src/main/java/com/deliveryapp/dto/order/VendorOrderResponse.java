@@ -19,8 +19,9 @@ public class VendorOrderResponse {
     private String orderNote;
 
     // Vendor's Specific Financials
-    private Double storeSubtotal; // Total of ONLY their items
-    private Double commissionAmount; // App's cut
+    private Double storeSubtotal; // Total of ONLY their items (full price)
+    private Double storeDiscountAmount; // Discounts the store pays for (its own offers / flash sale)
+    private Double commissionAmount; // App's cut (on the amount after store discounts)
     private Double storePayout; // What the driver pays the store in cash
 
     // ONLY the items that belong to this specific store

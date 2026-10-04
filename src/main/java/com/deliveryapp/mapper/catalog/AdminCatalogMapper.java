@@ -3,6 +3,7 @@ package com.deliveryapp.mapper.catalog;
 import com.deliveryapp.dto.catalog.AdminProductResponse;
 import com.deliveryapp.dto.catalog.AdminProductVariantResponse;
 import com.deliveryapp.entity.Product;
+import com.deliveryapp.service.PricingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +15,7 @@ import java.util.stream.Collectors;
 public class AdminCatalogMapper {
 
     private final CatalogMapper catalogMapper;
+    private final PricingService pricingService;
 
     public AdminProductResponse toAdminProductResponse(Product product) {
         AdminProductResponse dto = new AdminProductResponse();
@@ -24,13 +26,17 @@ public class AdminCatalogMapper {
         dto.setName(publicDto.getName());
         dto.setDescription(publicDto.getDescription());
         dto.setImageUrl(publicDto.getImageUrl());
-        dto.setCalculatedPrice(publicDto.getCalculatedPrice());
+        // 💹 Both prices: the store's own price + what customers pay (markup included)
+        dto.setCalculatedPrice(pricingService.getFinalPriceInSYP(product));
+        dto.setCustomerPrice(publicDto.getCalculatedPrice());
+        dto.setPriceMarkupPercentage(pricingService.getMarkupPercentage(product.getStore()));
         dto.setIsAvailable(publicDto.getIsAvailable());
         dto.setIsTrending(publicDto.getIsTrending());
         dto.setDisplayOrder(publicDto.getDisplayOrder());
         dto.setImages(publicDto.getImages());
         dto.setColors(publicDto.getColors());
-        dto.setStore(publicDto.getStore()); // Contains full store object
+        // Contains full store object (admin view, with the markup)
+        dto.setStore(product.getStore() != null ? catalogMapper.toAdminStoreResponse(product.getStore()) : null);
         dto.setCategoryId(publicDto.getCategoryId());
         dto.setCategoryName(publicDto.getCategoryName()); // Make sure this is mapped
         dto.setSubCategoryId(publicDto.getSubCategoryId());
@@ -59,8 +65,10 @@ public class AdminCatalogMapper {
                         .findFirst()
                         .orElse(null);
 
+                // Store's own variant price, plus what customers pay for it
+                vDto.setCalculatedPriceAdjustment(pricingService.getVariantFinalPriceInSYP(v));
                 if (publicVariant != null) {
-                    vDto.setCalculatedPriceAdjustment(publicVariant.getCalculatedPriceAdjustment());
+                    vDto.setCustomerPriceAdjustment(publicVariant.getCalculatedPriceAdjustment());
                 }
 
                 // Set the raw price adjustment

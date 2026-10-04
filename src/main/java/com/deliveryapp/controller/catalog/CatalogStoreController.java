@@ -44,7 +44,10 @@ public class CatalogStoreController {
             @RequestParam(required = false) Double userLng) {
         Store store = storeService.getStoreById(storeId);
         StoreResponse response = catalogMapper.toStoreResponse(store);
-        response.setPredictedDeliveryFee(orderCalculationService.computeFeeForStore(store, userLat, userLng));
+        // Same as the list endpoints: no location → leave the fee empty instead of showing a "free" 0
+        if (userLat != null && userLng != null) {
+            response.setPredictedDeliveryFee(orderCalculationService.computeFeeForStore(store, userLat, userLng));
+        }
         return ResponseEntity.ok(response);
     }
 

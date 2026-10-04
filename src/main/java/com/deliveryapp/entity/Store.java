@@ -46,6 +46,11 @@ public class Store {
     @Column(columnDefinition = "numeric(5,2) default 0.0")
     private Double commissionPercentage = 0.0;
 
+    // 💹 PRICE MARKUP (admin only): customers see and pay the store's prices + this %, rounded up to
+    // the nearest 10. The store is still paid on its own prices; the difference is platform profit.
+    @Column(columnDefinition = "numeric(5,2) default 0.0")
+    private Double priceMarkupPercentage = 0.0;
+
     // 🟢 NEW: Relationship to fetch categories directly from the Store object
     @OneToMany(mappedBy = "store", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @OrderBy("displayOrder ASC") // Ensures they are ordered automatically from the DB

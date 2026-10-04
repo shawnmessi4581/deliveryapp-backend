@@ -1,7 +1,6 @@
 package com.deliveryapp.dto.flashsale;
 
 import com.deliveryapp.entity.Coupon;
-import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -45,8 +44,10 @@ public class FlashSaleRequest {
     @NotNull(message = "نوع الخصم مطلوب")
     private Coupon.DiscountType discountType;
 
-    @NotNull(message = "قيمة الخصم مطلوبة")
-    @DecimalMin(value = "0.01", message = "قيمة الخصم يجب أن تكون أكبر من صفر")
+    /**
+     * Required for PERCENTAGE (1–100) and FIXED_AMOUNT (&gt; 0); ignored for FREE_DELIVERY.
+     * Validated in FlashSaleService because the rule depends on discountType.
+     */
     private BigDecimal discountValue;
 
     /** Minimum order value to be eligible. Null = no minimum. */

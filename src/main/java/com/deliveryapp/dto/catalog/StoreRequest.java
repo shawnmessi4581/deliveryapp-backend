@@ -32,6 +32,9 @@ public class StoreRequest {
     private Double commissionPercentage;
     private Double minimumDeliveryFee;
 
+    // 💹 Admin only: % added to this store's prices for customers (0 = none)
+    private Double priceMarkupPercentage;
+
     // 🔔 Telegram: Chat/Group/Channel ID for order notifications
     private String telegramChatId;
 

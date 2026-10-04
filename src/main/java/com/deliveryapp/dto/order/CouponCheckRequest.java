@@ -7,6 +7,9 @@ import java.util.List;
 public class CouponCheckRequest {
     private String code;
     private Long userId;
-    private Long storeId;
+    private Long storeId; // No longer needed: coupon scope is checked against the items' stores
     private List<OrderItemRequest> items; // We need items to calculate the subtotal
+
+    // Optional: lets FREE_DELIVERY coupons report the delivery amount they waive
+    private Long addressId;
 }

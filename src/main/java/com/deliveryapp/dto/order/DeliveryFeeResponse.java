@@ -12,9 +12,12 @@ import java.util.List;
 public class DeliveryFeeResponse {
     private Double deliveryFee;
     private String estimatedTime;
-    private Double maxMinimumDeliveryFee;
-    private Double totalDistanceKm;
+    private Double maxMinimumDeliveryFee; // min-fee floor of the stores the customer pays for
+    private Double totalDistanceKm; // full delivery route (all stores)
     private List<RouteSegmentResponse> routeSegments;
+
+    // Stores whose delivery is free; the fee only covers the other stores
+    private List<Long> freeDeliveryStoreIds;
 
     @Data
     @NoArgsConstructor

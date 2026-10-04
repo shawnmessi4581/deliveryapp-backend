@@ -1,6 +1,5 @@
 package com.deliveryapp.service;
 
-import com.deliveryapp.dto.offer.OfferApplicationResult;
 import com.deliveryapp.dto.order.*;
 import com.deliveryapp.entity.*;
 import com.deliveryapp.enums.OrderStatus;
@@ -8,7 +7,6 @@ import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.*;
-import com.deliveryapp.util.MathUtil;
 import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -20,9 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -33,22 +29,14 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OrderStatusHistoryRepository historyRepository;
     private final UserRepository userRepository;
-    private final ProductRepository productRepository;
-    private final ProductVariantRepository variantRepository;
-    private final UserAddressRepository addressRepository;
-    private final CouponUsageRepository couponUsageRepository;
-    private final ColorRepository colorRepository;
 
     private final CouponService couponService;
     private final NotificationService notificationService;
-    private final PricingService pricingService;
     private final TelegramService telegramService;
     private final OrderCalculationService calculationService;
     private final OrderWebSocketService webSocketService;
-    private final PromotionalOfferService promotionalOfferService;
 
     private final UrlUtil urlUtil;
-    private final MathUtil mathUtil;
 
     // =================================================================================
     // PLACE ORDER LOGIC
@@ -61,93 +49,33 @@ public class OrderService {
         if (request.getAddressId() == null)
             throw new InvalidDataException("عنوان التوصيل مطلوب.");
 
-        UserAddress userAddress = addressRepository.findById(request.getAddressId())
-                .orElseThrow(() -> new ResourceNotFoundException("العنوان غير موجود برقم: " + request.getAddressId()));
-
-        if (!userAddress.getUser().getUserId().equals(request.getUserId())) {
-            throw new ResourceNotFoundException("العنوان لا يخص هذا المستخدم");
-        }
+        UserAddress userAddress = calculationService.findUserAddress(request.getAddressId(), request.getUserId());
 
         User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود"));
+
+        // 1. Price the lines (variants, offers) — same engine as the /quote preview
+        List<OrderItem> orderItems = calculationService.priceItems(request.getItems());
+
+        for (OrderItem item : orderItems) {
+            Store store = item.getProduct().getStore();
+            if (!isStoreOpen(store)) {
+                throw new InvalidDataException("المتجر '" + store.getName() + "' مغلق حالياً.");
+            }
+        }
+
+        // 2. Delivery fee (store free-delivery rules), coupon / flash sale, total
+        OrderQuote quote = calculationService.quote(orderItems, request.getUserId(), request.getCouponCode(),
+                userAddress.getLatitude(), userAddress.getLongitude());
 
         Order order = new Order();
         order.setUser(user);
         order.setOrderNumber(UUID.randomUUID().toString().substring(0, 8).toUpperCase());
         order.setStatus(OrderStatus.PENDING);
 
-        List<OrderItem> orderItems = new ArrayList<>();
-        Set<Store> uniqueStores = new HashSet<>();
-        double subtotal = 0.0;
-
-        for (OrderItemRequest itemReq : request.getItems()) {
-            Product product = productRepository.findById(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود: " + itemReq.getProductId()));
-
-            Store store = product.getStore();
-
-            if (!isStoreOpen(store)) {
-                throw new InvalidDataException("المتجر '" + store.getName() + "' مغلق حالياً.");
-            }
-
-            uniqueStores.add(store);
-
-            OrderItem orderItem = new OrderItem();
-            orderItem.setOrder(order);
-            orderItem.setProduct(product);
-            orderItem.setProductName(product.getName());
-            orderItem.setQuantity(itemReq.getQuantity());
-            orderItem.setNotes(itemReq.getNotes());
-
-            if (itemReq.getColorId() != null) {
-                Color color = colorRepository.findById(itemReq.getColorId())
-                        .orElseThrow(() -> new ResourceNotFoundException("اللون غير موجود"));
-
-                boolean isValidColor = product.getColors().stream()
-                        .anyMatch(c -> c.getColorId().equals(color.getColorId()));
-
-                if (!isValidColor)
-                    throw new InvalidDataException("اللون غير متوفر لهذا المنتج");
-                orderItem.setSelectedColor(color);
-            }
-
-            double price = pricingService.getFinalPriceInSYP(product);
-            if (itemReq.getVariantId() != null && itemReq.getVariantId() != 0) {
-                ProductVariant variant = variantRepository.findById(itemReq.getVariantId())
-                        .orElseThrow(() -> new ResourceNotFoundException("النوع غير موجود: " + itemReq.getVariantId()));
-
-                if (!variant.getProduct().getProductId().equals(product.getProductId())) {
-                    throw new InvalidDataException("هذا النوع لا ينتمي لهذا المنتج");
-                }
-
-                orderItem.setVariant(variant);
-                orderItem.setVariantDetails(variant.getVariantValue());
-                price += pricingService.getVariantFinalPriceInSYP(variant);
-            }
-
-            orderItem.setUnitPrice(price);
-            orderItem.setTotalPrice(price * itemReq.getQuantity());
-
-            // ── Apply Promotional Offer ───────────────────────────────────────────────
-            OfferApplicationResult offerResult =
-                    promotionalOfferService.applyOfferToItem(product.getProductId(), itemReq.getQuantity(), price);
-            if (offerResult.getOfferId() != null) {
-                orderItem.setAppliedOfferId(offerResult.getOfferId());
-                orderItem.setOfferDiscountAmount(offerResult.getDiscountAmount());
-            }
-
-            subtotal += orderItem.getTotalPrice();
-            orderItems.add(orderItem);
-        }
-
-        // ── Sum total offer discount across all line-items ─────────────────────────
-        double totalOfferDiscount = orderItems.stream()
-                .mapToDouble(item -> item.getOfferDiscountAmount() != null ? item.getOfferDiscountAmount() : 0.0)
-                .sum();
-
-        order.setStores(new ArrayList<>(uniqueStores));
+        orderItems.forEach(item -> item.setOrder(order));
+        order.setStores(new ArrayList<>(quote.getStores()));
         order.setOrderItems(orderItems);
-        order.setSubtotal(subtotal);
 
         order.setDeliveryAddress(userAddress.getAddressLine());
         order.setDeliveryLatitude(userAddress.getLatitude());
@@ -157,81 +85,24 @@ public class OrderService {
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
 
-        // 5. CALCULATE DELIVERY FEE — applying all store-level rules
-        // Rule A: any store in the order has unconditional free delivery
-        boolean hasFreeDeliveryStore = uniqueStores.stream()
-                .anyMatch(s -> Boolean.TRUE.equals(s.getFreeDelivery()));
-
-        // Rule B: subtotal meets the free delivery threshold of any store (only if enabled)
-        final double finalSubtotal = subtotal; // must be effectively final for lambda
-        boolean meetsThreshold = uniqueStores.stream()
-                .filter(s -> Boolean.TRUE.equals(s.getFreeDeliveryThresholdEnabled()))
-                .filter(s -> s.getFreeDeliveryThreshold() != null)
-                .anyMatch(s -> finalSubtotal >= s.getFreeDeliveryThreshold());
-
-        double deliveryFee;
-        if (hasFreeDeliveryStore || meetsThreshold) {
-            deliveryFee = 0.0;
-        } else {
-            double maxFeePerKm = uniqueStores.stream()
-                    .mapToDouble(s -> s.getDeliveryFeeKM() != null ? s.getDeliveryFeeKM() : 0.0)
-                    .max().orElse(0.0);
-
-            double maxMinimumDeliveryFee = uniqueStores.stream()
-                    .mapToDouble(s -> s.getMinimumDeliveryFee() != null ? s.getMinimumDeliveryFee() : 0.0)
-                    .max().orElse(0.0);
-
-            double totalDistanceKm = calculationService.calculateOptimizedDistance(
-                    new ArrayList<>(uniqueStores),
-                    userAddress.getLatitude(),
-                    userAddress.getLongitude());
-
-            double rawDeliveryFee = totalDistanceKm * maxFeePerKm;
-            deliveryFee = mathUtil.roundUpToNearestTen(rawDeliveryFee);
-
-            if (deliveryFee < maxMinimumDeliveryFee) {
-                deliveryFee = maxMinimumDeliveryFee;
-            }
+        // 3. Financials (total = subtotal − offers − coupon + delivery)
+        order.setSubtotal(quote.getSubtotal());
+        order.setOfferDiscountAmount(quote.getOfferDiscountAmount());
+        order.setDeliveryFee(quote.getDeliveryFee());
+        if (quote.isCouponApplied()) {
+            order.setCouponId(quote.getCoupon().getCouponId());
+            order.setDiscountAmount(quote.getCouponDiscountAmount());
+            order.setCouponFundedByStoreId(quote.getCouponFundedByStoreId());
+            order.setCouponStoreDiscountAmount(quote.getCouponStoreDiscountAmount());
         }
-
-        // 6. Handle Coupon Logic
-        double discountAmount = 0.0;
-        Coupon validCoupon = null;
-
-        if (request.getCouponCode() != null && !request.getCouponCode().trim().isEmpty()) {
-            Store primaryStore = uniqueStores.iterator().next();
-            validCoupon = couponService.validateCouponForOrder(request.getCouponCode(), request.getUserId(), orderItems,
-                    primaryStore);
-            discountAmount = couponService.calculateDiscount(validCoupon, subtotal, deliveryFee);
-
-            if (validCoupon.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY) {
-                discountAmount = deliveryFee;
-                deliveryFee = 0.0;
-            }
-
-            order.setCouponId(validCoupon.getCouponId());
-            order.setDiscountAmount(discountAmount);
-        }
-
-        order.setDeliveryFee(deliveryFee);
-
-        // ── Save offer discount on the order ──────────────────────────────────────
-        order.setOfferDiscountAmount(totalOfferDiscount);
-
-        // 7. Final Total (subtotal − offerDiscount + deliveryFee − couponDiscount)
-        double finalTotal;
-        if (validCoupon != null && validCoupon.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY) {
-            finalTotal = subtotal - totalOfferDiscount;
-        } else {
-            finalTotal = (subtotal - totalOfferDiscount + deliveryFee) - discountAmount;
-        }
-
-        order.setTotalAmount(Math.max(finalTotal, 0.0));
+        order.setTotalAmount(quote.getTotalAmount());
 
         Order savedOrder = orderRepository.save(order);
 
-        if (validCoupon != null) {
-            couponService.recordUsage(validCoupon, request.getUserId(), savedOrder.getOrderId(), discountAmount);
+        // Takes the usage slot atomically — throws (rolling back the order) if a flash sale just sold out
+        if (quote.isCouponApplied()) {
+            couponService.recordUsage(quote.getCoupon(), request.getUserId(), savedOrder.getOrderId(),
+                    quote.getCouponDiscountAmount());
         }
 
         logStatusChange(savedOrder, null, OrderStatus.PENDING, "تم استلام الطلب");
@@ -250,7 +121,7 @@ public class OrderService {
             // Find all users who are VENDORS
             List<User> allVendors = userRepository.findByUserType(UserType.VENDOR);
 
-            for (Store store : uniqueStores) {
+            for (Store store : quote.getStores()) {
                 // Find vendors whose managedStoreId matches this store
                 List<User> storeVendors = allVendors.stream()
                         .filter(v -> v.getManagedStore() != null
@@ -376,14 +247,7 @@ public class OrderService {
         }
 
         if (order.getCouponId() != null) {
-            couponUsageRepository.deleteByOrderId(orderId);
-            try {
-                Coupon coupon = couponService.getCouponById(order.getCouponId());
-                if (coupon != null) {
-                    coupon.setCurrentUsageCount(Math.max(0, coupon.getCurrentUsageCount() - 1));
-                }
-            } catch (ResourceNotFoundException e) {
-            }
+            couponService.releaseUsageForOrder(orderId, order.getCouponId());
         }
 
         try {
@@ -470,7 +334,8 @@ public class OrderService {
         List<Long> storeIds = order.getStores().stream().map(Store::getStoreId).collect(Collectors.toList());
 
         historyRepository.deleteByOrderOrderId(orderId);
-        couponUsageRepository.deleteByOrderId(orderId);
+        // Gives the slot back too, so a flash sale's "X / Y used" stays in step with its usage rows
+        couponService.releaseUsageForOrder(orderId, order.getCouponId());
         orderRepository.deleteById(orderId);
 
         try {

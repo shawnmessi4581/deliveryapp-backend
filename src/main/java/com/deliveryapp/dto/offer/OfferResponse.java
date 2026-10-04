@@ -33,8 +33,14 @@ public class OfferResponse {
     private String productImage;
 
     // ── Store snapshot ───────────────────────────────────────────────────────
-    private Long storeId;    // null if admin-created (global)
+    private Long storeId;    // store of the offer's product
     private String storeName;
+
+    /** True = the store pays (deducted from its payout); false = the platform pays. */
+    private Boolean fundedByStore;
+
+    /** True = created by the store's vendor, who can edit it. Admin offers are read-only for vendors. */
+    private Boolean createdByVendor;
 
     // ── Scheduling & status ──────────────────────────────────────────────────
     private LocalDateTime startDate;

@@ -54,6 +54,18 @@ public class Order {
     private Long couponId;
     private Double discountAmount; // Stored as Double to match your existing financial fields
 
+    /**
+     * Store that pays for the coupon discount (a vendor's own flash sale), or null when the
+     * platform pays (admin coupons / admin flash sales).
+     */
+    private Long couponFundedByStoreId;
+
+    /**
+     * What that store pays for the coupon, at its own prices (discountAmount is the customer saving;
+     * the markup part of it is absorbed by the platform). Null on orders placed before markups existed.
+     */
+    private Double couponStoreDiscountAmount;
+
     // Promotional Offer Info
     /** Total SYP discount awarded by promotional offers across all line-items in this order. */
     @Column(columnDefinition = "numeric(15,2) default 0")

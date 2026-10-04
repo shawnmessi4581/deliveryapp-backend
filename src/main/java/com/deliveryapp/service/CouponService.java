@@ -7,13 +7,16 @@ import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.CouponRepository;
 import com.deliveryapp.repository.CouponUsageRepository;
+import com.deliveryapp.repository.FlashSaleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +24,7 @@ public class CouponService {
 
     private final CouponRepository couponRepository;
     private final CouponUsageRepository usageRepository;
+    private final FlashSaleRepository flashSaleRepository;
 
     // --- Admin: Create Coupon ---
     public Coupon createCoupon(CouponRequest request) {
@@ -29,8 +33,9 @@ public class CouponService {
         }
         Coupon coupon = new Coupon();
         mapRequestToEntity(coupon, request); // Helper method used here
+        validateDiscountSettings(coupon.getDiscountType(), coupon.getDiscountValue(),
+                coupon.getApplicableTo(), coupon.getApplicableId());
         coupon.setCurrentUsageCount(0); // Initialize
-        coupon.setCurrentUsageCount(0);
         coupon.setIsActive(true);
         coupon.setCreatedAt(LocalDateTime.now());
 
@@ -65,6 +70,8 @@ public class CouponService {
 
         // Update fields
         mapRequestToEntity(coupon, request);
+        validateDiscountSettings(coupon.getDiscountType(), coupon.getDiscountValue(),
+                coupon.getApplicableTo(), coupon.getApplicableId());
 
         coupon.setUpdatedAt(LocalDateTime.now());
         return couponRepository.save(coupon);
@@ -91,7 +98,7 @@ public class CouponService {
     // Helper to map DTO to Entity (Used by Create and Update)
     private void mapRequestToEntity(Coupon coupon, CouponRequest request) {
         if (request.getCode() != null)
-            coupon.setCode(request.getCode().toUpperCase());
+            coupon.setCode(request.getCode().trim().toUpperCase());
         if (request.getTitle() != null)
             coupon.setTitle(request.getTitle());
         if (request.getDescription() != null)
@@ -125,13 +132,39 @@ public class CouponService {
             coupon.setEndDate(request.getEndDate());
     }
 
+    /**
+     * Shared rules for coupons and flash sales: PERCENTAGE must be 1–100, FIXED_AMOUNT above 0,
+     * and a scoped discount (STORE / CATEGORY / SUBCATEGORY / PRODUCT) needs its target id.
+     */
+    public void validateDiscountSettings(Coupon.DiscountType type, BigDecimal value,
+                                         Coupon.ApplicableTo applicableTo, Long applicableId) {
+        if (type == null) {
+            throw new InvalidDataException("نوع الخصم مطلوب");
+        }
+        if (type == Coupon.DiscountType.PERCENTAGE
+                && (value == null || value.signum() <= 0 || value.compareTo(BigDecimal.valueOf(100)) > 0)) {
+            throw new InvalidDataException("نسبة الخصم يجب أن تكون بين 1 و 100");
+        }
+        if (type == Coupon.DiscountType.FIXED_AMOUNT && (value == null || value.signum() <= 0)) {
+            throw new InvalidDataException("قيمة الخصم يجب أن تكون أكبر من صفر");
+        }
+        if (applicableTo != null && applicableTo != Coupon.ApplicableTo.ALL && applicableId == null) {
+            throw new InvalidDataException("يجب تحديد المتجر أو الفئة أو المنتج الذي ينطبق عليه الخصم");
+        }
+    }
+
     // =================================================================================
-    // EXISTING LOGIC (Unchanged)
+    // CHECKOUT
     // =================================================================================
 
-    public Coupon validateCouponForOrder(String code, Long userId, List<OrderItem> items, Store store) {
-        // 1. Fetch Coupon
-        Coupon coupon = couponRepository.findByCode(code)
+    /**
+     * Validates a code against the priced cart lines (offers already applied).
+     * Scope is checked per item, so it works for multi-store orders, and the minimum order is
+     * measured on the items the coupon applies to, after offer discounts.
+     */
+    public Coupon validateCouponForOrder(String code, Long userId, List<OrderItem> items) {
+        // 1. Fetch Coupon (customers copy/paste codes — ignore case and stray spaces)
+        Coupon coupon = couponRepository.findByCodeIgnoreCase(code == null ? "" : code.trim())
                 .orElseThrow(() -> new ResourceNotFoundException("رمز قسيمة غير صالح"));
 
         // 2. Basic Status Checks
@@ -143,85 +176,96 @@ public class CouponService {
             throw new InvalidDataException("مدة القسيمة انتهت أو لم تبدأ بعد");
         }
 
-        // 3. Global Usage Limit
-        if (coupon.getTotalUsageLimit() != null &&
-                coupon.getCurrentUsageCount() >= coupon.getTotalUsageLimit()) {
+        // 3. Global Usage Limit (fast check — enforced atomically in recordUsage)
+        int currentUsage = coupon.getCurrentUsageCount() != null ? coupon.getCurrentUsageCount() : 0;
+        if (coupon.getTotalUsageLimit() != null && currentUsage >= coupon.getTotalUsageLimit()) {
             throw new InvalidDataException("تم الوصول إلى الحد الأقصى لاستخدام القسيمة");
         }
 
         // 4. Per User Usage Limit
         Integer userUsage = usageRepository.countByCouponIdAndUserId(coupon.getCouponId(), userId);
-        if (userUsage >= coupon.getMaxUsagePerUser()) {
+        if (coupon.getMaxUsagePerUser() != null && userUsage != null && userUsage >= coupon.getMaxUsagePerUser()) {
             throw new InvalidDataException("لقد استخدمت هذه القسيمة الحد الأقصى من المرات");
         }
 
         // 5. First Order Check
         if (Boolean.TRUE.equals(coupon.getIsFirstOrderOnly())) {
-            // Check if user has ever used a coupon OR placed an order (depending on
-            // strictness)
             // Here checking if they have a coupon usage record
             if (usageRepository.existsByUserId(userId)) {
                 throw new InvalidDataException("هذه القسيمة صالحة للطلبات الأولى فقط");
             }
         }
 
-        // 6. Minimum Order Amount Check
-        // Calculate subtotal from the list of OrderItems
-        double itemsSubtotal = items.stream()
-                .mapToDouble(OrderItem::getTotalPrice)
-                .sum();
-
-        if (coupon.getMinOrderAmount() != null &&
-                BigDecimal.valueOf(itemsSubtotal).compareTo(coupon.getMinOrderAmount()) < 0) {
-            throw new InvalidDataException("لم يتم الوصول للحد الأدنى للطلب " + coupon.getMinOrderAmount());
+        // 6. Applicability Check (Scope) — at least one item must be covered
+        List<OrderItem> eligibleItems = findEligibleItems(coupon, items);
+        if (eligibleItems.isEmpty()) {
+            throw new InvalidDataException(scopeErrorMessage(coupon.getApplicableTo()));
         }
 
-        // 7. Applicability Check (Scope)
-        if (coupon.getApplicableTo() != null) {
-            switch (coupon.getApplicableTo()) {
-                case STORE:
-                    if (!store.getStoreId().equals(coupon.getApplicableId())) {
-                        throw new InvalidDataException("القسيمة غير صالحة لهذا المتجر");
-                    }
-                    break;
-
-                case CATEGORY:
-                    boolean hasCategory = items.stream()
-                            .anyMatch(item -> item.getProduct().getCategory().getCategoryId()
-                                    .equals(coupon.getApplicableId()));
-                    if (!hasCategory) {
-                        throw new InvalidDataException("تتطلب القسيمة عناصر من فئة معينة");
-                    }
-                    break;
-
-                case PRODUCT:
-                    boolean hasProduct = items.stream()
-                            .anyMatch(item -> item.getProduct().getProductId().equals(coupon.getApplicableId()));
-                    if (!hasProduct) {
-                        throw new InvalidDataException("تتطلب القسيمة منتجاً معيناً في سلة التسوق");
-                    }
-                    break;
-
-                case ALL:
-                default:
-                    // Valid for everything
-                    break;
-            }
+        // 7. Minimum Order Amount Check — on the covered items, after offer discounts
+        double eligibleSubtotal = eligibleItems.stream().mapToDouble(OrderItem::getNetTotalPrice).sum();
+        if (coupon.getMinOrderAmount() != null &&
+                BigDecimal.valueOf(eligibleSubtotal).compareTo(coupon.getMinOrderAmount()) < 0) {
+            throw new InvalidDataException("لم يتم الوصول للحد الأدنى للطلب " + coupon.getMinOrderAmount());
         }
 
         return coupon;
     }
 
-    public double calculateDiscount(Coupon coupon, double subtotal, double deliveryFee) {
-        BigDecimal discount = BigDecimal.ZERO;
-        BigDecimal bdSubtotal = BigDecimal.valueOf(subtotal);
+    /** The lines a coupon applies to (all lines for ALL scope). */
+    public List<OrderItem> findEligibleItems(Coupon coupon, List<OrderItem> items) {
+        return items.stream().filter(item -> isEligible(coupon, item)).toList();
+    }
 
-        if (coupon.getDiscountType() == Coupon.DiscountType.FIXED_AMOUNT) {
-            discount = coupon.getDiscountValue();
-        } else if (coupon.getDiscountType() == Coupon.DiscountType.PERCENTAGE) {
-            discount = bdSubtotal.multiply(coupon.getDiscountValue().divide(BigDecimal.valueOf(100)));
-        } else if (coupon.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY) {
-            return deliveryFee;
+    private boolean isEligible(Coupon coupon, OrderItem item) {
+        Product product = item.getProduct();
+        if (coupon.getApplicableTo() == null || product == null) {
+            return coupon.getApplicableTo() == null || coupon.getApplicableTo() == Coupon.ApplicableTo.ALL;
+        }
+        Long targetId = coupon.getApplicableId();
+        return switch (coupon.getApplicableTo()) {
+            case STORE -> product.getStore() != null && Objects.equals(product.getStore().getStoreId(), targetId);
+            case CATEGORY -> product.getCategory() != null
+                    && Objects.equals(product.getCategory().getCategoryId(), targetId);
+            case SUBCATEGORY -> product.getSubCategory() != null
+                    && Objects.equals(product.getSubCategory().getSubcategoryId(), targetId);
+            case PRODUCT -> Objects.equals(product.getProductId(), targetId);
+            case ALL -> true;
+        };
+    }
+
+    private String scopeErrorMessage(Coupon.ApplicableTo applicableTo) {
+        if (applicableTo == null) {
+            return "القسيمة غير صالحة لهذا الطلب";
+        }
+        return switch (applicableTo) {
+            case STORE -> "القسيمة غير صالحة لهذا المتجر";
+            case CATEGORY -> "تتطلب القسيمة عناصر من فئة معينة";
+            case SUBCATEGORY -> "تتطلب القسيمة عناصر من فئة فرعية معينة";
+            case PRODUCT -> "تتطلب القسيمة منتجاً معيناً في سلة التسوق";
+            case ALL -> "القسيمة غير صالحة لهذا الطلب";
+        };
+    }
+
+    /**
+     * Item discount for PERCENTAGE / FIXED_AMOUNT coupons, on the subtotal of the covered items
+     * (after offer discounts). Capped by maxDiscountAmount and by that subtotal, so a coupon can
+     * never eat into the delivery fee. FREE_DELIVERY is handled by the delivery fee calculation.
+     */
+    public double calculateDiscount(Coupon coupon, double eligibleSubtotal) {
+        if (eligibleSubtotal <= 0 || coupon.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY) {
+            return 0.0;
+        }
+
+        BigDecimal base = BigDecimal.valueOf(eligibleSubtotal);
+        BigDecimal value = coupon.getDiscountValue() != null ? coupon.getDiscountValue() : BigDecimal.ZERO;
+        BigDecimal discount;
+
+        if (coupon.getDiscountType() == Coupon.DiscountType.PERCENTAGE) {
+            // Whole SYP — no fractional pounds on receipts
+            discount = base.multiply(value).divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
+        } else {
+            discount = value;
         }
 
         // Cap at Max Discount
@@ -229,16 +273,33 @@ public class CouponService {
             discount = coupon.getMaxDiscountAmount();
         }
 
-        // Ensure discount doesn't exceed subtotal
-        if (discount.compareTo(bdSubtotal) > 0) {
-            discount = bdSubtotal;
+        // Ensure discount doesn't exceed what the covered items cost
+        if (discount.compareTo(base) > 0) {
+            discount = base;
         }
 
-        return discount.doubleValue();
+        return Math.max(discount.doubleValue(), 0.0);
     }
 
+    /** Store paying for this coupon's discount: the vendor's store for a vendor flash sale, else null (platform). */
+    public Long findFundingStoreId(Coupon coupon) {
+        return flashSaleRepository.findFirstByBackingCouponId(coupon.getCouponId())
+                .map(FlashSale::getStore)
+                .map(Store::getStoreId)
+                .orElse(null);
+    }
+
+    /**
+     * Records the usage and takes a usage slot atomically. Must run inside the order transaction:
+     * if a limit was reached by a concurrent checkout, this throws and the whole order rolls back.
+     */
     @Transactional
     public void recordUsage(Coupon coupon, Long userId, Long orderId, Double discountAmount) {
+        // The conditional UPDATE locks the coupon row until commit, so parallel checkouts queue here
+        if (couponRepository.claimUsage(coupon.getCouponId()) == 0) {
+            throw new InvalidDataException("تم الوصول إلى الحد الأقصى لاستخدام القسيمة");
+        }
+
         CouponUsage usage = new CouponUsage();
         usage.setCouponId(coupon.getCouponId());
         usage.setUserId(userId);
@@ -248,7 +309,22 @@ public class CouponService {
 
         usageRepository.save(usage);
 
-        coupon.setCurrentUsageCount(coupon.getCurrentUsageCount() + 1);
-        couponRepository.save(coupon);
+        // Re-check the per-user limit while holding the coupon row lock: a parallel order by the
+        // same user has committed by now, so its usage row is visible to this count
+        Integer userUsage = usageRepository.countByCouponIdAndUserId(coupon.getCouponId(), userId);
+        if (coupon.getMaxUsagePerUser() != null && userUsage != null && userUsage > coupon.getMaxUsagePerUser()) {
+            throw new InvalidDataException("لقد استخدمت هذه القسيمة الحد الأقصى من المرات");
+        }
+    }
+
+    /** Gives the coupon usage back when an order is cancelled or deleted. */
+    @Transactional
+    public void releaseUsageForOrder(Long orderId, Long couponId) {
+        long removed = usageRepository.deleteByOrderId(orderId);
+        if (couponId != null) {
+            for (long i = 0; i < removed; i++) {
+                couponRepository.releaseUsage(couponId);
+            }
+        }
     }
 }

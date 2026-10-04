@@ -46,6 +46,9 @@ public class StoreResponse {
     private Integer displayOrder;
     //
     private Double commissionPercentage;
+
+    // 💹 Only filled for admin / vendor responses — never sent to customers
+    private Double priceMarkupPercentage;
     //
     private List<StoreCategoryResponse> storeCategories;
     private Double minimumDeliveryFee;

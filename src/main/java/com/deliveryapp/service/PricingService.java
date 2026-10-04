@@ -2,9 +2,13 @@ package com.deliveryapp.service;
 
 import com.deliveryapp.entity.Product;
 import com.deliveryapp.entity.ProductVariant;
+import com.deliveryapp.entity.Store;
 import com.deliveryapp.util.MathUtil; // 🟢 Import the new Utility
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Service
 @RequiredArgsConstructor
@@ -59,12 +63,13 @@ public class PricingService {
     }
 
     // 4. Calculate Discount Percentage (For Frontend Badges: e.g. "20% OFF")
+    // Based on the customer prices, since that's what the badge sits next to
     public Integer getDiscountPercentage(Product product) {
         if (!Boolean.TRUE.equals(product.getHasOffer()))
             return null;
 
-        Double oldPrice = getRegularPriceInSYP(product);
-        Double newPrice = getOfferPriceInSYP(product);
+        Double oldPrice = getCustomerRegularPrice(product);
+        Double newPrice = applyStoreMarkup(getOfferPriceInSYP(product), product.getStore());
 
         if (oldPrice == null || newPrice == null || oldPrice == 0.0 || newPrice >= oldPrice) {
             return null;
@@ -93,5 +98,57 @@ public class PricingService {
 
         // 🟢 DO NOT CEIL IF ALREADY SYP
         return variant.getPriceAdjustment() != null ? variant.getPriceAdjustment() : 0.0;
+    }
+
+    // =================================================================================
+    // CUSTOMER PRICES — store price + the store's markup (set by the admin)
+    // The methods above return the STORE's own price: what the store is paid on.
+    // =================================================================================
+
+    /** What the customer pays for one unit (offer or regular price), markup included. */
+    public Double getCustomerFinalPrice(Product product) {
+        return applyStoreMarkup(getFinalPriceInSYP(product), product.getStore());
+    }
+
+    /** Customer version of the regular price (shown crossed out when the product has an offer). */
+    public Double getCustomerRegularPrice(Product product) {
+        return applyStoreMarkup(getRegularPriceInSYP(product), product.getStore());
+    }
+
+    /**
+     * Customer version of a variant's extra price. Marked up separately so the app's
+     * "product price + variant price" always equals what checkout charges.
+     */
+    public Double getCustomerVariantPrice(ProductVariant variant) {
+        return applyStoreMarkup(getVariantFinalPriceInSYP(variant), variant.getProduct().getStore());
+    }
+
+    /**
+     * Store price + markup, rounded up to the nearest 10. Stores without a markup keep their exact prices.
+     * Negative variant prices (a cheaper size) are marked up too, so base + variant still equals
+     * store price + markup.
+     */
+    public double applyStoreMarkup(double storePrice, Store store) {
+        double markup = getMarkupPercentage(store);
+        if (markup <= 0 || storePrice == 0) {
+            return storePrice;
+        }
+        return mathUtil.addPercentRoundedUpToTen(storePrice, markup);
+    }
+
+    /** USD prices shown to customers get the same markup (rounded up to the cent). */
+    public Double applyStoreMarkupToUsd(Double usdPrice, Store store) {
+        double markup = getMarkupPercentage(store);
+        if (usdPrice == null || markup <= 0) {
+            return usdPrice;
+        }
+        return BigDecimal.valueOf(usdPrice)
+                .multiply(BigDecimal.valueOf(100 + markup))
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.CEILING)
+                .doubleValue();
+    }
+
+    public double getMarkupPercentage(Store store) {
+        return store != null && store.getPriceMarkupPercentage() != null ? store.getPriceMarkupPercentage() : 0.0;
     }
 }

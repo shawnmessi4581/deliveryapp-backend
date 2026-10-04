@@ -11,6 +11,7 @@ public interface CouponUsageRepository extends JpaRepository<CouponUsage, Long> 
     // Check if first order
     boolean existsByUserId(Long userId);
 
-    void deleteByOrderId(Long orderId);
+    // Returns how many usage rows were removed
+    long deleteByOrderId(Long orderId);
 
 }
