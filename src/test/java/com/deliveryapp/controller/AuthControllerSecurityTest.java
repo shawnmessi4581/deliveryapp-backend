@@ -82,6 +82,26 @@ class AuthControllerSecurityTest {
     }
 
     @Test
+    void refreshRequestTheServerCannotRead_isAlsoReportedWithTheSessionExpiredCode() throws Exception {
+        for (String body : new String[] { "", "null", "{not json", "{\"refreshToken\": {}}" }) {
+            mockMvc.perform(post("/api/auth/refresh")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value(InvalidRefreshTokenException.CODE));
+        }
+    }
+
+    @Test
+    void otherEndpoints_keepTheGenericErrorForAnUnreadableBody() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{not json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").doesNotExist());
+    }
+
+    @Test
     void logout_endsTheSessionTheAccessTokenBelongsTo() throws Exception {
         mockMvc.perform(post("/api/auth/logout")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(Instant.now())))

@@ -1,5 +1,6 @@
 package com.deliveryapp.exception;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -16,8 +17,11 @@ import java.util.HashMap;
 import java.util.Map;
 import org.springframework.dao.DataIntegrityViolationException; // Add this import
 
+@Slf4j
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final String REFRESH_PATH = "/api/auth/refresh";
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleResourceNotFoundException(
@@ -82,6 +86,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleUnreadableMessage(
             HttpMessageNotReadableException ex, WebRequest request) {
+        // A refresh the server can't read can never succeed on retry, so it gets the same answer
+        // as any other failed refresh: every 400 from /refresh tells the app to show the login screen
+        if (REFRESH_PATH.equals(request.getDescription(false).replace("uri=", ""))) {
+            log.warn("Refresh rejected (request body could not be read)");
+            return handleInvalidRefreshTokenException(
+                    new InvalidRefreshTokenException("رمز التحديث مفقود. يرجى تسجيل الدخول مرة أخرى."), request);
+        }
         return buildResponse(HttpStatus.BAD_REQUEST, "طلب غير صالح", "صيغة البيانات المرسلة غير صحيحة", request);
     }
 
