@@ -40,6 +40,7 @@ public class UserService {
     private final NotificationRepository notificationRepository;
     private final UserAddressRepository userAddressRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final TokenService tokenService;
     // private final NotificationService notificationService;
 
     public User registerUser(User user) {
@@ -293,5 +294,8 @@ public class UserService {
         user.setPassword(""); // Wipe password
 
         userRepository.save(user);
+
+        // 5. End every session of the deleted account
+        tokenService.revokeAllTokensForUser(userId);
     }
 }

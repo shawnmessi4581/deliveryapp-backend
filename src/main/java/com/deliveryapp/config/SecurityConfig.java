@@ -26,12 +26,24 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.util.matcher.AndRequestMatcher;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Arrays;
@@ -68,6 +80,8 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/webjars/**")
                         .permitAll()
+                        // Logout ends the caller's own session, so it needs their access token
+                        .requestMatchers("/api/auth/logout", "/api/auth/logout-all").authenticated()
                         // Auth endpoints — /refresh uses its own refresh token, not a JWT
                         .requestMatchers("/api/auth/**").permitAll()
                         // Static uploads
@@ -88,9 +102,26 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(bearerTokenResolver())
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
 
         return http.build();
+    }
+
+    /**
+     * Login, signup, OTP and refresh never need an access token, but apps often attach the stored one
+     * (possibly expired) to every request. Spring would reject an expired token with 401 before the
+     * endpoint runs, so a stale header could stop a user from refreshing or even logging in.
+     * The header is ignored on those endpoints.
+     */
+    private BearerTokenResolver bearerTokenResolver() {
+        RequestMatcher noAccessTokenNeeded = new AndRequestMatcher(
+                AntPathRequestMatcher.antMatcher("/api/auth/**"),
+                new NegatedRequestMatcher(new OrRequestMatcher(
+                        AntPathRequestMatcher.antMatcher("/api/auth/logout"),
+                        AntPathRequestMatcher.antMatcher("/api/auth/logout-all"))));
+        DefaultBearerTokenResolver defaultResolver = new DefaultBearerTokenResolver();
+        return request -> noAccessTokenNeeded.matches(request) ? null : defaultResolver.resolve(request);
     }
 
     @Bean
@@ -136,6 +167,18 @@ public class SecurityConfig {
         JWK jwk = new RSAKey.Builder(this.publicKey).privateKey(this.privateKey).build();
         JWKSource<SecurityContext> jwks = new ImmutableJWKSet<>(new JWKSet(jwk));
         return new NimbusJwtEncoder(jwks);
+    }
+
+    /**
+     * Key that derives each new refresh token from the previous one (see TokenService).
+     * Taken from the JWT signing key, so it needs no extra configuration and stays the same
+     * across restarts as long as the RSA key files do.
+     */
+    @Bean
+    public SecretKey refreshTokenKey() throws NoSuchAlgorithmException {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        digest.update("allin-shops:refresh-token:v1".getBytes(StandardCharsets.UTF_8));
+        return new SecretKeySpec(digest.digest(this.privateKey.getEncoded()), "HmacSHA256");
     }
 
     @Bean

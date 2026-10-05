@@ -31,6 +31,16 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "طلب غير صالح", ex.getMessage(), request);
     }
 
+    // The session is over — the "code" tells the app to show the login screen
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidRefreshTokenException(
+            InvalidRefreshTokenException ex, WebRequest request) {
+        ResponseEntity<Map<String, Object>> response =
+                buildResponse(HttpStatus.BAD_REQUEST, "طلب غير صالح", ex.getMessage(), request);
+        response.getBody().put("code", InvalidRefreshTokenException.CODE);
+        return response;
+    }
+
     @ExceptionHandler(DuplicateResourceException.class)
     public ResponseEntity<Map<String, Object>> handleDuplicateResourceException(
             DuplicateResourceException ex, WebRequest request) {

@@ -11,16 +11,16 @@ import lombok.NoArgsConstructor;
 public class AuthResponse {
 
     /**
-     * Short-lived JWT access token (15 minutes). Put this in Authorization: Bearer
+     * JWT access token (24 hours by default). Put this in Authorization: Bearer
      * <token>.
      */
     private String accessToken;
 
     /**
-     * Long-lived refresh token (30 days).
+     * Long-lived refresh token; the session ends only after 365 days without a refresh.
      * Store securely on the client (e.g. Flutter: flutter_secure_storage).
      * Send to POST /api/auth/refresh to get a new access token.
-     * Rotates on every use — old token is invalidated immediately.
+     * Rotates on every use — the previous token keeps working until the new one is used.
      */
     private String refreshToken;
 

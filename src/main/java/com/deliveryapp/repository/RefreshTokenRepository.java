@@ -1,7 +1,9 @@
 package com.deliveryapp.repository;
 
 import com.deliveryapp.entity.RefreshToken;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,7 +17,15 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     Optional<RefreshToken> findByTokenHash(String tokenHash);
 
-    /** Revoke every token in a family (theft response). */
+    /**
+     * Same as findByTokenHash, but the row stays locked until the transaction ends,
+     * so concurrent refreshes with the same token are handled one after another.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT rt FROM RefreshToken rt WHERE rt.tokenHash = :tokenHash")
+    Optional<RefreshToken> findByTokenHashForUpdate(@Param("tokenHash") String tokenHash);
+
+    /** Revoke every token in a family (logout of one device session). */
     @Modifying
     @Query("UPDATE RefreshToken rt SET rt.revoked = true WHERE rt.familyId = :familyId")
     void revokeFamily(@Param("familyId") String familyId);
@@ -34,13 +44,4 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Modifying
     @Query("DELETE FROM RefreshToken rt WHERE (rt.revoked = true AND rt.createdAt < :cutoff) OR rt.expiresAt < :cutoff")
     void deleteExpiredOrRevoked(@Param("cutoff") LocalDateTime cutoff);
-
-    /** Check if a revoked token in this family exists (reuse detection). */
-    boolean existsByFamilyIdAndRevoked(String familyId, boolean revoked);
-
-    /**
-     * Grace-window: find the active successor token issued for this family
-     * after a rotation. Used when a client retries with an already-rotated token.
-     */
-    Optional<RefreshToken> findTopByFamilyIdAndRevokedFalseOrderByCreatedAtDesc(String familyId);
 }

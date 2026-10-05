@@ -54,8 +54,8 @@ public class AuthController {
      *
      * Response body:
      * {
-     * "accessToken": "eyJ...", // JWT, 15 min, use in Authorization: Bearer header
-     * "refreshToken": "abc...", // Opaque, 30 days, store in flutter_secure_storage
+     * "accessToken": "eyJ...", // JWT, 24 h, use in Authorization: Bearer header
+     * "refreshToken": "abc...", // Opaque, store in flutter_secure_storage; ends after 365 days unused
      * "user": { ... }
      * }
      *
@@ -72,11 +72,12 @@ public class AuthController {
     // ─── Token Refresh ─────────────────────────────────────────────────────────
 
     /**
-     * Exchanges a valid refresh token for a new access token + refresh token pair.
+     * Exchanges a refresh token for a new access token + refresh token pair.
      *
-     * Implements rotation: the submitted refresh token is immediately revoked
-     * and a new one is issued. If a stolen/reused token is detected, all sessions
-     * for that user are invalidated automatically.
+     * Rotation: a new refresh token is issued every time. Retrying with the previous
+     * refresh token (lost response, app killed, parallel refreshes) returns the same
+     * new token again, so retries never log the user out. No access token is needed;
+     * an expired one sent along in the Authorization header is ignored.
      *
      * Flutter flow:
      * 1. API call returns 401 (access token expired)
@@ -84,7 +85,8 @@ public class AuthController {
      * 3. POST /api/auth/refresh with { "refreshToken": "..." }
      * 4. Save new accessToken + refreshToken back to storage
      * 5. Retry the original request
-     * 6. If /refresh returns 401/400 → force logout, navigate to login screen
+     * 6. Only if /refresh returns 400 with "code": "SESSION_EXPIRED" → logout, navigate to login screen.
+     *    Timeouts, no connection and 5xx errors are temporary: keep the tokens and retry later.
      */
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(@RequestBody RefreshTokenRequest request) {
@@ -94,15 +96,23 @@ public class AuthController {
     // ─── Logout ────────────────────────────────────────────────────────────────
 
     /**
-     * Revokes ALL refresh tokens for the user (logs out from every device).
-     * The access token will still work until it expires (15 min max) —
-     * this is acceptable for stateless JWTs.
+     * Logs out this device only: revokes the refresh token of the session the
+     * access token belongs to. The user's other devices stay logged in.
+     * The access token itself still works until it expires — acceptable for stateless JWTs.
      */
     @PostMapping("/logout")
     public ResponseEntity<String> logout(@AuthenticationPrincipal Jwt jwt) {
         Long userId = jwt.getClaim("userId");
-        authService.logout(userId);
+        authService.logout(userId, jwt.getClaimAsString("sid"));
         return ResponseEntity.ok("تم تسجيل الخروج بنجاح");
+    }
+
+    /** Revokes ALL refresh tokens for the user (logs out from every device). */
+    @PostMapping("/logout-all")
+    public ResponseEntity<String> logoutAllDevices(@AuthenticationPrincipal Jwt jwt) {
+        Long userId = jwt.getClaim("userId");
+        authService.logoutAllDevices(userId);
+        return ResponseEntity.ok("تم تسجيل الخروج من جميع الأجهزة بنجاح");
     }
 
     // ─── Password Reset ────────────────────────────────────────────────────────

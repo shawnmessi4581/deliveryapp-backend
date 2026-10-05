@@ -19,7 +19,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -98,11 +97,7 @@ public class AuthService {
 
         log.info("Account verified and activated: [...{}]", tail(phoneNumber));
 
-        String accessToken = tokenService.generateAccessTokenForUser(user);
-        String refreshToken = tokenService.createRefreshToken(user, deviceInfo);
-        UserResponse userResponse = userMapper.toUserResponse(user);
-
-        return new AuthResponse(accessToken, refreshToken, userResponse);
+        return toAuthResponse(tokenService.startSession(user, deviceInfo));
     }
 
     // ─── Login ─────────────────────────────────────────────────────────────────
@@ -121,9 +116,8 @@ public class AuthService {
             throw new InvalidDataException("غير موثق: رقم الهاتف غير موثق. يرجى إكمال عملية التحقق.");
         }
 
-        Authentication authentication;
         try {
-            authentication = authenticationManager.authenticate(
+            authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
                             request.getPhoneNumber(),
                             request.getPassword()));
@@ -136,44 +130,52 @@ public class AuthService {
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
-        String accessToken = tokenService.generateAccessToken(authentication, user.getUserId());
-        String refreshToken = tokenService.createRefreshToken(user, deviceInfo);
-        UserResponse userResponse = userMapper.toUserResponse(user);
-
         log.info("User logged in: [...{}]", tail(request.getPhoneNumber()));
-        return new AuthResponse(accessToken, refreshToken, userResponse);
+        return toAuthResponse(tokenService.startSession(user, deviceInfo));
     }
 
     // ─── Token Refresh ─────────────────────────────────────────────────────────
 
     /**
-     * Validates and rotates a refresh token, returning a fresh access + refresh
-     * token pair.
-     *
-     * Implements refresh token rotation:
-     * - Old refresh token is revoked immediately
-     * - New refresh token is issued in the same family
-     * - If a revoked token is reused, the entire family is nuked (theft response)
+     * Exchanges a refresh token for a fresh access + refresh token pair.
+     * Retrying with the previous refresh token is safe (see TokenService).
      */
     @Transactional
     public AuthResponse refresh(String rawRefreshToken) {
-        TokenService.RotationResult result = tokenService.rotateRefreshToken(rawRefreshToken);
-
-        User user = result.user();
-        String newAccessToken = tokenService.generateAccessTokenForUser(user);
-        UserResponse userResponse = userMapper.toUserResponse(user);
-
-        return new AuthResponse(newAccessToken, result.newRawRefreshToken(), userResponse);
+        return toAuthResponse(tokenService.refresh(rawRefreshToken));
     }
 
     // ─── Logout ────────────────────────────────────────────────────────────────
+
+    /**
+     * Logs out the device the access token belongs to and clears the FCM token.
+     * The user's other devices stay logged in.
+     *
+     * @param sessionId the "sid" claim of the access token
+     */
+    @Transactional
+    public void logout(Long userId, String sessionId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود."));
+
+        if (sessionId != null) {
+            tokenService.revokeSession(sessionId);
+        } else {
+            // Access token issued before sessions were tracked — no way to tell which device it is
+            tokenService.revokeAllTokensForUser(userId);
+        }
+        user.setFcmToken(null);
+        userRepository.save(user);
+
+        log.info("User logged out: {}", userId);
+    }
 
     /**
      * Revokes all refresh tokens for the user (logout from all devices)
      * and clears the FCM token.
      */
     @Transactional
-    public void logout(Long userId) {
+    public void logoutAllDevices(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود."));
 
@@ -239,6 +241,11 @@ public class AuthService {
     }
 
     // ─── Shared Helpers ────────────────────────────────────────────────────────
+
+    private AuthResponse toAuthResponse(TokenService.SessionTokens tokens) {
+        UserResponse userResponse = userMapper.toUserResponse(tokens.user());
+        return new AuthResponse(tokens.accessToken(), tokens.refreshToken(), userResponse);
+    }
 
     private void sendOtp(String phoneNumber, User user) {
         otpVerificationRepository.deleteByPhoneNumber(phoneNumber);
