@@ -209,6 +209,23 @@ public class OrderService {
                         null);
             } catch (Exception e) {
             }
+        } else if (newStatus == OrderStatus.OUT_FOR_DELIVERY && oldStatus != OrderStatus.OUT_FOR_DELIVERY) {
+            String message = order.getDriver() != null
+                    ? "طلبك رقم " + order.getOrderNumber() + " في الطريق إليك مع السائق " + order.getDriver().getName() + "."
+                    : "طلبك رقم " + order.getOrderNumber() + " في الطريق إليك.";
+            try {
+                notificationService.sendNotification(
+                        order.getUser().getUserId(),
+                        "طلبك في الطريق! 🛵",
+                        message,
+                        null,
+                        "ORDER_OUT_FOR_DELIVERY",
+                        "order",
+                        order.getOrderId(),
+                        null);
+            } catch (Exception e) {
+                System.err.println("Failed to notify customer of out-for-delivery: " + e.getMessage());
+            }
         } else if (newStatus == OrderStatus.DELIVERED && oldStatus != OrderStatus.DELIVERED) {
             try {
                 notificationService.sendNotification(
