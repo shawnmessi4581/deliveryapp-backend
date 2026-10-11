@@ -19,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -64,13 +65,14 @@ public class FlashSaleService {
     private final StoreRepository storeRepository;
     private final FlashSaleMapper flashSaleMapper;
     private final CouponService couponService;
+    private final FileStorageService fileStorageService;
 
     // =================================================================================
     // ADMIN CRUD
     // =================================================================================
 
     @Transactional
-    public FlashSaleResponse adminCreate(FlashSaleRequest request, Long adminUserId) {
+    public FlashSaleResponse adminCreate(FlashSaleRequest request, MultipartFile image, Long adminUserId) {
         validateRequest(request);
         String code = resolveCode(request.getCouponCode());
 
@@ -78,6 +80,9 @@ public class FlashSaleService {
         coupon = couponRepository.save(coupon);
 
         FlashSale fs = buildFlashSale(request, coupon, null, adminUserId, code);
+        if (image != null && !image.isEmpty()) {
+            fs.setBannerImage(fileStorageService.storeFile(image, "flash-sales"));
+        }
         fs = flashSaleRepository.save(fs);
 
         return flashSaleMapper.toResponse(fs, coupon);
@@ -93,7 +98,8 @@ public class FlashSaleService {
     }
 
     @Transactional
-    public FlashSaleResponse adminUpdate(Long flashSaleId, FlashSaleRequest request, Long adminUserId) {
+    public FlashSaleResponse adminUpdate(Long flashSaleId, FlashSaleRequest request,
+            MultipartFile image, Long adminUserId) {
         validateRequest(request);
         FlashSale fs = findById(flashSaleId);
         Coupon coupon = findBackingCoupon(fs);
@@ -102,6 +108,11 @@ public class FlashSaleService {
         couponRepository.save(coupon);
 
         applyRequestToFlashSale(fs, request, null);
+        // No new image = keep the current one
+        if (image != null && !image.isEmpty()) {
+            deleteUploadedImage(fs.getBannerImage());
+            fs.setBannerImage(fileStorageService.storeFile(image, "flash-sales"));
+        }
         fs.setUpdatedAt(LocalDateTime.now());
         fs = flashSaleRepository.save(fs);
 
@@ -340,7 +351,6 @@ public class FlashSaleService {
     private void applyRequestToFlashSale(FlashSale fs, FlashSaleRequest req, Store store) {
         fs.setTitle(req.getTitle());
         fs.setDescription(req.getDescription());
-        fs.setBannerImage(req.getBannerImage());
         fs.setDiscountType(req.getDiscountType());
         fs.setDiscountValue(discountValueOf(req));
         fs.setMinOrderAmount(req.getMinOrderAmount());
@@ -360,7 +370,15 @@ public class FlashSaleService {
         if (fs.getBackingCouponId() != null) {
             couponRepository.findById(fs.getBackingCouponId()).ifPresent(couponRepository::delete);
         }
+        deleteUploadedImage(fs.getBannerImage());
         flashSaleRepository.delete(fs);
+    }
+
+    /** Older flash sales may hold an external image URL, which is not ours to delete. */
+    private void deleteUploadedImage(String imagePath) {
+        if (imagePath != null && imagePath.startsWith("/uploads/")) {
+            fileStorageService.deleteFile(imagePath);
+        }
     }
 
     private void validateRequest(FlashSaleRequest req) {

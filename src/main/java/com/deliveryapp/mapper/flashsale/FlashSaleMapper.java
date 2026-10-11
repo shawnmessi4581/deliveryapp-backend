@@ -4,6 +4,7 @@ import com.deliveryapp.dto.flashsale.FlashSaleResponse;
 import com.deliveryapp.entity.Coupon;
 import com.deliveryapp.entity.FlashSale;
 import com.deliveryapp.repository.CouponRepository;
+import com.deliveryapp.util.UrlUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,7 @@ import java.time.temporal.ChronoUnit;
 public class FlashSaleMapper {
 
     private final CouponRepository couponRepository;
+    private final UrlUtil urlUtil;
 
     /** Lookup backing coupon and map to response. */
     public FlashSaleResponse toResponseWithCouponLookup(FlashSale fs) {
@@ -30,7 +32,7 @@ public class FlashSaleMapper {
         dto.setFlashSaleId(fs.getFlashSaleId());
         dto.setTitle(fs.getTitle());
         dto.setDescription(fs.getDescription());
-        dto.setBannerImage(fs.getBannerImage());
+        dto.setBannerImage(urlUtil.getFullUrl(fs.getBannerImage()));
         dto.setCouponCode(fs.getCouponCode());
         dto.setDiscountType(fs.getDiscountType());
         dto.setDiscountValue(fs.getDiscountValue());

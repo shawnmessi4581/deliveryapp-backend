@@ -4,6 +4,7 @@ import com.deliveryapp.entity.Coupon;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -18,6 +19,8 @@ import java.time.LocalDateTime;
  *       (null = global flash sale not tied to a specific store).</li>
  *   <li>{@code applicableTo + applicableId} — for Admin: can scope to STORE / CATEGORY / SUBCATEGORY / PRODUCT.
  *       Vendor flash sales are always auto-scoped to {@code STORE} with their store ID.</li>
+ *   <li>The banner image is not a field here — the Admin uploads it as the multipart {@code image} part
+ *       (like banners). Vendor updates keep whatever image the Admin uploaded.</li>
  * </ul>
  */
 @Data
@@ -29,9 +32,6 @@ public class FlashSaleRequest {
     private String title;
 
     private String description;
-
-    /** Optional banner image URL. */
-    private String bannerImage;
 
     // ── Coupon params ────────────────────────────────────────────────────────
 
@@ -77,10 +77,13 @@ public class FlashSaleRequest {
 
     // ── Scheduling ───────────────────────────────────────────────────────────
 
+    // @DateTimeFormat handles the String -> LocalDateTime conversion for the admin's multipart form
     @NotNull(message = "تاريخ بداية الفلاش سيل مطلوب")
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private LocalDateTime startDate;
 
     @NotNull(message = "وقت انتهاء العد التنازلي مطلوب")
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private LocalDateTime countdownEndsAt;
 
     private Boolean isActive = true;

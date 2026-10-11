@@ -43,7 +43,7 @@ public class FlashSale {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    /** Optional banner / thumbnail image URL for the flash sale card. */
+    /** Optional banner image for the flash sale card, uploaded by the Admin (e.g. /uploads/flash-sales/uuid.jpg). */
     private String bannerImage;
 
     // ── Coupon parameters (used when auto-creating the backing coupon) ────────

@@ -11,11 +11,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Admin CRUD for flash sales.
@@ -61,22 +63,27 @@ public class AdminFlashSaleController {
 
     // ── CREATE ───────────────────────────────────────────────────────────────
 
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Create a flash sale", description = "Creates a new flash sale and auto-generates (or uses the provided) coupon code. "
             +
-            "The backing Coupon entity is created and managed automatically.")
-    public ResponseEntity<FlashSaleResponse> create(@Valid @RequestBody FlashSaleRequest request) {
-        return ResponseEntity.ok(flashSaleService.adminCreate(request, currentAdminId()));
+            "The backing Coupon entity is created and managed automatically. The banner image is uploaded as the 'image' part.")
+    public ResponseEntity<FlashSaleResponse> create(
+            @Valid @ModelAttribute FlashSaleRequest request,
+            @RequestParam(value = "image", required = false) MultipartFile image) {
+        return ResponseEntity.ok(flashSaleService.adminCreate(request, image, currentAdminId()));
     }
 
     // ── UPDATE ───────────────────────────────────────────────────────────────
 
-    @PutMapping("/{flashSaleId}")
-    @Operation(summary = "Update a flash sale", description = "Updates the flash sale and keeps the backing Coupon in sync automatically.")
+    @PutMapping(value = "/{flashSaleId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Update a flash sale", description = "Updates the flash sale and keeps the backing Coupon in sync automatically. "
+            +
+            "Send a new 'image' part to replace the banner image; omit it to keep the current one.")
     public ResponseEntity<FlashSaleResponse> update(
             @PathVariable Long flashSaleId,
-            @Valid @RequestBody FlashSaleRequest request) {
-        return ResponseEntity.ok(flashSaleService.adminUpdate(flashSaleId, request, currentAdminId()));
+            @Valid @ModelAttribute FlashSaleRequest request,
+            @RequestParam(value = "image", required = false) MultipartFile image) {
+        return ResponseEntity.ok(flashSaleService.adminUpdate(flashSaleId, request, image, currentAdminId()));
     }
 
     // ── TOGGLE STATUS ────────────────────────────────────────────────────────
