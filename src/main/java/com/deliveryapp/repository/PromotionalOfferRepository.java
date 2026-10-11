@@ -15,12 +15,13 @@ public interface PromotionalOfferRepository extends JpaRepository<PromotionalOff
 
     // ── Admin / Public queries ────────────────────────────────────────────────
 
-    /** All active offers that are currently within their date window (for public listing). */
+    /** All active offers that are currently within their date window (for public listing), newest first. */
     @Query("SELECT o FROM PromotionalOffer o " +
            "WHERE o.isActive = true " +
            "  AND (o.startDate IS NULL OR o.startDate <= :now) " +
-           "  AND (o.endDate   IS NULL OR o.endDate   >= :now)")
-    List<PromotionalOffer> findAllActiveAndValid(@Param("now") LocalDateTime now);
+           "  AND (o.endDate   IS NULL OR o.endDate   >= :now) " +
+           "ORDER BY o.createdAt DESC, o.offerId DESC")
+    Page<PromotionalOffer> findAllActiveAndValid(@Param("now") LocalDateTime now, Pageable pageable);
 
     /** Paged list of ALL offers — for admin dashboard. */
     Page<PromotionalOffer> findAllByOrderByCreatedAtDesc(Pageable pageable);
@@ -61,9 +62,11 @@ public interface PromotionalOfferRepository extends JpaRepository<PromotionalOff
            "WHERE o.product.store.storeId = :storeId " +
            "  AND o.isActive = true " +
            "  AND (o.startDate IS NULL OR o.startDate <= :now) " +
-           "  AND (o.endDate   IS NULL OR o.endDate   >= :now)")
-    List<PromotionalOffer> findActiveOffersForProductsInStore(@Param("storeId") Long storeId,
-                                                               @Param("now") LocalDateTime now);
+           "  AND (o.endDate   IS NULL OR o.endDate   >= :now) " +
+           "ORDER BY o.createdAt DESC, o.offerId DESC")
+    Page<PromotionalOffer> findActiveOffersForProductsInStore(@Param("storeId") Long storeId,
+                                                               @Param("now") LocalDateTime now,
+                                                               Pageable pageable);
 
     Optional<PromotionalOffer> findByOfferIdAndStoreStoreId(Long offerId, Long storeId);
 }

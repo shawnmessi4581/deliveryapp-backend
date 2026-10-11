@@ -30,7 +30,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * Core business logic for {@link PromotionalOffer} lifecycle and application.
@@ -204,20 +203,16 @@ public class PromotionalOfferService {
     // PUBLIC
     // =================================================================================
 
-    /** All currently active & valid offers (public customer listing). */
-    public List<OfferResponse> getPublicActiveOffers() {
-        return offerRepository.findAllActiveAndValid(LocalDateTime.now())
-                .stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+    /** Paged list of currently active & valid offers (public customer listing). */
+    public Page<OfferResponse> getPublicActiveOffers(Pageable pageable) {
+        return offerRepository.findAllActiveAndValid(LocalDateTime.now(), pageable)
+                .map(this::toResponse);
     }
 
-    /** Active & valid offers for a specific store (public). */
-    public List<OfferResponse> getPublicActiveOffersForStore(Long storeId) {
-        return offerRepository.findActiveOffersForProductsInStore(storeId, LocalDateTime.now())
-                .stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+    /** Paged list of active & valid offers for a specific store (public). */
+    public Page<OfferResponse> getPublicActiveOffersForStore(Long storeId, Pageable pageable) {
+        return offerRepository.findActiveOffersForProductsInStore(storeId, LocalDateTime.now(), pageable)
+                .map(this::toResponse);
     }
 
     // =================================================================================
