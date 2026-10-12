@@ -229,7 +229,8 @@ public class CatalogMapper {
         return dto;
     }
 
-    private boolean isStoreOpen(Store store) {
+    // Public so the paged store routes can sort open-first before mapping only the requested page
+    public boolean isStoreOpen(Store store) {
         if (store.getOpeningTime() == null || store.getClosingTime() == null)
             return true; // Assume open if not set
 
