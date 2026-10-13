@@ -29,13 +29,16 @@ import java.util.UUID;
 /**
  * Issues the access token (JWT) and refresh token of each device session.
  *
- * <p>Refresh tokens rotate on every use, and a refresh must never log a real user out because the
- * app lost a response, retried, or sent several refreshes at once. So the token given in exchange
- * for another one is not random: it is derived from it with a server key. Sending the previous
- * token again returns that same new token for as long as the new one has not been used, so retries
- * and parallel refreshes all end up holding the same valid token, whichever response the app keeps.
- * Once the new token has been used, the previous one is rejected — without ending the session of
- * whoever holds the current token.
+ * <p>A refresh must never log a real user out, so the refresh token does not change during a
+ * session: a refresh only issues a new access token and sends the same refresh token back. Lost
+ * responses, retries and parallel refreshes therefore can't leave the app holding an outdated
+ * token. Each refresh also pushes the session's expiry forward, so a session only ends after
+ * {@code app.auth.refresh-token-ttl} without opening the app, or on logout, password reset or
+ * account deactivation.
+ *
+ * <p>Refresh tokens used to rotate on every use, each new one derived from the previous one with a
+ * server key. Apps that still hold the token from before their last rotation are given the current
+ * one (see {@link #refresh}).
  */
 @Slf4j
 @Service
@@ -79,7 +82,7 @@ public class TokenService {
     }
 
     /**
-     * Exchanges a refresh token for a new access token + refresh token.
+     * Returns a new access token for the session, along with the same refresh token.
      *
      * @throws InvalidRefreshTokenException when the session is over and the user must log in again
      */
@@ -91,24 +94,21 @@ public class TokenService {
         }
         String presented = rawRefreshToken.trim();
 
-        // Locked: a parallel refresh with the same token waits here, then takes the retry path below.
+        // Locked, so a logout running at the same time can't be undone by the expiry update below
         RefreshToken stored = refreshTokenRepository.findByTokenHashForUpdate(sha256(presented)).orElse(null);
         if (stored != null && isUsable(stored)) {
-            ensureAccountActive(stored.getUser());
-            return rotate(stored, presented);
+            return renew(stored, presented);
         }
 
-        // Not the current token. If the one issued in exchange for it is still unused, the app never
-        // received or saved that response (lost connection, app killed, retry, parallel refresh):
-        // hand the same token back. This also works after the cleanup job deleted the old row.
+        // From when refresh tokens rotated: the app may still hold the token from before its last
+        // rotation (it never received or saved the response). The current one was derived from it,
+        // so hand that one over. This also works after the cleanup job deleted the old row.
         String successor = successorOf(presented);
-        RefreshToken current = refreshTokenRepository.findByTokenHash(sha256(successor)).orElse(null);
+        RefreshToken current = refreshTokenRepository.findByTokenHashForUpdate(sha256(successor)).orElse(null);
         if (current != null && isUsable(current)) {
-            ensureAccountActive(current.getUser());
-            log.info("Refresh retry for user {} (session {}): re-sent the unclaimed refresh token",
+            log.info("Refresh with the token from before the last rotation: user {} | session {}",
                     current.getUser().getUserId(), current.getFamilyId());
-            return new SessionTokens(current.getUser(),
-                    generateAccessToken(current.getUser(), current.getFamilyId()), successor);
+            return renew(current, successor);
         }
 
         throw rejection(current != null ? current : stored);
@@ -133,17 +133,16 @@ public class TokenService {
 
     // ─── Internal helpers ──────────────────────────────────────────────────────
 
-    private SessionTokens rotate(RefreshToken stored, String presented) {
-        stored.setRevoked(true);
-        stored.setRotatedAt(LocalDateTime.now());
-        refreshTokenRepository.save(stored);
+    /** New access token, same refresh token; the session now ends a full TTL from today. */
+    private SessionTokens renew(RefreshToken token, String rawToken) {
+        User user = token.getUser();
+        ensureAccountActive(user);
 
-        User user = stored.getUser();
-        String next = successorOf(presented);
-        saveRefreshToken(user, stored.getFamilyId(), next, stored.getDeviceInfo());
+        token.setExpiresAt(LocalDateTime.now().plus(refreshTokenTtl));
+        refreshTokenRepository.save(token);
 
-        log.debug("Refresh token rotated for user: {}", user.getUserId());
-        return new SessionTokens(user, generateAccessToken(user, stored.getFamilyId()), next);
+        log.debug("Session refreshed for user: {}", user.getUserId());
+        return new SessionTokens(user, generateAccessToken(user, token.getFamilyId()), rawToken);
     }
 
     /** {@code latest} is the newest row we know of in the token's chain (null when the token is unknown). */
@@ -154,7 +153,7 @@ public class TokenService {
         }
         Long userId = latest.getUser().getUserId();
         if (latest.getRotatedAt() != null) {
-            // The token that replaced this one has been used already: an old copy, or a stolen token.
+            // From when refresh tokens rotated: the token that replaced this one was used already.
             log.warn("Refresh rejected (old token reused after its replacement was used): user {} | session {}",
                     userId, latest.getFamilyId());
         } else if (latest.isRevoked()) {
@@ -194,7 +193,7 @@ public class TokenService {
         token.setTokenHash(sha256(rawToken));
         token.setFamilyId(sessionId);
         token.setUser(user);
-        // Every refresh issues a new token, so a session only expires after this long without use.
+        // Pushed forward on every refresh (see renew), so a session only expires after this long without use.
         token.setExpiresAt(LocalDateTime.now().plus(refreshTokenTtl));
         token.setDeviceInfo(deviceInfo);
         token.setRevoked(false);
@@ -212,7 +211,7 @@ public class TokenService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    /** The refresh token issued in exchange for {@code refreshToken} — always the same for the same input. */
+    /** The refresh token that replaced {@code refreshToken} back when refresh tokens rotated. */
     private String successorOf(String refreshToken) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");

@@ -137,8 +137,7 @@ public class AuthService {
     // ─── Token Refresh ─────────────────────────────────────────────────────────
 
     /**
-     * Exchanges a refresh token for a fresh access + refresh token pair.
-     * Retrying with the previous refresh token is safe (see TokenService).
+     * Returns a fresh access token along with the same refresh token (see TokenService).
      */
     @Transactional
     public AuthResponse refresh(String rawRefreshToken) {

@@ -20,15 +20,22 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
+import javax.crypto.Mac;
+import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -43,6 +50,9 @@ import static org.mockito.Mockito.lenient;
 class TokenServiceTest {
 
     private static KeyPair keyPair;
+
+    private final SecretKey refreshTokenKey =
+            new SecretKeySpec("test-key-for-refresh-tokens-0001".getBytes(StandardCharsets.UTF_8), "HmacSHA256");
 
     @Mock private RefreshTokenRepository repository;
 
@@ -68,7 +78,7 @@ class TokenServiceTest {
         tokenService = new TokenService(
                 new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(jwk))),
                 repository,
-                new SecretKeySpec("test-key-for-refresh-tokens-0001".getBytes(StandardCharsets.UTF_8), "HmacSHA256"),
+                refreshTokenKey,
                 Duration.ofHours(24),
                 Duration.ofDays(365));
 
@@ -103,55 +113,63 @@ class TokenServiceTest {
     }
 
     @Test
-    void refresh_issuesANewRefreshToken() {
+    void refresh_issuesANewAccessToken_andKeepsTheSameRefreshToken() {
         SessionTokens login = tokenService.startSession(customer, "Flutter/Android");
 
         SessionTokens refreshed = tokenService.refresh(login.refreshToken());
 
-        assertNotEquals(login.refreshToken(), refreshed.refreshToken());
+        assertEquals(login.refreshToken(), refreshed.refreshToken());
         assertSame(customer, refreshed.user());
         assertDoesNotThrow(() -> jwtDecoder.decode(refreshed.accessToken()));
     }
 
     @Test
-    void retryWithThePreviousToken_getsTheSameNewTokenAgain() {
-        // The refresh reached the server, but the response never made it into the app
-        String original = tokenService.startSession(customer, null).refreshToken();
-        String issued = tokenService.refresh(original).refreshToken();
-
-        assertEquals(issued, tokenService.refresh(original).refreshToken());
-        assertEquals(issued, tokenService.refresh(original).refreshToken());
-        assertEquals(2, rows.size());
-        assertDoesNotThrow(() -> tokenService.refresh(issued));
-    }
-
-    @Test
-    void refreshesWithTheSameToken_allReturnTheSameToken_whateverResponseTheAppKeeps() {
-        String original = tokenService.startSession(customer, null).refreshToken();
+    void retriesAndParallelRefreshes_allKeepWorking_whateverResponseTheAppKeeps() {
+        String token = tokenService.startSession(customer, null).refreshToken();
 
         Set<String> issued = new HashSet<>();
         for (int i = 0; i < 5; i++) {
-            issued.add(tokenService.refresh(original).refreshToken());
+            issued.add(tokenService.refresh(token).refreshToken());
         }
 
-        assertEquals(1, issued.size());
-        assertDoesNotThrow(() -> tokenService.refresh(issued.iterator().next()));
+        assertEquals(Set.of(token), issued);
+        assertEquals(1, rows.size());
     }
 
     @Test
-    void retryDaysLater_worksEvenAfterTheCleanupJobDeletedTheOldToken() {
+    void refresh_pushesTheSessionExpiryAFullTtlForward() {
+        String token = tokenService.startSession(customer, null).refreshToken();
+        RefreshToken row = rows.values().iterator().next();
+        row.setExpiresAt(LocalDateTime.now().plusMinutes(5));
+
+        tokenService.refresh(token);
+
+        assertTrue(row.getExpiresAt().isAfter(LocalDateTime.now().plusDays(364)));
+    }
+
+    @Test
+    void appStillHoldingTheTokenFromBeforeItsLastRotation_getsTheCurrentOne() {
+        // Refreshed on a backend that rotated tokens, but the app never saved the response
         String original = tokenService.startSession(customer, null).refreshToken();
-        String issued = tokenService.refresh(original).refreshToken();
+        String current = rotateTheOldWay(original);
+
+        assertEquals(current, tokenService.refresh(original).refreshToken());
+        assertEquals(current, tokenService.refresh(current).refreshToken());
+    }
+
+    @Test
+    void tokenFromBeforeTheLastRotation_worksEvenAfterTheCleanupJobDeletedItsRow() {
+        String original = tokenService.startSession(customer, null).refreshToken();
+        String current = rotateTheOldWay(original);
         rows.values().removeIf(RefreshToken::isRevoked);
 
-        assertEquals(issued, tokenService.refresh(original).refreshToken());
+        assertEquals(current, tokenService.refresh(original).refreshToken());
     }
 
     @Test
-    void previousToken_isRejectedOnceTheNewOneWasUsed_withoutEndingTheSession() {
+    void tokenFromTwoRotationsAgo_isRejected_withoutEndingTheSession() {
         String first = tokenService.startSession(customer, null).refreshToken();
-        String second = tokenService.refresh(first).refreshToken();
-        String third = tokenService.refresh(second).refreshToken();
+        String third = rotateTheOldWay(rotateTheOldWay(first));
 
         assertThrows(InvalidRefreshTokenException.class, () -> tokenService.refresh(first));
         assertDoesNotThrow(() -> tokenService.refresh(third));
@@ -169,14 +187,14 @@ class TokenServiceTest {
     }
 
     @Test
-    void retryAfterLogout_isRejected() {
-        String original = tokenService.startSession(customer, null).refreshToken();
-        SessionTokens refreshed = tokenService.refresh(original);
+    void logout_alsoEndsTheTokenFromBeforeTheLastRotation() {
+        SessionTokens login = tokenService.startSession(customer, null);
+        String current = rotateTheOldWay(login.refreshToken());
 
-        tokenService.revokeSession(sessionId(refreshed));
+        tokenService.revokeSession(sessionId(login));
 
-        assertThrows(InvalidRefreshTokenException.class, () -> tokenService.refresh(original));
-        assertThrows(InvalidRefreshTokenException.class, () -> tokenService.refresh(refreshed.refreshToken()));
+        assertThrows(InvalidRefreshTokenException.class, () -> tokenService.refresh(login.refreshToken()));
+        assertThrows(InvalidRefreshTokenException.class, () -> tokenService.refresh(current));
     }
 
     @Test
@@ -234,5 +252,40 @@ class TokenServiceTest {
 
     private String sessionId(SessionTokens tokens) {
         return jwtDecoder.decode(tokens.accessToken()).getClaimAsString("sid");
+    }
+
+    /** Does what /refresh did while refresh tokens rotated, and returns the token it handed out. */
+    private String rotateTheOldWay(String token) {
+        RefreshToken previous = rows.get(sha256(token));
+        previous.setRevoked(true);
+        previous.setRotatedAt(LocalDateTime.now());
+
+        String next;
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(refreshTokenKey);
+            next = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(mac.doFinal(token.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+
+        RefreshToken current = new RefreshToken();
+        current.setTokenHash(sha256(next));
+        current.setFamilyId(previous.getFamilyId());
+        current.setUser(previous.getUser());
+        current.setExpiresAt(LocalDateTime.now().plusDays(365));
+        current.setCreatedAt(LocalDateTime.now());
+        rows.put(current.getTokenHash(), current);
+        return next;
+    }
+
+    private static String sha256(String input) {
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

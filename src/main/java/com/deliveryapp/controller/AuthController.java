@@ -72,12 +72,10 @@ public class AuthController {
     // ─── Token Refresh ─────────────────────────────────────────────────────────
 
     /**
-     * Exchanges a refresh token for a new access token + refresh token pair.
-     *
-     * Rotation: a new refresh token is issued every time. Retrying with the previous
-     * refresh token (lost response, app killed, parallel refreshes) returns the same
-     * new token again, so retries never log the user out. No access token is needed;
-     * an expired one sent along in the Authorization header is ignored.
+     * Returns a new access token. The refresh token does not change for the whole session:
+     * the response carries the same one back, so retries and parallel refreshes are always
+     * safe. Each refresh pushes the session's expiry 365 days forward. No access token is
+     * needed; an expired one sent along in the Authorization header is ignored.
      *
      * Flutter flow:
      * 1. API call returns 401 (access token expired)

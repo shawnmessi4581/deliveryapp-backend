@@ -20,7 +20,7 @@ public class AuthResponse {
      * Long-lived refresh token; the session ends only after 365 days without a refresh.
      * Store securely on the client (e.g. Flutter: flutter_secure_storage).
      * Send to POST /api/auth/refresh to get a new access token.
-     * Rotates on every use — the previous token keeps working until the new one is used.
+     * Stays the same for the whole session; /refresh sends the same value back.
      */
     private String refreshToken;
 
