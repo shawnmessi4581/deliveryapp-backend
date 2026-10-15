@@ -321,6 +321,42 @@ class PromotionalOfferServiceTest {
         assertEquals(List.of(20L, 21L), rewards.get(0).getRewardProductIds());
     }
 
+    @Test
+    void availableRewards_countsTheSecondRewardOfABuyOneGetTwoDeal() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        offers(lists(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 2, VENDOR_ID), List.of(burger), List.of(pepsi)));
+        List<OrderItem> cart = List.of(line(burger, 30_000, 1), rewardLine(pepsi, 5_000, 1, 1L));
+
+        List<AvailableRewardResponse> rewards = service.findAvailableRewards(cart);
+
+        assertEquals(1, rewards.size());
+        assertEquals(1, rewards.get(0).getRewardQuantity());
+    }
+
+    @Test
+    void availableRewards_onlyListsProductsTheCustomerCanAdd() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        pepsi.setIsAvailable(false);
+        Product sevenUp = product(21L, store);
+        offers(lists(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID), List.of(burger), List.of(pepsi, sevenUp)));
+
+        List<AvailableRewardResponse> rewards = service.findAvailableRewards(List.of(line(burger, 30_000, 1)));
+
+        assertEquals(List.of(21L), rewards.get(0).getRewardProductIds());
+    }
+
+    @Test
+    void availableRewards_skipsAnOfferWhoseRewardsAreAllUnavailable() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        pepsi.setIsAvailable(false);
+        offers(lists(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID), List.of(burger), List.of(pepsi)));
+
+        assertTrue(service.findAvailableRewards(List.of(line(burger, 30_000, 1))).isEmpty());
+    }
+
     // ── Who pays: admin flag / vendor offers ──────────────────────────────────
 
     @Test
@@ -373,7 +409,6 @@ class PromotionalOfferServiceTest {
                 .thenReturn(List.of(pepsi));
         when(offerRepository.save(any(PromotionalOffer.class))).thenAnswer(call -> call.getArgument(0));
         OfferRequest request = request(null);
-        request.setProductId(null);
         request.setBuyProductIds(List.of(10L));
         request.setRewardProductIds(List.of(20L));
 
@@ -405,6 +440,65 @@ class PromotionalOfferServiceTest {
         request.setBuyProductIds(List.of(11L));
 
         assertThrows(InvalidDataException.class, () -> service.vendorCreateOffer(request, STORE_ID, VENDOR_ID));
+    }
+
+    @Test
+    void create_withoutProducts_isRejected() {
+        OfferRequest request = request(null);
+        request.setBuyProductIds(null);
+
+        assertThrows(InvalidDataException.class, () -> service.adminCreateOffer(request, ADMIN_ID));
+    }
+
+    @Test
+    void update_withoutLists_keepsTheCurrentLists() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        PromotionalOffer existing = lists(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, ADMIN_ID),
+                List.of(burger), List.of(pepsi));
+        when(offerRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(offerRepository.save(any(PromotionalOffer.class))).thenAnswer(call -> call.getArgument(0));
+        OfferRequest request = request(null);
+        request.setBuyProductIds(null);
+
+        OfferResponse updated = service.adminUpdateOffer(1L, request, ADMIN_ID);
+
+        assertEquals(List.of(10L), updated.getBuyProducts().stream().map(p -> p.getProductId()).toList());
+        assertEquals(List.of(20L), updated.getRewardProducts().stream().map(p -> p.getProductId()).toList());
+    }
+
+    @Test
+    void update_withOnlyARewardList_keepsTheBuyListAndReplacesTheRewards() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        Product sevenUp = product(21L, store);
+        PromotionalOffer existing = lists(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, ADMIN_ID),
+                List.of(burger), List.of(pepsi));
+        when(offerRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(productRepository.findAllById(List.of(21L))).thenReturn(List.of(sevenUp));
+        when(offerRepository.save(any(PromotionalOffer.class))).thenAnswer(call -> call.getArgument(0));
+        OfferRequest request = request(null);
+        request.setBuyProductIds(null);
+        request.setRewardProductIds(List.of(21L));
+
+        OfferResponse updated = service.adminUpdateOffer(1L, request, ADMIN_ID);
+
+        assertEquals(List.of(10L), updated.getBuyProducts().stream().map(p -> p.getProductId()).toList());
+        assertEquals(List.of(21L), updated.getRewardProducts().stream().map(p -> p.getProductId()).toList());
+    }
+
+    @Test
+    void update_ofAnOlderSingleProductOffer_withoutLists_keepsItsProduct() {
+        PromotionalOffer existing = offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, ADMIN_ID); // lists empty
+        when(offerRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(offerRepository.save(any(PromotionalOffer.class))).thenAnswer(call -> call.getArgument(0));
+        OfferRequest request = request(null);
+        request.setBuyProductIds(null);
+
+        OfferResponse updated = service.adminUpdateOffer(1L, request, ADMIN_ID);
+
+        assertEquals(List.of(PRODUCT_ID), updated.getBuyProducts().stream().map(p -> p.getProductId()).toList());
+        assertEquals(List.of(PRODUCT_ID), updated.getRewardProducts().stream().map(p -> p.getProductId()).toList());
     }
 
     // ── Product deletion ─────────────────────────────────────────────────────
@@ -502,7 +596,7 @@ class PromotionalOfferServiceTest {
         OfferRequest request = new OfferRequest();
         request.setTitle("Buy 1 Get 1");
         request.setOfferType(OfferType.BUY_X_GET_Y_FREE);
-        request.setProductId(PRODUCT_ID);
+        request.setBuyProductIds(List.of(PRODUCT_ID));
         request.setBuyQuantity(1);
         request.setGetQuantity(1);
         request.setFundedByStore(fundedByStore);
@@ -510,7 +604,7 @@ class PromotionalOfferServiceTest {
     }
 
     private void stubProductAndSave() {
-        when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product));
+        when(productRepository.findAllById(List.of(PRODUCT_ID))).thenReturn(List.of(product));
         when(offerRepository.save(any(PromotionalOffer.class))).thenAnswer(call -> call.getArgument(0));
     }
 }

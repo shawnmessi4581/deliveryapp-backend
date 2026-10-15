@@ -15,8 +15,9 @@ import java.util.List;
  * <h3>Validation rules</h3>
  * <ul>
  *   <li>Products: send {@code buyProductIds} (+ optional {@code rewardProductIds}), all from one store.
- *       Older dashboards send just {@code productId}, used for both lists. On update, sending neither
- *       (or the offer's current main {@code productId}) keeps the current lists.</li>
+ *       The first buy product becomes the offer's main product. On update, leaving out
+ *       {@code buyProductIds} keeps the buy list, and leaving out {@code rewardProductIds} too keeps
+ *       the reward list.</li>
  *   <li>{@code storeId} is injected server-side for Vendor requests — ignored if provided.</li>
  *   <li>{@code discountPercent} is required when {@code offerType = BUY_X_GET_Y_PERCENT_OFF}.</li>
  *   <li>{@code discountValue} is required when {@code offerType = BUY_X_GET_Y_FIXED_OFF}.</li>
@@ -32,9 +33,6 @@ public class OfferRequest {
 
     @NotNull(message = "نوع العرض مطلوب")
     private OfferType offerType;
-
-    /** Single-product offer (older dashboards): used as both lists when the lists are not sent. */
-    private Long productId;
 
     /** The options the customer pays for to earn the deal. */
     private List<Long> buyProductIds;

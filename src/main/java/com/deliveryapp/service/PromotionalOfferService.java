@@ -307,19 +307,28 @@ public class PromotionalOfferService {
             if (buyQty < 1 || getQty < 1) {
                 continue;
             }
+            // Only offer what the customer can actually add
+            List<Long> rewardIds = rewardProductsOf(offer).stream()
+                    .filter(product -> !Boolean.FALSE.equals(product.getIsAvailable()))
+                    .map(Product::getProductId)
+                    .toList();
+            if (rewardIds.isEmpty()) {
+                continue;
+            }
             Set<Long> buyIds = productIds(buyProductsOf(offer));
             int paidUnits = allocation.lines().stream()
                     .filter(line -> line.chosenRewardOf == null && buyIds.contains(line.productId))
                     .mapToInt(line -> line.available)
                     .sum();
             int uses = Math.min(paidUnits / buyQty, usesLeft(offer, allocation.usesOf(offer)));
-            if (uses > 0) {
+            int quantity = allocation.unusedRewardSlotsOf(offer) + uses * getQty;
+            if (quantity > 0) {
                 rewards.add(new AvailableRewardResponse(
                         offer.getOfferId(),
                         offer.getTitle(),
                         buildSummary(offer),
-                        uses * getQty,
-                        new ArrayList<>(productIds(rewardProductsOf(offer)))));
+                        quantity,
+                        rewardIds));
             }
         }
         return rewards;
@@ -352,10 +361,19 @@ public class PromotionalOfferService {
 
     private record Allocation(List<CartLine> lines, List<PromotionalOffer> offers, List<Plan> applied) {
         int usesOf(PromotionalOffer offer) {
-            return applied.stream()
-                    .filter(plan -> Objects.equals(plan.offer().getOfferId(), offer.getOfferId()))
-                    .mapToInt(Plan::uses)
+            return appliedPlansOf(offer).mapToInt(Plan::uses).sum();
+        }
+
+        /** Rewards a deal already paid for but not picked yet (buy 1 get 2 with one drink picked → 1). */
+        int unusedRewardSlotsOf(PromotionalOffer offer) {
+            return appliedPlansOf(offer)
+                    .mapToInt(plan -> plan.uses() * quantityOf(offer.getGetQuantity())
+                            - plan.rewards().values().stream().mapToInt(Integer::intValue).sum())
                     .sum();
+        }
+
+        private Stream<Plan> appliedPlansOf(PromotionalOffer offer) {
+            return applied.stream().filter(plan -> Objects.equals(plan.offer().getOfferId(), offer.getOfferId()));
         }
     }
 
@@ -598,18 +616,16 @@ public class PromotionalOfferService {
         List<Long> rewardIds = distinctIds(req.getRewardProductIds());
 
         if (buyIds.isEmpty()) {
-            if (!rewardIds.isEmpty()) {
-                throw new InvalidDataException("يجب اختيار المنتجات المطلوب شراؤها في العرض");
+            // Buy list not sent on update → keep it; the reward list is replaced only when sent
+            if (existing != null) {
+                List<Product> buy = buyProductsOf(existing);
+                List<Product> reward = rewardIds.isEmpty() ? rewardProductsOf(existing) : findProducts(rewardIds);
+                assertSameStore(buy, reward);
+                return new OfferProducts(buy, reward);
             }
-            // Older dashboards only know one product: keep the lists while it's still the main product
-            if (existing != null && (req.getProductId() == null || isMainProduct(existing, req.getProductId()))) {
-                return new OfferProducts(buyProductsOf(existing), rewardProductsOf(existing));
-            }
-            if (req.getProductId() == null) {
-                throw new InvalidDataException("يجب اختيار منتجات العرض");
-            }
-            Product product = resolveProduct(req.getProductId());
-            return new OfferProducts(List.of(product), List.of(product));
+            throw new InvalidDataException(rewardIds.isEmpty()
+                    ? "يجب اختيار منتجات العرض"
+                    : "يجب اختيار المنتجات المطلوب شراؤها في العرض");
         }
 
         List<Product> buy = findProducts(buyIds);
@@ -760,10 +776,6 @@ public class PromotionalOfferService {
         return new ArrayList<>(ids.stream().filter(Objects::nonNull).collect(Collectors.toCollection(LinkedHashSet::new)));
     }
 
-    private boolean isMainProduct(PromotionalOffer offer, Long productId) {
-        return offer.getProduct() != null && Objects.equals(offer.getProduct().getProductId(), productId);
-    }
-
     private boolean isLive(PromotionalOffer offer, LocalDateTime now) {
         return Boolean.TRUE.equals(offer.getIsActive())
                 && (offer.getStartDate() == null || !offer.getStartDate().isAfter(now))
@@ -773,11 +785,6 @@ public class PromotionalOfferService {
     private PromotionalOffer findById(Long offerId) {
         return offerRepository.findById(offerId)
                 .orElseThrow(() -> new ResourceNotFoundException("العرض الترويجي غير موجود برقم: " + offerId));
-    }
-
-    private Product resolveProduct(Long productId) {
-        return productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود برقم: " + productId));
     }
 
     /** The products in the order given; any unknown id is an error. */

@@ -137,7 +137,8 @@ public class AuthService {
     // ─── Token Refresh ─────────────────────────────────────────────────────────
 
     /**
-     * Returns a fresh access token along with the same refresh token (see TokenService).
+     * Returns a fresh access token along with the same refresh token (see
+     * TokenService).
      */
     @Transactional
     public AuthResponse refresh(String rawRefreshToken) {
@@ -160,7 +161,8 @@ public class AuthService {
         if (sessionId != null) {
             tokenService.revokeSession(sessionId);
         } else {
-            // Access token issued before sessions were tracked — no way to tell which device it is
+            // Access token issued before sessions were tracked — no way to tell which
+            // device it is
             tokenService.revokeAllTokensForUser(userId);
         }
         user.setFcmToken(null);
