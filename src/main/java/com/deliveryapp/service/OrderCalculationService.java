@@ -1,5 +1,6 @@
 package com.deliveryapp.service;
 
+import com.deliveryapp.dto.offer.AvailableRewardResponse;
 import com.deliveryapp.dto.order.CouponCheckRequest;
 import com.deliveryapp.dto.order.CouponCheckResponse;
 import com.deliveryapp.dto.order.DeliveryFeeRequest;
@@ -86,6 +87,7 @@ public class OrderCalculationService {
             item.setProductName(product.getName());
             item.setQuantity(itemReq.getQuantity());
             item.setNotes(itemReq.getNotes());
+            item.setRewardOfferId(itemReq.getRewardOfferId());
 
             if (itemReq.getColorId() != null) {
                 Color color = colorRepository.findById(itemReq.getColorId())
@@ -126,6 +128,11 @@ public class OrderCalculationService {
 
         promotionalOfferService.applyOffers(items);
         return items;
+    }
+
+    /** Offer rewards the priced cart earned but the customer hasn't added yet. */
+    public List<AvailableRewardResponse> findAvailableRewards(List<OrderItem> items) {
+        return promotionalOfferService.findAvailableRewards(items);
     }
 
     /**

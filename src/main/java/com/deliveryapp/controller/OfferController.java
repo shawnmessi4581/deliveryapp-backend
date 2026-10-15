@@ -50,6 +50,16 @@ public class OfferController {
                 offerService.getPublicActiveOffersForStore(storeId, PageRequest.of(page, size))));
     }
 
+    /**
+     * GET /api/offers/{offerId}
+     * One active offer with its buy options and reward options (the "choose your reward" screen).
+     */
+    @GetMapping("/{offerId}")
+    @Operation(summary = "Get one active offer", description = "Returns an active offer with the products to buy and the products to choose the reward from.")
+    public ResponseEntity<OfferResponse> getActiveOfferById(@PathVariable Long offerId) {
+        return ResponseEntity.ok(offerService.getPublicOfferById(offerId));
+    }
+
     private PagedResponse<OfferResponse> toPagedResponse(Page<OfferResponse> result) {
         return new PagedResponse<>(
                 result.getContent(), result.getNumber(), result.getSize(),

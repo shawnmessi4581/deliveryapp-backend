@@ -1,9 +1,11 @@
 package com.deliveryapp.dto.offer;
 
+import com.deliveryapp.dto.catalog.ProductResponse;
 import com.deliveryapp.enums.OfferType;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Public-safe response DTO for a {@link com.deliveryapp.entity.PromotionalOffer}.
@@ -27,10 +29,18 @@ public class OfferResponse {
     /** E.g. "اشتر 1 واحصل على 1 مجاناً" — generated server-side. */
     private String summary;
 
-    // ── Product snapshot ─────────────────────────────────────────────────────
+    // ── Product snapshot (the offer's main product — the first buy product) ──
     private Long productId;
     private String productName;
     private String productImage;
+
+    // ── Product lists ────────────────────────────────────────────────────────
+    /** The options the customer pays for to earn the deal. */
+    private List<ProductResponse> buyProducts;
+    /** The products the customer chooses the reward from. */
+    private List<ProductResponse> rewardProducts;
+    /** How many times the deal can apply in one order; null = no limit. */
+    private Integer maxUsesPerOrder;
 
     // ── Store snapshot ───────────────────────────────────────────────────────
     private Long storeId;    // store of the offer's product

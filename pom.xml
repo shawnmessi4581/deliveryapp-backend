@@ -15,6 +15,8 @@
     <description>deliveryapp</description>
     <properties>
         <java.version>17</java.version>
+        <!-- Newer than Spring Boot's default: older Lombok breaks constructors in the VS Code Java extension -->
+        <lombok.version>1.18.46</lombok.version>
     </properties>
     <dependencies>
         <dependency>

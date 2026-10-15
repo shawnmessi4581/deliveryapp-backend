@@ -1,5 +1,6 @@
 package com.deliveryapp.dto.order;
 
+import com.deliveryapp.dto.offer.AvailableRewardResponse;
 import lombok.Data;
 
 import java.util.List;
@@ -28,4 +29,6 @@ public class OrderQuoteResponse {
 
     /** Lines in the same order as the request, with any offer applied. */
     private List<OrderItemResponse> items;
+    /** Rewards the cart earned but the customer hasn't added yet — the app asks them to choose. */
+    private List<AvailableRewardResponse> availableRewards;
 }

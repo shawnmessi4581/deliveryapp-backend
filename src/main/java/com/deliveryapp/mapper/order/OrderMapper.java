@@ -192,6 +192,7 @@ public class OrderMapper {
         r.setStoreTotalPrice(item.getEffectiveStoreTotalPrice());
         r.setNotes(item.getNotes());
         r.setSelectedColor(item.getSelectedColor());
+        r.setRewardOfferId(item.getRewardOfferId());
         r.setAppliedOfferId(item.getAppliedOfferId());
         r.setOfferDiscountAmount(item.getOfferDiscountAmount() != null ? item.getOfferDiscountAmount() : 0.0);
         r.setOfferFundedByStore(Boolean.TRUE.equals(item.getOfferFundedByStore()));

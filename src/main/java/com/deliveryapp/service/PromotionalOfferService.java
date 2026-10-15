@@ -1,5 +1,7 @@
 package com.deliveryapp.service;
 
+import com.deliveryapp.dto.catalog.ProductResponse;
+import com.deliveryapp.dto.offer.AvailableRewardResponse;
 import com.deliveryapp.dto.offer.OfferRequest;
 import com.deliveryapp.dto.offer.OfferResponse;
 import com.deliveryapp.entity.OrderItem;
@@ -10,6 +12,7 @@ import com.deliveryapp.enums.OfferType;
 import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
+import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.repository.ProductRepository;
 import com.deliveryapp.repository.PromotionalOfferRepository;
 import com.deliveryapp.repository.StoreRepository;
@@ -26,30 +29,41 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Core business logic for {@link PromotionalOffer} lifecycle and application.
  *
  * <h3>Security contract</h3>
  * <ul>
- *   <li>Admin methods accept any product.</li>
+ *   <li>Admin methods accept any products, as long as one offer's products all come from one store.</li>
  *   <li>Vendor methods always enforce {@code vendorStoreId} — a vendor can only manage
  *       offers they created, on their own store's products.</li>
  * </ul>
  *
  * <h3>Offer application engine</h3>
- * {@link #applyOffers(List)} is called once per checkout with all priced lines. Lines of the same
- * product (e.g. different variants or colors) are pooled, so "Buy 1 Get 1" works across them:
- * <pre>
- *   cycles        = totalQuantity / (buyQty + getQty)
- *   rewardedUnits = cycles * getQty            (the cheapest units in the pool)
- *   discount      = Σ discountPerUnit(unit price) over the rewarded units
- * </pre>
- * When several offers are active on a product, the one worth the most to the customer is applied.
+ * {@link #applyOffers(List)} is called once per checkout with all priced lines. Every offer has buy
+ * options (what the customer pays for) and reward options (what they get); all variants count.
+ * <ul>
+ *   <li><b>Chosen rewards</b> – lines the customer marked with {@code rewardOfferId} are rewarded, as
+ *       many as the paid buy-option units earn ({@code buyQty} paid units → {@code getQty} rewards).
+ *       If they picked more than they earned, the dearest picks are rewarded; the rest stay full price.</li>
+ *   <li><b>Automatic</b> – without chosen rewards (e.g. older app versions) the cheapest reward-option
+ *       units are rewarded, as many as the cart earns. For a single product this is the old rule:
+ *       {@code cycles = units / (buyQty + getQty)}, the cheapest {@code cycles × getQty} units rewarded.</li>
+ * </ul>
+ * Offers are applied best-first (most saving for the customer; ties go to the latest offer). A unit
+ * counts toward one offer only and a line is discounted by one offer only. A deal repeats within an
+ * order up to {@code maxUsesPerOrder}.
  */
 @Service
 @RequiredArgsConstructor
@@ -61,6 +75,7 @@ public class PromotionalOfferService {
     private final UserRepository userRepository;
     private final MathUtil mathUtil;
     private final UrlUtil urlUtil;
+    private final CatalogMapper catalogMapper;
 
     // =================================================================================
     // ADMIN CRUD
@@ -69,12 +84,12 @@ public class PromotionalOfferService {
     /** Create a new offer (Admin). Paid by the platform unless {@code fundedByStore} is true. */
     @Transactional
     public OfferResponse adminCreateOffer(OfferRequest request, Long adminUserId) {
-        Product product = resolveProduct(request.getProductId());
+        OfferProducts products = resolveOfferProducts(request, null);
         boolean fundedByStore = Boolean.TRUE.equals(request.getFundedByStore());
-        assertCanBeStoreFunded(product, fundedByStore);
+        assertCanBeStoreFunded(products.main(), fundedByStore);
 
-        // Anchor to the product's store so it shows up in that store's listings
-        PromotionalOffer offer = buildOffer(request, product, product.getStore(), adminUserId);
+        // Anchor to the products' store so it shows up in that store's listings
+        PromotionalOffer offer = buildOffer(request, products, products.main().getStore(), adminUserId);
         offer.setFundedByStore(fundedByStore);
         offer = offerRepository.save(offer);
         return toResponse(offer);
@@ -95,20 +110,20 @@ public class PromotionalOfferService {
     @Transactional
     public OfferResponse adminUpdateOffer(Long offerId, OfferRequest request, Long adminUserId) {
         PromotionalOffer offer = findById(offerId);
-        Product product = resolveProduct(request.getProductId());
+        OfferProducts products = resolveOfferProducts(request, offer);
 
         // A vendor's own offer stays on that vendor's store's products
         if (isCreatedByVendor(offer) && offer.getStore() != null) {
-            assertProductBelongsToStore(product, offer.getStore().getStoreId());
+            assertProductsBelongToStore(products, offer.getStore().getStoreId());
         }
 
         // Not sent → keep the current payer, so an edit from an older dashboard can't silently move the cost
         boolean fundedByStore = request.getFundedByStore() != null
                 ? request.getFundedByStore()
                 : isFundedByStore(offer);
-        assertCanBeStoreFunded(product, fundedByStore);
+        assertCanBeStoreFunded(products.main(), fundedByStore);
 
-        applyRequestToOffer(offer, request, product, product.getStore());
+        applyRequestToOffer(offer, request, products, products.main().getStore());
         offer.setFundedByStore(fundedByStore);
         offer.setUpdatedAt(LocalDateTime.now());
         return toResponse(offerRepository.save(offer));
@@ -139,13 +154,13 @@ public class PromotionalOfferService {
     /** Create a new offer scoped to the vendor's store. Paid by that store. */
     @Transactional
     public OfferResponse vendorCreateOffer(OfferRequest request, Long vendorStoreId, Long vendorUserId) {
-        Product product = resolveProduct(request.getProductId());
-        assertProductBelongsToStore(product, vendorStoreId);
+        OfferProducts products = resolveOfferProducts(request, null);
+        assertProductsBelongToStore(products, vendorStoreId);
 
         Store store = storeRepository.findById(vendorStoreId)
                 .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود"));
 
-        PromotionalOffer offer = buildOffer(request, product, store, vendorUserId);
+        PromotionalOffer offer = buildOffer(request, products, store, vendorUserId);
         offer.setFundedByStore(true); // a vendor's own promotion is always paid by their store
         offer = offerRepository.save(offer);
         return toResponse(offer);
@@ -171,10 +186,10 @@ public class PromotionalOfferService {
         PromotionalOffer offer = findById(offerId);
         assertOfferBelongsToStore(offer, vendorStoreId);
 
-        Product product = resolveProduct(request.getProductId());
-        assertProductBelongsToStore(product, vendorStoreId);
+        OfferProducts products = resolveOfferProducts(request, offer);
+        assertProductsBelongToStore(products, vendorStoreId);
 
-        applyRequestToOffer(offer, request, product, offer.getStore());
+        applyRequestToOffer(offer, request, products, offer.getStore());
         // Even if an admin had sponsored it, the vendor's own changes are paid by their store
         offer.setFundedByStore(true);
         offer.setUpdatedAt(LocalDateTime.now());
@@ -215,68 +230,308 @@ public class PromotionalOfferService {
                 .map(this::toResponse);
     }
 
+    /** One currently active & valid offer with its product lists (public — the "choose your reward" screen). */
+    public OfferResponse getPublicOfferById(Long offerId) {
+        PromotionalOffer offer = findById(offerId);
+        if (!isLive(offer, LocalDateTime.now())) {
+            throw new ResourceNotFoundException("العرض الترويجي غير متاح حالياً");
+        }
+        return toResponse(offer);
+    }
+
+    // =================================================================================
+    // PRODUCT CLEANUP  (called before a product is deleted)
+    // =================================================================================
+
+    /**
+     * Takes a product out of every offer. An offer left without buy or reward options is deleted;
+     * one that lost its main product moves to its next buy option.
+     */
+    @Transactional
+    public void removeProductFromOffers(Long productId) {
+        for (PromotionalOffer offer : offerRepository.findAllUsingProduct(productId)) {
+            List<Product> buy = without(buyProductsOf(offer), productId);
+            List<Product> reward = without(rewardProductsOf(offer), productId);
+            if (buy.isEmpty() || reward.isEmpty()) {
+                offerRepository.delete(offer);
+                continue;
+            }
+            offer.setProduct(buy.get(0));
+            offer.setBuyProducts(new ArrayList<>(buy));
+            offer.setRewardProducts(new ArrayList<>(reward));
+            offer.setUpdatedAt(LocalDateTime.now());
+            offerRepository.save(offer);
+        }
+    }
+
     // =================================================================================
     // OFFER APPLICATION ENGINE  (called by OrderCalculationService for checkout & previews)
     // =================================================================================
 
     /**
-     * Applies the best active offer to every product in the cart, writing
-     * {@code appliedOfferId}, {@code offerDiscountAmount} and {@code offerFundedByStore} on the lines.
-     *
-     * <p>Lines must already carry their SYP {@code unitPrice} and {@code quantity}. Partial deal
-     * cycles are never rewarded, and the rewarded units are always the cheapest ones.
+     * Applies the best active offers to the cart, writing {@code appliedOfferId},
+     * {@code offerDiscountAmount}, {@code storeOfferDiscountAmount} and {@code offerFundedByStore}
+     * on the rewarded lines. Lines must already carry their SYP {@code unitPrice} and {@code quantity}.
      */
     public void applyOffers(List<OrderItem> items) {
-        LocalDateTime now = LocalDateTime.now();
-
-        Map<Long, List<OrderItem>> linesByProduct = new LinkedHashMap<>();
         for (OrderItem item : items) {
             item.setAppliedOfferId(null);
             item.setOfferDiscountAmount(0.0);
             item.setStoreOfferDiscountAmount(0.0);
             item.setOfferFundedByStore(false);
-            linesByProduct.computeIfAbsent(item.getProduct().getProductId(), id -> new ArrayList<>()).add(item);
         }
 
-        for (Map.Entry<Long, List<OrderItem>> entry : linesByProduct.entrySet()) {
-            List<PromotionalOffer> candidates = offerRepository.findActiveOffersForProduct(entry.getKey(), now);
-            if (candidates.isEmpty()) {
+        for (Plan plan : allocate(items).applied()) {
+            boolean fundedByStore = isFundedByStore(plan.offer());
+            plan.rewards().forEach((line, units) -> {
+                double discount = lineDiscount(plan.offer(), line, units);
+                line.item.setAppliedOfferId(plan.offer().getOfferId());
+                line.item.setOfferDiscountAmount(discount);
+                line.item.setStoreOfferDiscountAmount(storeShare(line.item, discount));
+                line.item.setOfferFundedByStore(fundedByStore);
+            });
+        }
+    }
+
+    /**
+     * Rewards the cart has earned but the customer hasn't added yet, so the app can ask them to
+     * choose: the unused paid units of each offer's buy options, up to its uses left in this order.
+     */
+    public List<AvailableRewardResponse> findAvailableRewards(List<OrderItem> items) {
+        Allocation allocation = allocate(items);
+        List<AvailableRewardResponse> rewards = new ArrayList<>();
+
+        for (PromotionalOffer offer : allocation.offers()) {
+            int buyQty = quantityOf(offer.getBuyQuantity());
+            int getQty = quantityOf(offer.getGetQuantity());
+            if (buyQty < 1 || getQty < 1) {
                 continue;
             }
+            Set<Long> buyIds = productIds(buyProductsOf(offer));
+            int paidUnits = allocation.lines().stream()
+                    .filter(line -> line.chosenRewardOf == null && buyIds.contains(line.productId))
+                    .mapToInt(line -> line.available)
+                    .sum();
+            int uses = Math.min(paidUnits / buyQty, usesLeft(offer, allocation.usesOf(offer)));
+            if (uses > 0) {
+                rewards.add(new AvailableRewardResponse(
+                        offer.getOfferId(),
+                        offer.getTitle(),
+                        buildSummary(offer),
+                        uses * getQty,
+                        new ArrayList<>(productIds(rewardProductsOf(offer)))));
+            }
+        }
+        return rewards;
+    }
 
-            List<OrderItem> cheapestFirst = new ArrayList<>(entry.getValue());
-            cheapestFirst.sort(Comparator.comparingDouble(OrderItem::getUnitPrice));
-            int totalQuantity = cheapestFirst.stream().mapToInt(OrderItem::getQuantity).sum();
+    /** One cart line while offers are allocated. */
+    private static final class CartLine {
+        final OrderItem item;
+        final Long productId;
+        final double unitPrice;
+        /** The offer the customer picked this line as a reward for, when that pick is valid. */
+        PromotionalOffer chosenRewardOf;
+        /** Units not used by any offer yet. */
+        int available;
+        /** A line is discounted by one offer only. */
+        boolean rewarded;
 
-            // Candidates come latest-first, so a tie keeps the latest offer
-            PromotionalOffer best = null;
-            double[] bestDiscounts = null;
-            double bestTotal = 0.0;
-            for (PromotionalOffer offer : candidates) {
-                double[] discounts = computeLineDiscounts(offer, cheapestFirst, totalQuantity);
-                double total = 0.0;
-                for (double d : discounts) total += d;
-                if (total > bestTotal) {
-                    best = offer;
-                    bestDiscounts = discounts;
-                    bestTotal = total;
+        CartLine(OrderItem item) {
+            this.item = item;
+            this.productId = item.getProduct().getProductId();
+            this.unitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : 0.0;
+            this.available = item.getQuantity() != null ? item.getQuantity() : 0;
+        }
+    }
+
+    /** What one offer does to the cart: units used as payment, units rewarded, and the saving. */
+    private record Plan(PromotionalOffer offer, int uses, Map<CartLine, Integer> paid,
+                        Map<CartLine, Integer> rewards, double discount) {
+    }
+
+    private record Allocation(List<CartLine> lines, List<PromotionalOffer> offers, List<Plan> applied) {
+        int usesOf(PromotionalOffer offer) {
+            return applied.stream()
+                    .filter(plan -> Objects.equals(plan.offer().getOfferId(), offer.getOfferId()))
+                    .mapToInt(Plan::uses)
+                    .sum();
+        }
+    }
+
+    /** Best-first allocation of the active offers to the cart. Reads the lines, never changes them. */
+    private Allocation allocate(List<OrderItem> items) {
+        List<CartLine> lines = items.stream().map(CartLine::new).toList();
+        if (lines.isEmpty()) {
+            return new Allocation(lines, List.of(), List.of());
+        }
+
+        Set<Long> cartProductIds = lines.stream().map(line -> line.productId).collect(Collectors.toSet());
+        List<PromotionalOffer> offers =
+                offerRepository.findActiveOffersForProducts(cartProductIds, LocalDateTime.now());
+
+        // A pick only counts for a live offer that has this product among its reward options
+        Map<Long, PromotionalOffer> offersById = offers.stream()
+                .collect(Collectors.toMap(PromotionalOffer::getOfferId, Function.identity(), (a, b) -> a));
+        for (CartLine line : lines) {
+            PromotionalOffer offer = offersById.get(line.item.getRewardOfferId());
+            if (offer != null && productIds(rewardProductsOf(offer)).contains(line.productId)) {
+                line.chosenRewardOf = offer;
+            }
+        }
+
+        // Offers come latest-first, so a tie keeps the latest offer
+        List<PromotionalOffer> remaining = new ArrayList<>(offers);
+        List<Plan> applied = new ArrayList<>();
+        while (true) {
+            Plan best = null;
+            for (PromotionalOffer offer : remaining) {
+                Plan plan = plan(offer, lines);
+                if (plan != null && (best == null || plan.discount() > best.discount())) {
+                    best = plan;
                 }
             }
             if (best == null) {
-                continue;
+                break;
             }
-
-            boolean fundedByStore = isFundedByStore(best);
-            for (int i = 0; i < cheapestFirst.size(); i++) {
-                if (bestDiscounts[i] > 0) {
-                    OrderItem line = cheapestFirst.get(i);
-                    line.setAppliedOfferId(best.getOfferId());
-                    line.setOfferDiscountAmount(bestDiscounts[i]);
-                    line.setStoreOfferDiscountAmount(storeShare(line, bestDiscounts[i]));
-                    line.setOfferFundedByStore(fundedByStore);
-                }
-            }
+            commit(best);
+            applied.add(best);
+            remaining.remove(best.offer());
         }
+        return new Allocation(lines, offers, applied);
+    }
+
+    /** What {@code offer} would do with the units still available, or null when it saves nothing. */
+    private Plan plan(PromotionalOffer offer, List<CartLine> lines) {
+        int buyQty = quantityOf(offer.getBuyQuantity());
+        int getQty = quantityOf(offer.getGetQuantity());
+        if (buyQty < 1 || getQty < 1) {
+            return null;
+        }
+        int maxUses = usesLeft(offer, 0);
+        Set<Long> buyIds = productIds(buyProductsOf(offer));
+        Set<Long> rewardIds = productIds(rewardProductsOf(offer));
+
+        // Lines picked as anyone's reward are never used as payment
+        List<CartLine> paidPool = lines.stream()
+                .filter(line -> line.available > 0 && line.chosenRewardOf == null
+                        && buyIds.contains(line.productId))
+                .toList();
+        List<CartLine> chosen = lines.stream()
+                .filter(line -> line.available > 0 && !line.rewarded && line.chosenRewardOf != null
+                        && Objects.equals(line.chosenRewardOf.getOfferId(), offer.getOfferId()))
+                .toList();
+
+        return chosen.isEmpty()
+                ? automaticPlan(offer, buyQty, getQty, maxUses, paidPool, rewardIds, lines)
+                : chosenRewardsPlan(offer, buyQty, getQty, maxUses, paidPool, chosen);
+    }
+
+    /** The customer picked their rewards: reward as many picks as the paid units earn, dearest first. */
+    private Plan chosenRewardsPlan(PromotionalOffer offer, int buyQty, int getQty, int maxUses,
+                                   List<CartLine> paidPool, List<CartLine> chosen) {
+        int paidUnits = paidPool.stream().mapToInt(line -> line.available).sum();
+        int chosenUnits = chosen.stream().mapToInt(line -> line.available).sum();
+        int uses = Math.min(Math.min(paidUnits / buyQty, ceilDiv(chosenUnits, getQty)), maxUses);
+        if (uses == 0) {
+            return null;
+        }
+
+        Map<CartLine, Integer> rewards = take(sorted(chosen, false), Math.min(chosenUnits, uses * getQty), Map.of());
+        Map<CartLine, Integer> paid = take(sorted(paidPool, false), uses * buyQty, Map.of());
+        return toPlan(offer, uses, paid, rewards);
+    }
+
+    /**
+     * No picks: reward the cheapest reward-option units. A product in both lists can pay or be the
+     * reward, so it's only used as a reward while enough units are left to pay for the deal.
+     */
+    private Plan automaticPlan(PromotionalOffer offer, int buyQty, int getQty, int maxUses,
+                               List<CartLine> paidPool, Set<Long> rewardIds, List<CartLine> lines) {
+        List<CartLine> rewardPool = lines.stream()
+                .filter(line -> line.available > 0 && !line.rewarded && line.chosenRewardOf == null
+                        && rewardIds.contains(line.productId))
+                .toList();
+
+        int eitherUnits = 0;
+        for (CartLine line : rewardPool) {
+            if (paidPool.contains(line)) eitherUnits += line.available;
+        }
+        int paidOnlyUnits = paidPool.stream().mapToInt(line -> line.available).sum() - eitherUnits;
+        int rewardOnlyUnits = rewardPool.stream().mapToInt(line -> line.available).sum() - eitherUnits;
+
+        int uses = Math.min(Math.min((rewardOnlyUnits + eitherUnits) / getQty, (paidOnlyUnits + eitherUnits) / buyQty),
+                Math.min((paidOnlyUnits + rewardOnlyUnits + eitherUnits) / (buyQty + getQty), maxUses));
+        if (uses == 0) {
+            return null;
+        }
+
+        int[] eitherForRewards = {eitherUnits - Math.max(0, uses * buyQty - paidOnlyUnits)};
+        Map<CartLine, Integer> rewards = new LinkedHashMap<>();
+        int needed = uses * getQty;
+        for (CartLine line : sorted(rewardPool, true)) {
+            if (needed == 0) break;
+            boolean either = paidPool.contains(line);
+            int units = Math.min(line.available, needed);
+            if (either) units = Math.min(units, eitherForRewards[0]);
+            if (units <= 0) continue;
+            rewards.put(line, units);
+            needed -= units;
+            if (either) eitherForRewards[0] -= units;
+        }
+
+        Map<CartLine, Integer> paid = take(sorted(paidPool, false), uses * buyQty, rewards);
+        return toPlan(offer, uses, paid, rewards);
+    }
+
+    private Plan toPlan(PromotionalOffer offer, int uses, Map<CartLine, Integer> paid, Map<CartLine, Integer> rewards) {
+        double discount = rewards.entrySet().stream()
+                .mapToDouble(entry -> lineDiscount(offer, entry.getKey(), entry.getValue()))
+                .sum();
+        return discount > 0 ? new Plan(offer, uses, paid, rewards, discount) : null;
+    }
+
+    private void commit(Plan plan) {
+        plan.paid().forEach((line, units) -> line.available -= units);
+        plan.rewards().forEach((line, units) -> {
+            line.available -= units;
+            line.rewarded = true;
+        });
+    }
+
+    /** Takes {@code count} units from the lines in order, skipping units already {@code taken}. */
+    private Map<CartLine, Integer> take(List<CartLine> lines, int count, Map<CartLine, Integer> taken) {
+        Map<CartLine, Integer> result = new LinkedHashMap<>();
+        for (CartLine line : lines) {
+            if (count == 0) break;
+            int units = Math.min(line.available - taken.getOrDefault(line, 0), count);
+            if (units <= 0) continue;
+            result.put(line, units);
+            count -= units;
+        }
+        return result;
+    }
+
+    private List<CartLine> sorted(List<CartLine> lines, boolean cheapestFirst) {
+        Comparator<CartLine> byPrice = Comparator.comparingDouble(line -> line.unitPrice);
+        return lines.stream().sorted(cheapestFirst ? byPrice : byPrice.reversed()).toList();
+    }
+
+    private double lineDiscount(PromotionalOffer offer, CartLine line, int units) {
+        return mathUtil.roundMoney(units * computeDiscountPerUnit(offer, line.unitPrice));
+    }
+
+    private int usesLeft(PromotionalOffer offer, int usedSoFar) {
+        Integer max = offer.getMaxUsesPerOrder();
+        return max != null ? Math.max(max - usedSoFar, 0) : Integer.MAX_VALUE;
+    }
+
+    private static int quantityOf(Integer quantity) {
+        return quantity != null ? quantity : 0;
+    }
+
+    private static int ceilDiv(int a, int b) {
+        return (a + b - 1) / b;
     }
 
     /**
@@ -290,25 +545,6 @@ public class PromotionalOfferService {
             return customerDiscount;
         }
         return mathUtil.roundMoney(customerDiscount * storeUnitPrice / unitPrice);
-    }
-
-    /** Discount per line (same order as {@code cheapestFirst}) if {@code offer} were applied to the pool. */
-    private double[] computeLineDiscounts(PromotionalOffer offer, List<OrderItem> cheapestFirst, int totalQuantity) {
-        double[] discounts = new double[cheapestFirst.size()];
-        int buyQty = offer.getBuyQuantity() != null ? offer.getBuyQuantity() : 0;
-        int getQty = offer.getGetQuantity() != null ? offer.getGetQuantity() : 0;
-        if (buyQty < 1 || getQty < 1) {
-            return discounts;
-        }
-
-        int remaining = (totalQuantity / (buyQty + getQty)) * getQty;
-        for (int i = 0; i < cheapestFirst.size() && remaining > 0; i++) {
-            OrderItem line = cheapestFirst.get(i);
-            int units = Math.min(remaining, line.getQuantity());
-            discounts[i] = mathUtil.roundMoney(units * computeDiscountPerUnit(offer, line.getUnitPrice()));
-            remaining -= units;
-        }
-        return discounts;
     }
 
     /**
@@ -350,16 +586,48 @@ public class PromotionalOfferService {
         };
     }
 
-    private PromotionalOffer buildOffer(OfferRequest req, Product product, Store store, Long userId) {
+    /** The offer's buy and reward options — they exist and all come from one store. */
+    private record OfferProducts(List<Product> buy, List<Product> reward) {
+        Product main() {
+            return buy.get(0);
+        }
+    }
+
+    private OfferProducts resolveOfferProducts(OfferRequest req, PromotionalOffer existing) {
+        List<Long> buyIds = distinctIds(req.getBuyProductIds());
+        List<Long> rewardIds = distinctIds(req.getRewardProductIds());
+
+        if (buyIds.isEmpty()) {
+            if (!rewardIds.isEmpty()) {
+                throw new InvalidDataException("يجب اختيار المنتجات المطلوب شراؤها في العرض");
+            }
+            // Older dashboards only know one product: keep the lists while it's still the main product
+            if (existing != null && (req.getProductId() == null || isMainProduct(existing, req.getProductId()))) {
+                return new OfferProducts(buyProductsOf(existing), rewardProductsOf(existing));
+            }
+            if (req.getProductId() == null) {
+                throw new InvalidDataException("يجب اختيار منتجات العرض");
+            }
+            Product product = resolveProduct(req.getProductId());
+            return new OfferProducts(List.of(product), List.of(product));
+        }
+
+        List<Product> buy = findProducts(buyIds);
+        List<Product> reward = rewardIds.isEmpty() ? buy : findProducts(rewardIds);
+        assertSameStore(buy, reward);
+        return new OfferProducts(buy, reward);
+    }
+
+    private PromotionalOffer buildOffer(OfferRequest req, OfferProducts products, Store store, Long userId) {
         PromotionalOffer offer = new PromotionalOffer();
-        applyRequestToOffer(offer, req, product, store);
+        applyRequestToOffer(offer, req, products, store);
         offer.setCreatedBy(userId);
         offer.setCreatedAt(LocalDateTime.now());
         offer.setUpdatedAt(LocalDateTime.now());
         return offer;
     }
 
-    private void applyRequestToOffer(PromotionalOffer offer, OfferRequest req, Product product, Store store) {
+    private void applyRequestToOffer(PromotionalOffer offer, OfferRequest req, OfferProducts products, Store store) {
         validateRequest(req);
         offer.setTitle(req.getTitle());
         offer.setDescription(req.getDescription());
@@ -368,7 +636,10 @@ public class PromotionalOfferService {
         offer.setGetQuantity(req.getGetQuantity());
         offer.setDiscountPercent(req.getDiscountPercent());
         offer.setDiscountValue(req.getDiscountValue());
-        offer.setProduct(product);
+        offer.setProduct(products.main());
+        offer.setBuyProducts(new ArrayList<>(products.buy()));
+        offer.setRewardProducts(new ArrayList<>(products.reward()));
+        offer.setMaxUsesPerOrder(req.getMaxUsesPerOrder());
         offer.setStore(store);
         offer.setStartDate(req.getStartDate());
         offer.setEndDate(req.getEndDate());
@@ -410,6 +681,9 @@ public class PromotionalOfferService {
             dto.setProductName(offer.getProduct().getName());
             dto.setProductImage(urlUtil.getFullUrl(offer.getProduct().getImage()));
         }
+        dto.setBuyProducts(buyProductsOf(offer).stream().map(this::toOfferProductResponse).toList());
+        dto.setRewardProducts(rewardProductsOf(offer).stream().map(this::toOfferProductResponse).toList());
+        dto.setMaxUsesPerOrder(offer.getMaxUsesPerOrder());
 
         if (offer.getStore() != null) {
             dto.setStoreId(offer.getStore().getStoreId());
@@ -424,6 +698,13 @@ public class PromotionalOfferService {
         dto.setCreatedBy(offer.getCreatedBy());
         dto.setCreatedAt(offer.getCreatedAt());
         dto.setUpdatedAt(offer.getUpdatedAt());
+        return dto;
+    }
+
+    /** The full product card (price, variants, colors) so the app can add it to the cart; the offer already names the store. */
+    private ProductResponse toOfferProductResponse(Product product) {
+        ProductResponse dto = catalogMapper.toProductResponse(product);
+        dto.setStore(null);
         return dto;
     }
 
@@ -447,6 +728,48 @@ public class PromotionalOfferService {
         return BigDecimal.valueOf(value).stripTrailingZeros().toPlainString();
     }
 
+    // ── Product lists ────────────────────────────────────────────────────────
+
+    /** Offers saved before product lists existed use their single product for both lists. */
+    private List<Product> buyProductsOf(PromotionalOffer offer) {
+        List<Product> buy = offer.getBuyProducts();
+        return buy != null && !buy.isEmpty() ? buy : singleProduct(offer);
+    }
+
+    private List<Product> rewardProductsOf(PromotionalOffer offer) {
+        List<Product> reward = offer.getRewardProducts();
+        return reward != null && !reward.isEmpty() ? reward : singleProduct(offer);
+    }
+
+    private List<Product> singleProduct(PromotionalOffer offer) {
+        return offer.getProduct() != null ? List.of(offer.getProduct()) : List.of();
+    }
+
+    private static Set<Long> productIds(List<Product> products) {
+        return products.stream().map(Product::getProductId).collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private static List<Product> without(List<Product> products, Long productId) {
+        return products.stream().filter(p -> !Objects.equals(p.getProductId(), productId)).toList();
+    }
+
+    private static List<Long> distinctIds(List<Long> ids) {
+        if (ids == null) {
+            return List.of();
+        }
+        return new ArrayList<>(ids.stream().filter(Objects::nonNull).collect(Collectors.toCollection(LinkedHashSet::new)));
+    }
+
+    private boolean isMainProduct(PromotionalOffer offer, Long productId) {
+        return offer.getProduct() != null && Objects.equals(offer.getProduct().getProductId(), productId);
+    }
+
+    private boolean isLive(PromotionalOffer offer, LocalDateTime now) {
+        return Boolean.TRUE.equals(offer.getIsActive())
+                && (offer.getStartDate() == null || !offer.getStartDate().isAfter(now))
+                && (offer.getEndDate() == null || !offer.getEndDate().isBefore(now));
+    }
+
     private PromotionalOffer findById(Long offerId) {
         return offerRepository.findById(offerId)
                 .orElseThrow(() -> new ResourceNotFoundException("العرض الترويجي غير موجود برقم: " + offerId));
@@ -455,6 +778,39 @@ public class PromotionalOfferService {
     private Product resolveProduct(Long productId) {
         return productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود برقم: " + productId));
+    }
+
+    /** The products in the order given; any unknown id is an error. */
+    private List<Product> findProducts(List<Long> ids) {
+        Map<Long, Product> byId = new HashMap<>();
+        productRepository.findAllById(ids).forEach(product -> byId.put(product.getProductId(), product));
+        List<Product> products = new ArrayList<>();
+        for (Long id : ids) {
+            Product product = byId.get(id);
+            if (product == null) {
+                throw new ResourceNotFoundException("المنتج غير موجود برقم: " + id);
+            }
+            products.add(product);
+        }
+        return products;
+    }
+
+    private void assertSameStore(List<Product> buy, List<Product> reward) {
+        Long storeId = storeIdOf(buy.get(0));
+        boolean sameStore = Stream.concat(buy.stream(), reward.stream())
+                .allMatch(product -> Objects.equals(storeIdOf(product), storeId));
+        if (!sameStore) {
+            throw new InvalidDataException("يجب أن تكون جميع منتجات العرض من نفس المتجر");
+        }
+    }
+
+    private static Long storeIdOf(Product product) {
+        return product.getStore() != null ? product.getStore().getStoreId() : null;
+    }
+
+    private void assertProductsBelongToStore(OfferProducts products, Long storeId) {
+        Stream.concat(products.buy().stream(), products.reward().stream())
+                .forEach(product -> assertProductBelongsToStore(product, storeId));
     }
 
     private void assertProductBelongsToStore(Product product, Long storeId) {

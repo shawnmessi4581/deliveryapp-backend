@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,21 +41,33 @@ public interface PromotionalOfferRepository extends JpaRepository<PromotionalOff
     List<PromotionalOffer> findActiveAndValidByStore(@Param("storeId") Long storeId,
                                                       @Param("now") LocalDateTime now);
 
-    // ── Offer lookup per product (used by OrderService engine) ───────────────
+    // ── Offer lookup for a cart (used by the checkout offer engine) ──────────
 
     /**
-     * All active & valid offers for a product at checkout time, latest first.
-     * The engine evaluates every candidate and applies the one worth the most to the customer
-     * (ties go to the latest).
+     * All active & valid offers that any of the cart's products can take part in — as the main
+     * product, a buy option or a reward option — latest first (ties between offers go to the latest).
      */
-    @Query("SELECT o FROM PromotionalOffer o " +
-           "WHERE o.product.productId = :productId " +
-           "  AND o.isActive = true " +
+    @Query("SELECT DISTINCT o FROM PromotionalOffer o " +
+           "LEFT JOIN o.buyProducts bp " +
+           "LEFT JOIN o.rewardProducts rp " +
+           "WHERE o.isActive = true " +
            "  AND (o.startDate IS NULL OR o.startDate <= :now) " +
            "  AND (o.endDate   IS NULL OR o.endDate   >= :now) " +
+           "  AND (o.product.productId IN :productIds " +
+           "       OR bp.productId IN :productIds " +
+           "       OR rp.productId IN :productIds) " +
            "ORDER BY o.offerId DESC")
-    List<PromotionalOffer> findActiveOffersForProduct(@Param("productId") Long productId,
-                                                       @Param("now") LocalDateTime now);
+    List<PromotionalOffer> findActiveOffersForProducts(@Param("productIds") Collection<Long> productIds,
+                                                        @Param("now") LocalDateTime now);
+
+    /** Every offer that uses a product anywhere — cleaned up before the product is deleted. */
+    @Query("SELECT DISTINCT o FROM PromotionalOffer o " +
+           "LEFT JOIN o.buyProducts bp " +
+           "LEFT JOIN o.rewardProducts rp " +
+           "WHERE o.product.productId = :productId " +
+           "   OR bp.productId = :productId " +
+           "   OR rp.productId = :productId")
+    List<PromotionalOffer> findAllUsingProduct(@Param("productId") Long productId);
 
     // ── Public: active offers for a specific store (includes admin/global offers tied to store products) ──
 

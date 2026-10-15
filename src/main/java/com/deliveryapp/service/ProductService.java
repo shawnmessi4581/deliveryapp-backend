@@ -30,6 +30,7 @@ public class ProductService {
     private final StoreCategoryRepository storeCategoryRepository;
     private final FileStorageService fileStorageService;
     private final OrderItemRepository orderItemRepository;
+    private final PromotionalOfferService promotionalOfferService;
 
     // ── Strip sort from pageable so it doesn't interfere with JPQL ORDER BY ──
     private Pageable withoutSort(Pageable pageable) {
@@ -404,6 +405,8 @@ public class ProductService {
             product.getImages().forEach(fileStorageService::deleteFile);
         }
 
+        // Offers reference their products, so take it out of them first
+        promotionalOfferService.removeProductFromOffers(id);
         productRepository.deleteById(id);
         return "تم حذف المنتج بنجاح";
     }

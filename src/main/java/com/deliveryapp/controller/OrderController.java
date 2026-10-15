@@ -59,7 +59,10 @@ public class OrderController {
                 request.getCouponCode(),
                 address.getLatitude(),
                 address.getLongitude());
-        return ResponseEntity.ok(orderMapper.toQuoteResponse(quote));
+        OrderQuoteResponse response = orderMapper.toQuoteResponse(quote);
+        // Only the preview needs these: rewards earned that the customer still has to pick
+        response.setAvailableRewards(orderCalculationService.findAvailableRewards(quote.getItems()));
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/place")

@@ -42,6 +42,12 @@ public class OrderItem {
     private Double storeTotalPrice;
 
     // ── Promotional Offer tracking ────────────────────────────────────────────
+    /**
+     * The offer the customer chose this line as a reward for, or null for a normal line.
+     * The reward discount still only applies when the cart earned it (see {@code appliedOfferId}).
+     */
+    private Long rewardOfferId;
+
     /** ID of the PromotionalOffer applied to this line-item, or null if none. */
     private Long appliedOfferId;
 

@@ -3,11 +3,24 @@ package com.deliveryapp.entity;
 import com.deliveryapp.enums.OfferType;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Represents a promotional offer that can be attached to a specific product.
+ * Represents a "buy X get Y" promotional offer on products of one store.
+ *
+ * <h3>Product lists</h3>
+ * <ul>
+ *   <li>{@code buyProducts} – the options the customer pays for to earn the deal.</li>
+ *   <li>{@code rewardProducts} – the products the customer chooses the reward from
+ *       (may be the same products as {@code buyProducts}, e.g. "buy 2 pizzas get 1 free").</li>
+ *   <li>All variants of a listed product count.</li>
+ *   <li>Offers saved before the lists existed have them empty and use {@code product} for both.</li>
+ * </ul>
  *
  * <h3>Offer mechanics (driven by {@link OfferType})</h3>
  * <ul>
@@ -78,14 +91,36 @@ public class PromotionalOffer {
      */
     private Double discountValue;
 
-    // ── Scope: which product does this offer apply to ─────────────────────────
+    // ── Scope: which products does this offer apply to ────────────────────────
 
     /**
-     * The product this offer is linked to. Required — an offer must target a specific product.
+     * The offer's main product: the first of {@code buyProducts}. Shown on offer cards and kept for
+     * app versions that only know single-product offers.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
+
+    /** Products the customer pays for to earn the deal. Empty on older offers → {@code product}. */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "promotional_offer_buy_products",
+            joinColumns = @JoinColumn(name = "offer_id"),
+            inverseJoinColumns = @JoinColumn(name = "product_id"))
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private List<Product> buyProducts = new ArrayList<>();
+
+    /** Products the customer chooses the reward from. Empty on older offers → {@code product}. */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "promotional_offer_reward_products",
+            joinColumns = @JoinColumn(name = "offer_id"),
+            inverseJoinColumns = @JoinColumn(name = "product_id"))
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private List<Product> rewardProducts = new ArrayList<>();
+
+    /** How many times the deal can apply in one order (buy 2 get 1 twice = 2). Null = no limit. */
+    private Integer maxUsesPerOrder;
 
     /**
      * The store of the offer's product (the one that pays when {@code fundedByStore} is true).

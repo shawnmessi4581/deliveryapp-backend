@@ -7,13 +7,16 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Request DTO used by both Admin and Vendor to create or update a {@link com.deliveryapp.entity.PromotionalOffer}.
  *
  * <h3>Validation rules</h3>
  * <ul>
- *   <li>{@code productId} is always required.</li>
+ *   <li>Products: send {@code buyProductIds} (+ optional {@code rewardProductIds}), all from one store.
+ *       Older dashboards send just {@code productId}, used for both lists. On update, sending neither
+ *       (or the offer's current main {@code productId}) keeps the current lists.</li>
  *   <li>{@code storeId} is injected server-side for Vendor requests — ignored if provided.</li>
  *   <li>{@code discountPercent} is required when {@code offerType = BUY_X_GET_Y_PERCENT_OFF}.</li>
  *   <li>{@code discountValue} is required when {@code offerType = BUY_X_GET_Y_FIXED_OFF}.</li>
@@ -30,9 +33,18 @@ public class OfferRequest {
     @NotNull(message = "نوع العرض مطلوب")
     private OfferType offerType;
 
-    /** Product the offer is attached to. */
-    @NotNull(message = "معرّف المنتج مطلوب")
+    /** Single-product offer (older dashboards): used as both lists when the lists are not sent. */
     private Long productId;
+
+    /** The options the customer pays for to earn the deal. */
+    private List<Long> buyProductIds;
+
+    /** The products the customer chooses the reward from. Empty = the same as {@code buyProductIds}. */
+    private List<Long> rewardProductIds;
+
+    /** Optional: how many times the deal can apply in one order. Null = no limit. */
+    @Min(value = 1, message = "عدد مرات تطبيق العرض يجب أن يكون 1 على الأقل")
+    private Integer maxUsesPerOrder;
 
     /**
      * Number of units customer must buy.

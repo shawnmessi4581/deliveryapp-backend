@@ -9,5 +9,6 @@ public class OrderItemRequest {
     private Integer quantity;
     private String notes;
     private Long colorId; // Nullable
+    private Long rewardOfferId; // Optional: the customer picked this line as their reward from that offer
 
 }

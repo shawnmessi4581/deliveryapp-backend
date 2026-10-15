@@ -25,6 +25,9 @@ public class OrderItemResponse {
     private Double storeCommissionPercentage; // e.g., 10.0 for 10%
 
     // --- PROMOTIONAL OFFER INFO ---
+    /** The offer the customer chose this line as a reward for, or null for a normal line. */
+    private Long rewardOfferId;
+
     /** ID of the applied promotional offer, or null if none. */
     private Long appliedOfferId;
 

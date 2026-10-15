@@ -1,5 +1,6 @@
 package com.deliveryapp.service;
 
+import com.deliveryapp.dto.offer.AvailableRewardResponse;
 import com.deliveryapp.dto.offer.OfferRequest;
 import com.deliveryapp.dto.offer.OfferResponse;
 import com.deliveryapp.entity.OrderItem;
@@ -9,6 +10,8 @@ import com.deliveryapp.entity.Store;
 import com.deliveryapp.entity.User;
 import com.deliveryapp.enums.OfferType;
 import com.deliveryapp.enums.UserType;
+import com.deliveryapp.exception.InvalidDataException;
+import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.repository.ProductRepository;
 import com.deliveryapp.repository.PromotionalOfferRepository;
 import com.deliveryapp.repository.StoreRepository;
@@ -21,12 +24,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,26 +47,28 @@ class PromotionalOfferServiceTest {
     @Mock private StoreRepository storeRepository;
     @Mock private UserRepository userRepository;
     @Mock private UrlUtil urlUtil;
+    @Mock private PricingService pricingService;
 
     private PromotionalOfferService service;
+    private Store store;
     private Product product;
 
     @BeforeEach
     void setUp() {
         service = new PromotionalOfferService(offerRepository, productRepository, storeRepository,
-                userRepository, new MathUtil(), urlUtil);
-        Store store = new Store();
+                userRepository, new MathUtil(), urlUtil, new CatalogMapper(urlUtil, pricingService));
+        store = new Store();
         store.setStoreId(STORE_ID);
-        product = new Product();
-        product.setProductId(PRODUCT_ID);
-        product.setStore(store);
+        product = product(PRODUCT_ID, store);
     }
+
+    // ── Single-product offers (unchanged behaviour, also older app versions) ──
 
     @Test
     void buyOneGetOne_poolsVariantsAndFreesTheCheapestUnit() {
         // Customer picks one Large and one Regular — separate lines, same product
-        OrderItem large = line(15_000, 1);
-        OrderItem regular = line(10_000, 1);
+        OrderItem large = line(product, 15_000, 1);
+        OrderItem regular = line(product, 10_000, 1);
         offers(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID));
         user(VENDOR_ID, UserType.VENDOR);
 
@@ -76,7 +83,7 @@ class PromotionalOfferServiceTest {
 
     @Test
     void partialDealCycle_givesNoDiscount() {
-        OrderItem item = line(10_000, 2);
+        OrderItem item = line(product, 10_000, 2);
         offers(offer(1L, OfferType.BUY_X_GET_Y_FREE, 2, 1, VENDOR_ID)); // needs 3 units
 
         service.applyOffers(List.of(item));
@@ -87,7 +94,7 @@ class PromotionalOfferServiceTest {
 
     @Test
     void picksTheOfferWorthMostToTheCustomer() {
-        OrderItem item = line(10_000, 3);
+        OrderItem item = line(product, 10_000, 3);
         // Latest offer: buy 1 get 1 at 50% → 1 unit × 5,000. Older: buy 2 get 1 free → 1 unit × 10,000
         PromotionalOffer halfOff = offer(2L, OfferType.BUY_X_GET_Y_PERCENT_OFF, 1, 1, ADMIN_ID);
         halfOff.setDiscountPercent(50.0);
@@ -102,7 +109,7 @@ class PromotionalOfferServiceTest {
 
     @Test
     void percentDiscount_isRoundedToWholePounds() {
-        OrderItem item = line(12_345, 2);
+        OrderItem item = line(product, 12_345, 2);
         PromotionalOffer offer = offer(1L, OfferType.BUY_X_GET_Y_PERCENT_OFF, 1, 1, VENDOR_ID);
         offer.setDiscountPercent(33.0); // 4,073.85
         offers(offer);
@@ -116,7 +123,7 @@ class PromotionalOfferServiceTest {
     @Test
     void withAMarkup_theStoresShareIsAtItsOwnPrice() {
         // Customer price 11,000, store price 10,000 (10% markup)
-        OrderItem item = line(11_000, 2);
+        OrderItem item = line(product, 11_000, 2);
         item.setStoreUnitPrice(10_000.0);
         PromotionalOffer offer = offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID);
         offer.setFundedByStore(true);
@@ -130,7 +137,7 @@ class PromotionalOfferServiceTest {
 
     @Test
     void withAMarkup_fixedDiscountsAreSplitInTheSameRatio() {
-        OrderItem item = line(11_000, 2);
+        OrderItem item = line(product, 11_000, 2);
         item.setStoreUnitPrice(10_000.0);
         PromotionalOffer offer = offer(1L, OfferType.BUY_X_GET_Y_FIXED_OFF, 1, 1, VENDOR_ID);
         offer.setDiscountValue(5_000.0);
@@ -145,7 +152,7 @@ class PromotionalOfferServiceTest {
 
     @Test
     void legacyAdminOffer_withoutFlag_isPaidByThePlatform() {
-        OrderItem item = line(10_000, 2);
+        OrderItem item = line(product, 10_000, 2);
         offers(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, ADMIN_ID)); // saved before fundedByStore existed
         user(ADMIN_ID, UserType.ADMIN);
 
@@ -157,7 +164,7 @@ class PromotionalOfferServiceTest {
 
     @Test
     void adminOfferMarkedAsPaidByStore_isChargedToTheStore() {
-        OrderItem item = line(10_000, 2);
+        OrderItem item = line(product, 10_000, 2);
         PromotionalOffer offer = offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, ADMIN_ID);
         offer.setFundedByStore(true);
         offers(offer);
@@ -165,6 +172,153 @@ class PromotionalOfferServiceTest {
         service.applyOffers(List.of(item));
 
         assertTrue(item.getOfferFundedByStore());
+    }
+
+    // ── Buy options + reward options ─────────────────────────────────────────
+
+    @Test
+    void chosenReward_fromTheRewardList_isFree() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        Product sevenUp = product(21L, store);
+        PromotionalOffer offer = lists(paidByStore(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID)),
+                List.of(burger), List.of(pepsi, sevenUp));
+        offers(offer);
+        OrderItem paid = line(burger, 30_000, 1);
+        OrderItem reward = rewardLine(sevenUp, 6_000, 1, 1L);
+
+        service.applyOffers(List.of(paid, reward));
+
+        assertEquals(6_000.0, reward.getOfferDiscountAmount());
+        assertEquals(1L, reward.getAppliedOfferId());
+        assertEquals(0.0, paid.getOfferDiscountAmount());
+    }
+
+    @Test
+    void chosenReward_thatIsNotEarned_staysFullPrice() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        offers(lists(paidByStore(offer(1L, OfferType.BUY_X_GET_Y_FREE, 2, 1, VENDOR_ID)),
+                List.of(burger), List.of(pepsi)));
+        OrderItem paid = line(burger, 30_000, 1); // needs 2 burgers
+        OrderItem reward = rewardLine(pepsi, 5_000, 1, 1L);
+
+        service.applyOffers(List.of(paid, reward));
+
+        assertEquals(0.0, reward.getOfferDiscountAmount());
+        assertNull(reward.getAppliedOfferId());
+    }
+
+    @Test
+    void morePicksThanEarned_theDearestPickIsRewarded() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        Product juice = product(22L, store);
+        offers(lists(paidByStore(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID)),
+                List.of(burger), List.of(pepsi, juice)));
+        OrderItem paid = line(burger, 30_000, 1);
+        OrderItem cheapPick = rewardLine(pepsi, 5_000, 1, 1L);
+        OrderItem dearPick = rewardLine(juice, 9_000, 1, 1L);
+
+        service.applyOffers(List.of(paid, cheapPick, dearPick));
+
+        assertEquals(9_000.0, dearPick.getOfferDiscountAmount());
+        assertEquals(0.0, cheapPick.getOfferDiscountAmount());
+    }
+
+    @Test
+    void sameProductsInBothLists_theCustomersPickIsFree_evenTheDearest() {
+        Product margherita = product(30L, store);
+        Product mixed = product(31L, store);
+        offers(lists(paidByStore(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID)),
+                List.of(margherita, mixed), List.of(margherita, mixed)));
+        OrderItem paid = line(margherita, 20_000, 1);
+        OrderItem pick = rewardLine(mixed, 30_000, 1, 1L);
+
+        service.applyOffers(List.of(paid, pick));
+
+        assertEquals(30_000.0, pick.getOfferDiscountAmount());
+        assertEquals(0.0, paid.getOfferDiscountAmount());
+    }
+
+    @Test
+    void noPick_rewardListProductInTheCart_isRewardedAutomatically() {
+        // Older app versions don't send rewardOfferId
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        offers(lists(paidByStore(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID)),
+                List.of(burger), List.of(pepsi)));
+        OrderItem paid = line(burger, 30_000, 1);
+        OrderItem drink = line(pepsi, 5_000, 1);
+
+        service.applyOffers(List.of(paid, drink));
+
+        assertEquals(5_000.0, drink.getOfferDiscountAmount());
+        assertEquals(0.0, paid.getOfferDiscountAmount());
+    }
+
+    @Test
+    void pickForAProductOutsideTheRewardList_isIgnored() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        Product fries = product(40L, store);
+        offers(lists(paidByStore(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID)),
+                List.of(burger), List.of(pepsi)));
+        OrderItem paid = line(burger, 30_000, 1);
+        OrderItem wrongPick = rewardLine(fries, 8_000, 1, 1L);
+
+        service.applyOffers(List.of(paid, wrongPick));
+
+        assertEquals(0.0, wrongPick.getOfferDiscountAmount());
+    }
+
+    @Test
+    void maxUsesPerOrder_capsHowOftenTheDealRepeats() {
+        PromotionalOffer offer = paidByStore(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID));
+        offer.setMaxUsesPerOrder(1);
+        offers(offer);
+        OrderItem item = line(product, 10_000, 4); // would earn 2 without the cap
+
+        service.applyOffers(List.of(item));
+
+        assertEquals(10_000.0, item.getOfferDiscountAmount());
+    }
+
+    @Test
+    void aUnitCountsTowardOneOfferOnly() {
+        // Both offers need the same single burger as payment — only the better one applies
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        Product fries = product(40L, store);
+        offers(lists(paidByStore(offer(2L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID)), List.of(burger), List.of(pepsi)),
+                lists(paidByStore(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID)), List.of(burger), List.of(fries)));
+        OrderItem paid = line(burger, 30_000, 1);
+        OrderItem drink = rewardLine(pepsi, 5_000, 1, 2L);
+        OrderItem side = rewardLine(fries, 8_000, 1, 1L);
+
+        service.applyOffers(List.of(paid, drink, side));
+
+        assertEquals(8_000.0, side.getOfferDiscountAmount());
+        assertEquals(0.0, drink.getOfferDiscountAmount());
+    }
+
+    @Test
+    void availableRewards_listsRewardsEarnedButNotPicked() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        Product sevenUp = product(21L, store);
+        PromotionalOffer offer = lists(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID),
+                List.of(burger), List.of(pepsi, sevenUp));
+        offer.setTitle("وجبة + مشروب مجاني");
+        offers(offer);
+        List<OrderItem> cart = List.of(line(burger, 30_000, 2), rewardLine(pepsi, 5_000, 1, 1L));
+
+        List<AvailableRewardResponse> rewards = service.findAvailableRewards(cart);
+
+        assertEquals(1, rewards.size());
+        assertEquals(1L, rewards.get(0).getOfferId());
+        assertEquals(1, rewards.get(0).getRewardQuantity()); // 2 earned, 1 already picked
+        assertEquals(List.of(20L, 21L), rewards.get(0).getRewardProductIds());
     }
 
     // ── Who pays: admin flag / vendor offers ──────────────────────────────────
@@ -185,6 +339,7 @@ class PromotionalOfferServiceTest {
     @Test
     void adminUpdate_withoutTheFlag_keepsWhoPays() {
         PromotionalOffer existing = offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, ADMIN_ID);
+        existing.setProduct(product(99L, store));
         existing.setFundedByStore(true);
         when(offerRepository.findById(1L)).thenReturn(Optional.of(existing));
         stubProductAndSave();
@@ -198,7 +353,7 @@ class PromotionalOfferServiceTest {
     @Test
     void vendorCreate_isAlwaysPaidByTheVendorsStore() {
         stubProductAndSave();
-        when(storeRepository.findById(STORE_ID)).thenReturn(Optional.of(product.getStore()));
+        when(storeRepository.findById(STORE_ID)).thenReturn(Optional.of(store));
         user(VENDOR_ID, UserType.VENDOR);
 
         OfferResponse created = service.vendorCreateOffer(request(false), STORE_ID, VENDOR_ID);
@@ -207,9 +362,92 @@ class PromotionalOfferServiceTest {
         assertTrue(created.getCreatedByVendor());
     }
 
+    // ── Product lists on create / update ─────────────────────────────────────
+
+    @Test
+    void create_withLists_savesBothLists_andTheFirstBuyOptionIsTheMainProduct() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        when(productRepository.findAllById(anyList()))
+                .thenReturn(List.of(burger))
+                .thenReturn(List.of(pepsi));
+        when(offerRepository.save(any(PromotionalOffer.class))).thenAnswer(call -> call.getArgument(0));
+        OfferRequest request = request(null);
+        request.setProductId(null);
+        request.setBuyProductIds(List.of(10L));
+        request.setRewardProductIds(List.of(20L));
+
+        OfferResponse created = service.adminCreateOffer(request, ADMIN_ID);
+
+        assertEquals(10L, created.getProductId());
+        assertEquals(List.of(10L), created.getBuyProducts().stream().map(p -> p.getProductId()).toList());
+        assertEquals(List.of(20L), created.getRewardProducts().stream().map(p -> p.getProductId()).toList());
+    }
+
+    @Test
+    void create_withProductsFromTwoStores_isRejected() {
+        Store otherStore = new Store();
+        otherStore.setStoreId(6L);
+        when(productRepository.findAllById(anyList()))
+                .thenReturn(List.of(product(10L, store), product(11L, otherStore)));
+        OfferRequest request = request(null);
+        request.setBuyProductIds(List.of(10L, 11L));
+
+        assertThrows(InvalidDataException.class, () -> service.adminCreateOffer(request, ADMIN_ID));
+    }
+
+    @Test
+    void vendorCreate_withAnotherStoresProduct_isRejected() {
+        Store otherStore = new Store();
+        otherStore.setStoreId(6L);
+        when(productRepository.findAllById(anyList())).thenReturn(List.of(product(11L, otherStore)));
+        OfferRequest request = request(null);
+        request.setBuyProductIds(List.of(11L));
+
+        assertThrows(InvalidDataException.class, () -> service.vendorCreateOffer(request, STORE_ID, VENDOR_ID));
+    }
+
+    // ── Product deletion ─────────────────────────────────────────────────────
+
+    @Test
+    void removingTheMainProduct_movesTheOfferToTheNextBuyOption() {
+        Product burger = product(10L, store);
+        Product chicken = product(11L, store);
+        Product pepsi = product(20L, store);
+        PromotionalOffer offer = lists(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID),
+                List.of(burger, chicken), List.of(pepsi));
+        when(offerRepository.findAllUsingProduct(10L)).thenReturn(List.of(offer));
+
+        service.removeProductFromOffers(10L);
+
+        assertEquals(chicken, offer.getProduct());
+        assertEquals(List.of(chicken), offer.getBuyProducts());
+        verify(offerRepository).save(offer);
+    }
+
+    @Test
+    void removingTheLastRewardOption_deletesTheOffer() {
+        Product burger = product(10L, store);
+        Product pepsi = product(20L, store);
+        PromotionalOffer offer = lists(offer(1L, OfferType.BUY_X_GET_Y_FREE, 1, 1, VENDOR_ID),
+                List.of(burger), List.of(pepsi));
+        when(offerRepository.findAllUsingProduct(20L)).thenReturn(List.of(offer));
+
+        service.removeProductFromOffers(20L);
+
+        verify(offerRepository).delete(offer);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private OrderItem line(double unitPrice, int quantity) {
+    private static Product product(long id, Store store) {
+        Product product = new Product();
+        product.setProductId(id);
+        product.setStore(store);
+        return product;
+    }
+
+    private OrderItem line(Product product, double unitPrice, int quantity) {
         OrderItem item = new OrderItem();
         item.setProduct(product);
         item.setUnitPrice(unitPrice);
@@ -218,6 +456,13 @@ class PromotionalOfferServiceTest {
         return item;
     }
 
+    private OrderItem rewardLine(Product product, double unitPrice, int quantity, long rewardOfferId) {
+        OrderItem item = line(product, unitPrice, quantity);
+        item.setRewardOfferId(rewardOfferId);
+        return item;
+    }
+
+    /** A single-product offer on {@code product}, like the ones saved before product lists existed. */
     private PromotionalOffer offer(long id, OfferType type, int buy, int get, long createdBy) {
         PromotionalOffer offer = new PromotionalOffer();
         offer.setOfferId(id);
@@ -225,11 +470,25 @@ class PromotionalOfferServiceTest {
         offer.setBuyQuantity(buy);
         offer.setGetQuantity(get);
         offer.setCreatedBy(createdBy);
+        offer.setProduct(product);
+        return offer;
+    }
+
+    private static PromotionalOffer lists(PromotionalOffer offer, List<Product> buy, List<Product> reward) {
+        offer.setProduct(buy.get(0));
+        offer.setBuyProducts(new ArrayList<>(buy));
+        offer.setRewardProducts(new ArrayList<>(reward));
+        return offer;
+    }
+
+    /** Skips the who-created-it lookup in engine tests that don't care who pays. */
+    private static PromotionalOffer paidByStore(PromotionalOffer offer) {
+        offer.setFundedByStore(true);
         return offer;
     }
 
     private void offers(PromotionalOffer... offers) {
-        when(offerRepository.findActiveOffersForProduct(eq(PRODUCT_ID), any())).thenReturn(List.of(offers));
+        when(offerRepository.findActiveOffersForProducts(any(), any())).thenReturn(List.of(offers));
     }
 
     private void user(long id, UserType type) {
