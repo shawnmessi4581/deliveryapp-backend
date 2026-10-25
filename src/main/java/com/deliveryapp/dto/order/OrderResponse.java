@@ -1,6 +1,7 @@
 package com.deliveryapp.dto.order;
 
 import com.deliveryapp.dto.catalog.StoreResponse; // Import the Store DTO
+import com.deliveryapp.dto.report.ProfitBreakdownResponse;
 import com.deliveryapp.enums.DriverOrderStatus;
 import com.deliveryapp.enums.OrderStatus;
 import lombok.Data;
@@ -66,5 +67,8 @@ public class OrderResponse {
      * Drivers/admins should use this instead of recomputing from item totals.
      */
     private List<StorePayoutResponse> storePayouts;
+
+    /** The platform's profit on this order — admin only (null for everyone else). */
+    private ProfitBreakdownResponse profit;
 
 }

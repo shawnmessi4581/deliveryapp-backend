@@ -9,8 +9,10 @@ import com.deliveryapp.entity.Product;
 import com.deliveryapp.entity.Store;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.mapper.user.UserMapper;
+import com.deliveryapp.service.OrderProfitService;
 import com.deliveryapp.service.StorePayoutService;
 import com.deliveryapp.util.DistanceUtil;
+import com.deliveryapp.util.MathUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,7 +36,9 @@ class OrderMapperTest {
 
     @BeforeEach
     void setUp() {
-        mapper = new OrderMapper(catalogMapper, userMapper, new DistanceUtil(), new StorePayoutService());
+        StorePayoutService payouts = new StorePayoutService();
+        mapper = new OrderMapper(catalogMapper, userMapper, new DistanceUtil(), payouts,
+                new OrderProfitService(null, payouts, new MathUtil()));
 
         Store store = new Store();
         store.setStoreId(1L);

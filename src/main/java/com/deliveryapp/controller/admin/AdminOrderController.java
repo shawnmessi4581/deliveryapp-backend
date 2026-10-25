@@ -14,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -53,14 +54,14 @@ public class AdminOrderController {
             @RequestBody UpdateOrderStatusRequest request) {
 
         Order updatedOrder = orderService.updateOrderStatus(orderId, request.getNewStatus(), request.getUserId());
-        return ResponseEntity.ok(orderMapper.toOrderResponse(updatedOrder));
+        return ResponseEntity.ok(toResponseForCaller(updatedOrder));
     }
 
     // 3. GET SINGLE ORDER DETAILS
     @GetMapping("/{orderId}")
     public ResponseEntity<OrderResponse> getOrderDetails(@PathVariable Long orderId) {
         Order order = orderService.getOrderById(orderId);
-        return ResponseEntity.ok(orderMapper.toOrderResponse(order));
+        return ResponseEntity.ok(toResponseForCaller(order));
     }
 
     // 4. DELETE ORDER
@@ -70,10 +71,18 @@ public class AdminOrderController {
         return ResponseEntity.ok("تم حذف الطلب بنجاح");
     }
 
-    // --- HELPER METHOD ---
+    // --- HELPER METHODS ---
+
+    // 💹 Profit is for admins only — employees manage orders but don't see the platform's earnings
+    private OrderResponse toResponseForCaller(Order order) {
+        boolean admin = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        return admin ? orderMapper.toAdminOrderResponse(order) : orderMapper.toOrderResponse(order);
+    }
+
     private PagedResponse<OrderResponse> createPagedResponse(Page<Order> orderPage) {
         List<OrderResponse> content = orderPage.getContent().stream()
-                .map(orderMapper::toOrderResponse)
+                .map(this::toResponseForCaller)
                 .collect(Collectors.toList());
 
         return new PagedResponse<>(

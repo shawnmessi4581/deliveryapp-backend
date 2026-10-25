@@ -13,6 +13,7 @@ import com.deliveryapp.entity.OrderItem;
 import com.deliveryapp.entity.Store;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.mapper.user.UserMapper;
+import com.deliveryapp.service.OrderProfitService;
 import com.deliveryapp.service.StorePayoutService;
 import com.deliveryapp.util.DistanceUtil;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,14 @@ public class OrderMapper {
     private final UserMapper userMapper;
     private final DistanceUtil distanceUtil;
     private final StorePayoutService storePayoutService;
+    private final OrderProfitService orderProfitService;
+
+    /** Everything {@link #toOrderResponse} has, plus the platform's profit on the order — admins only. */
+    public OrderResponse toAdminOrderResponse(Order order) {
+        OrderResponse response = toOrderResponse(order);
+        response.setProfit(orderProfitService.breakdown(order, response.getStorePayouts()));
+        return response;
+    }
 
     public OrderResponse toOrderResponse(Order order) {
         OrderResponse response = new OrderResponse();
