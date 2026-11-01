@@ -79,4 +79,10 @@ public class Store {
     // Allows admin to disable the threshold without losing its value.
     @Column(columnDefinition = "boolean default false")
     private Boolean freeDeliveryThresholdEnabled = false;
+
+    /**
+     * Set when the store was deleted but past orders still point to it: it's hidden everywhere and
+     * kept only so those orders, payouts and reports stay correct. Null = a live store.
+     */
+    private LocalDateTime deletedAt;
 }

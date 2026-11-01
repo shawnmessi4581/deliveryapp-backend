@@ -146,6 +146,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         // ── Non-paginated (unchanged) ──
         List<Product> findBySubCategorySubcategoryId(Long subCategoryId);
 
+        List<Product> findByStoreStoreId(Long storeId);
+
         @Query(value = "SELECT p.productId FROM Product p WHERE p.isAvailable = true AND " +
                         "(LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
                         "LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%')))", countQuery = "SELECT COUNT(p) FROM Product p WHERE p.isAvailable = true AND "

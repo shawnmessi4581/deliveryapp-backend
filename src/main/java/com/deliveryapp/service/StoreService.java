@@ -31,8 +31,10 @@ public class StoreService {
         return storeRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
     }
 
+    /** A live store; deleted stores (kept only for past orders) are "not found". */
     public Store getStoreById(Long id) {
         return storeRepository.findById(id)
+                .filter(store -> store.getDeletedAt() == null)
                 .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود برقم: " + id));
     }
 
@@ -55,7 +57,7 @@ public class StoreService {
 
     // ================= ADMIN CRUD =================
     public List<Store> getAllStores() {
-        return storeRepository.findAllByOrderByDisplayOrderAsc();
+        return storeRepository.findByDeletedAtIsNullOrderByDisplayOrderAsc();
     }
 
     @Transactional
@@ -202,8 +204,7 @@ public class StoreService {
     // 💹 Admin: set the % customers pay on top of this store's prices (0 turns it off)
     @Transactional
     public Store setPriceMarkup(Long storeId, Double percentage) {
-        Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId));
+        Store store = getStoreById(storeId);
         store.setPriceMarkupPercentage(validMarkup(percentage));
         return storeRepository.save(store);
     }
@@ -225,20 +226,13 @@ public class StoreService {
         }
     }
 
-    public void deleteStore(Long id) {
-        Store store = getStoreById(id);
-        if (store.getLogo() != null)
-            fileStorageService.deleteFile(store.getLogo());
-        if (store.getCoverImage() != null)
-            fileStorageService.deleteFile(store.getCoverImage());
-        storeRepository.deleteById(id);
-    }
+    // Deleting a store: see StoreDeletionService
+
     // ================= VENDOR APP =================
 
     @Transactional
     public Store toggleStoreBusyStatus(Long storeId, Boolean isBusy) {
-        Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId));
+        Store store = getStoreById(storeId);
 
         store.setIsBusy(isBusy);
         return storeRepository.save(store);
@@ -247,8 +241,7 @@ public class StoreService {
     // 🆓 Toggle free delivery on/off for a specific store
     @Transactional
     public Store toggleFreeDelivery(Long storeId, Boolean freeDelivery) {
-        Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود برقم: " + storeId));
+        Store store = getStoreById(storeId);
         store.setFreeDelivery(freeDelivery);
         return storeRepository.save(store);
     }

@@ -10,5 +10,7 @@ import java.util.List;
 public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     boolean existsByProductProductId(Long productId);
 
+    boolean existsByProductStoreStoreId(Long storeId);
+
     List<OrderItem> findByVariantVariantId(Long variantId);
 }

@@ -101,4 +101,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         // 🟢 NEW: Get Orders by Store AND Statuses (For Vendor App "Active" view)
         Page<Order> findByStores_StoreIdAndStatusInOrderByCreatedAtDesc(Long storeId, List<OrderStatus> statuses,
                         Pageable pageable);
+
+        // ── Deletion checks: does a user / store have past or in-progress orders ──
+        boolean existsByUserUserId(Long userId);
+
+        boolean existsByDriverUserId(Long driverId);
+
+        boolean existsByDriverUserIdAndStatusIn(Long driverId, List<OrderStatus> statuses);
+
+        boolean existsByStores_StoreId(Long storeId);
+
+        boolean existsByStores_StoreIdAndStatusIn(Long storeId, List<OrderStatus> statuses);
 }

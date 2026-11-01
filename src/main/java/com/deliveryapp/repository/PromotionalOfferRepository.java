@@ -82,4 +82,9 @@ public interface PromotionalOfferRepository extends JpaRepository<PromotionalOff
                                                                Pageable pageable);
 
     Optional<PromotionalOffer> findByOfferIdAndStoreStoreId(Long offerId, Long storeId);
+
+    // ── Deletion ──
+    List<PromotionalOffer> findByStoreStoreId(Long storeId);
+
+    boolean existsByCreatedBy(Long userId);
 }

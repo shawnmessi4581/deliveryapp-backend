@@ -8,12 +8,7 @@ import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.DuplicateResourceException;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
-import com.deliveryapp.repository.FavoriteRepository;
-import com.deliveryapp.repository.NotificationRepository;
-import com.deliveryapp.repository.OrderRepository;
-import com.deliveryapp.repository.OtpVerificationRepository;
 import com.deliveryapp.repository.StoreRepository;
-import com.deliveryapp.repository.UserAddressRepository;
 import com.deliveryapp.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -33,12 +28,8 @@ public class AdminUserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final FileStorageService fileStorageService;
-    private final NotificationRepository notificationRepository;
-    private final FavoriteRepository favoriteRepository;
-    private final UserAddressRepository addressRepository;
-    private final OrderRepository orderRepository;
-    private final OtpVerificationRepository otpRepository;
     private final StoreRepository storeRepository; // 🟢 NEW: For linking vendors to stores
+    private final UserDeletionService userDeletionService;
 
     /**
      * 🔍 Admin: paginated user list with optional keyword search and optional UserType filter.
@@ -49,37 +40,9 @@ public class AdminUserService {
         return userRepository.searchUsers(kw, userType, isActive, pageable);
     }
 
-    @Transactional
-    public void deleteUser(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("المستخدم غير موجود برقم: " + userId));
-
-        // 1. Safety Check: Prevent deletion if user has orders (Customer or Driver)
-        boolean hasCustomerOrders = !orderRepository.findByUserUserIdOrderByCreatedAtDesc(userId).isEmpty();
-        boolean hasDriverOrders = false;
-
-        if (user.getUserType() == UserType.DRIVER) {
-            hasDriverOrders = !orderRepository.findByDriverUserIdOrderByCreatedAtDesc(userId).isEmpty();
-        }
-
-        if (hasCustomerOrders || hasDriverOrders) {
-            throw new InvalidDataException(
-                    "لا يمكن حذف هذا المستخدم لارتباطه بطلبات سابقة. يرجى تعطيل حسابه بدلاً من الحذف.");
-        }
-
-        // 2. 🧹 Cleanup Child Records (Fixes the 500 Foreign Key Error)
-        notificationRepository.deleteByUserUserId(userId);
-        favoriteRepository.deleteByUserUserId(userId);
-        addressRepository.deleteByUserUserId(userId);
-        otpRepository.deleteByPhoneNumber(user.getPhoneNumber());
-
-        // 3. 🧹 Cleanup Profile Image
-        if (user.getProfileImage() != null) {
-            fileStorageService.deleteFile(user.getProfileImage());
-        }
-
-        // 4. Delete the User
-        userRepository.deleteById(userId);
+    /** @return true when deleted completely, false when an anonymous record was kept for past orders */
+    public boolean deleteUser(Long userId) {
+        return userDeletionService.deleteUser(userId);
     }
 
     @Transactional
@@ -192,6 +155,7 @@ public class AdminUserService {
             }
             // Assuming you have storeRepository injected in AdminUserService
             Store store = storeRepository.findById(request.getManagedStoreId())
+                    .filter(s -> s.getDeletedAt() == null)
                     .orElseThrow(() -> new ResourceNotFoundException("المتجر غير موجود"));
             user.setManagedStore(store);
         }

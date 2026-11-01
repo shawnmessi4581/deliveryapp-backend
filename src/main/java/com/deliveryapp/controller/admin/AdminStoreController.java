@@ -4,6 +4,7 @@ import com.deliveryapp.dto.catalog.StoreRequest;
 import com.deliveryapp.dto.catalog.StoreResponse;
 import com.deliveryapp.entity.Store;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
+import com.deliveryapp.service.StoreDeletionService;
 import com.deliveryapp.service.StoreService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -22,6 +23,7 @@ import java.util.stream.Collectors;
 public class AdminStoreController {
 
     private final StoreService storeService;
+    private final StoreDeletionService storeDeletionService;
     private final CatalogMapper catalogMapper;
 
     @GetMapping
@@ -53,8 +55,10 @@ public class AdminStoreController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteStore(@PathVariable Long id) {
-        storeService.deleteStore(id);
-        return ResponseEntity.ok("تم حذف المتجر");
+        boolean removedCompletely = storeDeletionService.deleteStore(id);
+        return ResponseEntity.ok(removedCompletely
+                ? "تم حذف المتجر نهائياً"
+                : "تم حذف المتجر وإخفاؤه من التطبيق، مع الاحتفاظ بسجل طلباته السابقة");
     }
 
     /**

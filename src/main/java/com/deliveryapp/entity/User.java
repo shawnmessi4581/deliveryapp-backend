@@ -49,6 +49,12 @@ public class User {
     private LocalDateTime createdAt;
     private LocalDateTime lastLogin;
 
+    /**
+     * Set when the account was deleted but past orders still point to it: the personal data is
+     * wiped and the row only keeps orders, payouts and reports correct. Null = a live account.
+     */
+    private LocalDateTime deletedAt;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

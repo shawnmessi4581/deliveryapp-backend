@@ -31,6 +31,8 @@ public class ProductService {
     private final FileStorageService fileStorageService;
     private final OrderItemRepository orderItemRepository;
     private final PromotionalOfferService promotionalOfferService;
+    private final FavoriteRepository favoriteRepository;
+    private final BannerRepository bannerRepository;
 
     // ── Strip sort from pageable so it doesn't interfere with JPQL ORDER BY ──
     private Pageable withoutSort(Pageable pageable) {
@@ -391,6 +393,10 @@ public class ProductService {
     @Transactional
     public String deleteProduct(Long id) {
         Product product = getProductById(id);
+
+        // Gone from the catalog either way: nobody can favorite it or open it from a banner
+        favoriteRepository.deleteByTypeAndIds("PRODUCT", java.util.Set.of(id));
+        bannerRepository.deleteByLinkTypeAndLinkIds("product", java.util.Set.of(id));
 
         if (orderItemRepository.existsByProductProductId(id)) {
             product.setIsAvailable(false);

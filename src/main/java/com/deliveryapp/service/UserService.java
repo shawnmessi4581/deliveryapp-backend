@@ -5,16 +5,11 @@ import com.deliveryapp.dto.user.UserUpdateRequest;
 import com.deliveryapp.dto.websocket.DriverWebSocketEvent;
 import com.deliveryapp.entity.OtpVerification;
 import com.deliveryapp.entity.User;
-import com.deliveryapp.enums.OrderStatus;
 import com.deliveryapp.enums.UserType;
 import com.deliveryapp.exception.DuplicateResourceException;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.exception.ResourceNotFoundException;
-import com.deliveryapp.repository.FavoriteRepository;
-import com.deliveryapp.repository.NotificationRepository;
-import com.deliveryapp.repository.OrderRepository;
 import com.deliveryapp.repository.OtpVerificationRepository;
-import com.deliveryapp.repository.UserAddressRepository;
 import com.deliveryapp.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -23,10 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Random;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -35,12 +27,8 @@ public class UserService {
     private final UserRepository userRepository;
     private final OtpVerificationRepository otpRepository;
     private final FileStorageService fileStorageService;
-    private final OrderRepository orderRepository;
-    private final FavoriteRepository favoriteRepository;
-    private final NotificationRepository notificationRepository;
-    private final UserAddressRepository userAddressRepository;
     private final SimpMessagingTemplate messagingTemplate;
-    private final TokenService tokenService;
+    private final UserDeletionService userDeletionService;
     // private final NotificationService notificationService;
 
     public User registerUser(User user) {
@@ -251,51 +239,8 @@ public class UserService {
                 driver.getVehicleNumber());
     }
 
-    @Transactional
+    /** The customer's "delete my account" — same rules as the admin delete (see UserDeletionService). */
     public void deleteMyAccount(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        // 1. Prevent deletion if they have active orders
-        List<OrderStatus> activeStatuses = Arrays.asList(
-                OrderStatus.PENDING,
-                OrderStatus.CONFIRMED,
-                OrderStatus.PREPARING,
-                OrderStatus.OUT_FOR_DELIVERY);
-
-        if (orderRepository.existsByUserUserIdAndStatusIn(userId, activeStatuses)) {
-            throw new InvalidDataException("لا يمكنك حذف الحساب لوجود طلبات قيد التنفيذ."); // "Cannot delete account
-                                                                                            // with active orders"
-        }
-
-        // 2. Wipe physical profile image from server
-        if (user.getProfileImage() != null) {
-            fileStorageService.deleteFile(user.getProfileImage());
-        }
-
-        // 3. Delete related personal data
-        userAddressRepository.deleteByUserUserId(userId);
-        favoriteRepository.deleteByUserUserId(userId);
-        notificationRepository.deleteByUserUserId(userId);
-
-        // 4. Anonymize User Record (Soft Delete)
-        // This keeps old orders attached to a "Deleted User", saving your accounting
-        // data
-        user.setName("مستخدم محذوف"); // "Deleted User"
-        user.setPhoneNumber("DELETED_" + UUID.randomUUID().toString().substring(0, 10));
-        user.setEmail(null);
-        user.setFcmToken(null);
-        user.setProfileImage(null);
-        user.setAddress(null);
-        user.setLatitude(null);
-        user.setLongitude(null);
-
-        user.setIsActive(false);
-        user.setPassword(""); // Wipe password
-
-        userRepository.save(user);
-
-        // 5. End every session of the deleted account
-        tokenService.revokeAllTokensForUser(userId);
+        userDeletionService.deleteUser(userId);
     }
 }

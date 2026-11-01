@@ -81,6 +81,11 @@ public class OrderCalculationService {
                     .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود: " + itemReq.getProductId()));
             if (product.getStore() == null)
                 throw new InvalidDataException("المنتج غير مرتبط بمتجر: " + product.getName());
+            // Hidden products and inactive / deleted stores can't be ordered, even from an old cart
+            if (Boolean.FALSE.equals(product.getIsAvailable()))
+                throw new InvalidDataException("المنتج '" + product.getName() + "' غير متوفر حالياً");
+            if (Boolean.FALSE.equals(product.getStore().getIsActive()))
+                throw new InvalidDataException("المتجر '" + product.getStore().getName() + "' غير متاح حالياً");
 
             OrderItem item = new OrderItem();
             item.setProduct(product);

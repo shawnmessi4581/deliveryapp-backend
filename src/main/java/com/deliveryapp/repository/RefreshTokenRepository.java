@@ -44,4 +44,9 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Modifying
     @Query("DELETE FROM RefreshToken rt WHERE (rt.revoked = true AND rt.createdAt < :cutoff) OR rt.expiresAt < :cutoff")
     void deleteExpiredOrRevoked(@Param("cutoff") LocalDateTime cutoff);
+
+    /** Before a user row is removed for good. */
+    @Modifying
+    @Query("DELETE FROM RefreshToken rt WHERE rt.user.userId = :userId")
+    void deleteByUserId(@Param("userId") Long userId);
 }

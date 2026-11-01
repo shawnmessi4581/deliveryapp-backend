@@ -63,8 +63,10 @@ public class AdminUserController {
     @DeleteMapping("/users/{userId}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<String> deleteUser(@PathVariable Long userId) {
-        adminUserService.deleteUser(userId);
-        return ResponseEntity.ok("تم حذف المستخدم بنجاح");
+        boolean removedCompletely = adminUserService.deleteUser(userId);
+        return ResponseEntity.ok(removedCompletely
+                ? "تم حذف المستخدم نهائياً"
+                : "تم حذف المستخدم ومسح بياناته الشخصية، مع الاحتفاظ بسجل مجهول لطلباته السابقة");
     }
 
     @PatchMapping("/users/{userId}/status")

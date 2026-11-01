@@ -12,4 +12,6 @@ public interface OrderStatusHistoryRepository extends JpaRepository<OrderStatusH
 
     void deleteByOrderOrderId(Long orderId);
 
+    boolean existsByChangedByUserId(Long userId);
+
 }

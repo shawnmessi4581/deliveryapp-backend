@@ -31,4 +31,9 @@ public interface CouponRepository  extends JpaRepository<Coupon, Long> {
     @Query("UPDATE Coupon c SET c.currentUsageCount = c.currentUsageCount - 1 " +
            "WHERE c.couponId = :couponId AND c.currentUsageCount > 0")
     int releaseUsage(@Param("couponId") Long couponId);
+
+    boolean existsByCreatedBy(Long userId);
+
+    /** Coupons scoped to one store / category / product. */
+    java.util.List<Coupon> findByApplicableToAndApplicableId(Coupon.ApplicableTo applicableTo, Long applicableId);
 }

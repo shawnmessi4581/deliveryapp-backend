@@ -36,7 +36,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
                         "  LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR " +
                         "  LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))) " +
                         "AND (:userType IS NULL OR u.userType = :userType) " +
-                        "AND (:isActive IS NULL OR u.isActive = :isActive)")
+                        "AND (:isActive IS NULL OR u.isActive = :isActive) " +
+                        "AND u.deletedAt IS NULL")
         Page<User> searchUsers(
                         @Param("keyword") String keyword,
                         @Param("userType") UserType userType,
@@ -44,10 +45,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
                         Pageable pageable);
 
         // Legacy non-paginated search (kept for backward-compat if used elsewhere)
-        @Query("SELECT u FROM User u WHERE " +
+        @Query("SELECT u FROM User u WHERE u.deletedAt IS NULL AND (" +
                         "LOWER(u.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
                         "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-                        "LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+                        "LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')))")
         List<User> searchUsers(@Param("keyword") String keyword);
+
+        /** Vendors linked to a store — unlinked when the store is deleted. */
+        List<User> findByManagedStoreStoreId(Long storeId);
 
 }

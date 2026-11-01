@@ -71,4 +71,12 @@ public interface FlashSaleRepository extends JpaRepository<FlashSale, Long> {
 
     /** The flash sale behind a coupon, if any — used at checkout to see who pays the discount. */
     Optional<FlashSale> findFirstByBackingCouponId(Long backingCouponId);
+
+    // ── Deletion: a store's flash sales, admin ones aimed at it, and who created any ──
+    List<FlashSale> findByStoreStoreId(Long storeId);
+
+    List<FlashSale> findByApplicableToAndApplicableId(com.deliveryapp.entity.Coupon.ApplicableTo applicableTo,
+                                                      Long applicableId);
+
+    boolean existsByCreatedBy(Long userId);
 }

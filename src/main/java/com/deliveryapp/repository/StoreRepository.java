@@ -23,6 +23,9 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
 
     List<Store> findAllByOrderByDisplayOrderAsc();
 
+    /** Admin list: every store except deleted ones kept for old orders. */
+    List<Store> findByDeletedAtIsNullOrderByDisplayOrderAsc();
+
     List<Store> findByIsActiveTrueOrderByDisplayOrderAsc();
 
     // For User App: Only Active Stores, ordered by displayOrder
