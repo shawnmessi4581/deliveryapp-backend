@@ -81,6 +81,20 @@ public interface PromotionalOfferRepository extends JpaRepository<PromotionalOff
                                                                @Param("now") LocalDateTime now,
                                                                Pageable pageable);
 
+    /** Home offers section: like findAllActiveAndValid, minus offers of turned-off stores (checkout rejects their products). */
+    @Query(value = "SELECT o FROM PromotionalOffer o JOIN o.product p JOIN p.store s " +
+           "WHERE o.isActive = true " +
+           "  AND (o.startDate IS NULL OR o.startDate <= :now) " +
+           "  AND (o.endDate   IS NULL OR o.endDate   >= :now) " +
+           "  AND s.isActive = true " +
+           "ORDER BY o.createdAt DESC, o.offerId DESC",
+           countQuery = "SELECT COUNT(o) FROM PromotionalOffer o JOIN o.product p JOIN p.store s " +
+           "WHERE o.isActive = true " +
+           "  AND (o.startDate IS NULL OR o.startDate <= :now) " +
+           "  AND (o.endDate   IS NULL OR o.endDate   >= :now) " +
+           "  AND s.isActive = true")
+    Page<PromotionalOffer> findLiveOffersOfActiveStores(@Param("now") LocalDateTime now, Pageable pageable);
+
     Optional<PromotionalOffer> findByOfferIdAndStoreStoreId(Long offerId, Long storeId);
 
     // ── Deletion ──

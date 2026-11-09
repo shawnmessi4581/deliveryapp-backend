@@ -155,4 +155,53 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                         "(LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
                                         "LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%')))")
         Page<Long> findIdsByDeepSearchGlobal(String keyword, Pageable pageable);
+
+        // ── Home sections: like the lists above, minus products of turned-off stores (checkout rejects them) ──
+
+        @Query(value = "SELECT p.productId FROM Product p WHERE p.isTrending = true AND p.isAvailable = true AND p.store.isActive = true ORDER BY p.displayOrder ASC, p.productId ASC", countQuery = "SELECT COUNT(p) FROM Product p WHERE p.isTrending = true AND p.isAvailable = true AND p.store.isActive = true")
+        Page<Long> findHomeTrendingIds(Pageable pageable);
+
+        @Query(value = "SELECT p.productId FROM Product p WHERE p.isAvailable = true AND p.store.isActive = true ORDER BY p.productId DESC", countQuery = "SELECT COUNT(p) FROM Product p WHERE p.isAvailable = true AND p.store.isActive = true")
+        Page<Long> findHomeNewestIds(Pageable pageable);
+
+        @Query(value = "SELECT p.productId FROM Product p WHERE p.hasOffer = true AND p.isAvailable = true AND p.store.isActive = true ORDER BY p.displayOrder ASC, p.productId ASC", countQuery = "SELECT COUNT(p) FROM Product p WHERE p.hasOffer = true AND p.isAvailable = true AND p.store.isActive = true")
+        Page<Long> findHomeDiscountedIds(Pageable pageable);
+
+        /**
+         * Products whose customer price — the price the app shows — is at most :maxPrice. Mirrors
+         * PricingService.getCustomerFinalPrice, so keep the two in step:
+         * <ul>
+         *   <li>store price: the discounted price when hasOffer, else the regular one; USD × :usdRate,
+         *       rounded up to the next 10</li>
+         *   <li>customer price: store price + the store's markup %, rounded up to the next 10
+         *       (no markup, or a price of 0 → unchanged)</li>
+         * </ul>
+         * :usdRate ≤ 0 (no exchange rate set) leaves USD products out, and so does a USD product without a
+         * price (NULL stays NULL; the app couldn't price it either). Shared by the query and its count.
+         */
+        String HOME_UNDER_PRICE_SQL = """
+                        FROM (
+                            SELECT p.product_id, p.display_order,
+                                   CASE WHEN p.is_usd THEN
+                                            CASE WHEN :usdRate > 0 THEN
+                                                CEIL(COALESCE(CASE WHEN p.has_offer THEN p.offer_usd_price END, p.usd_price) * :usdRate / 10) * 10
+                                            END
+                                        ELSE COALESCE(CASE WHEN p.has_offer THEN p.offer_base_price END, p.base_price, 0)
+                                   END AS store_price,
+                                   COALESCE(s.price_markup_percentage, 0) AS markup
+                            FROM products p
+                            JOIN stores s ON s.store_id = p.store_id
+                            WHERE p.is_available = true AND s.is_active = true
+                        ) q
+                        WHERE CASE WHEN q.markup <= 0 OR q.store_price = 0 THEN q.store_price
+                                   ELSE CEIL(CAST(q.store_price AS numeric) * (100 + q.markup) / 1000) * 10
+                              END <= :maxPrice
+                        """;
+
+        @Query(value = "SELECT q.product_id " + HOME_UNDER_PRICE_SQL
+                        + " ORDER BY q.display_order ASC, q.product_id ASC", countQuery = "SELECT COUNT(*) "
+                                        + HOME_UNDER_PRICE_SQL, nativeQuery = true)
+        Page<Long> findHomeIdsUnderCustomerPrice(@Param("maxPrice") double maxPrice,
+                        @Param("usdRate") double usdRate,
+                        Pageable pageable);
 }

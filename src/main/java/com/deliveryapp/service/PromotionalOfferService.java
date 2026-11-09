@@ -230,6 +230,12 @@ public class PromotionalOfferService {
                 .map(this::toResponse);
     }
 
+    /** Home offers section: the public listing minus offers of turned-off stores. */
+    public Page<OfferResponse> getHomeOffers(Pageable pageable) {
+        return offerRepository.findLiveOffersOfActiveStores(LocalDateTime.now(), pageable)
+                .map(this::toResponse);
+    }
+
     /** One currently active & valid offer with its product lists (public — the "choose your reward" screen). */
     public OfferResponse getPublicOfferById(Long offerId) {
         PromotionalOffer offer = findById(offerId);

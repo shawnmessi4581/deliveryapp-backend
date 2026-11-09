@@ -187,6 +187,29 @@ public class ProductService {
         return fetchPage(productRepository.findIdsByDeepSearchGlobal(keyword, pageable));
     }
 
+    // ================= HOME SECTIONS =================
+    // Like the catalog lists above, minus products of turned-off stores (checkout rejects them).
+
+    public Page<Product> getHomeTrendingProducts(Pageable pageable) {
+        return fetchPage(productRepository.findHomeTrendingIds(withoutSort(pageable)));
+    }
+
+    public Page<Product> getHomeNewestProducts(Pageable pageable) {
+        return fetchPage(productRepository.findHomeNewestIds(withoutSort(pageable)));
+    }
+
+    public Page<Product> getHomeDiscountedProducts(Pageable pageable) {
+        return fetchPage(productRepository.findHomeDiscountedIds(withoutSort(pageable)));
+    }
+
+    /**
+     * Products the customer pays at most {@code maxPrice} for, judged on the price the app shows:
+     * discounted, converted from USD and with the store's markup. {@code usdRate} ≤ 0 leaves USD products out.
+     */
+    public Page<Product> getHomeProductsUnderPrice(double maxPrice, double usdRate, Pageable pageable) {
+        return fetchPage(productRepository.findHomeIdsUnderCustomerPrice(maxPrice, usdRate, withoutSort(pageable)));
+    }
+
     // ================= ADMIN CRUD =================
 
     /**
