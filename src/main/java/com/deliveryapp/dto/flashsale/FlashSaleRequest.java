@@ -87,4 +87,13 @@ public class FlashSaleRequest {
     private LocalDateTime countdownEndsAt;
 
     private Boolean isActive = true;
+
+    // ── Who pays ─────────────────────────────────────────────────────────────
+
+    /**
+     * Admin only. True = the store pays the discount (only for a sale on one store or one product),
+     * false = the platform pays. Left out on create = the platform; left out on update = keep the
+     * current payer. Ignored for vendors: their own flash sales are always paid by their store.
+     */
+    private Boolean fundedByStore;
 }

@@ -8,6 +8,8 @@ import com.deliveryapp.exception.ResourceNotFoundException;
 import com.deliveryapp.repository.CouponRepository;
 import com.deliveryapp.repository.CouponUsageRepository;
 import com.deliveryapp.repository.FlashSaleRepository;
+import com.deliveryapp.repository.ProductRepository;
+import com.deliveryapp.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,8 @@ public class CouponService {
     private final CouponRepository couponRepository;
     private final CouponUsageRepository usageRepository;
     private final FlashSaleRepository flashSaleRepository;
+    private final StoreRepository storeRepository;
+    private final ProductRepository productRepository;
 
     // --- Admin: Create Coupon ---
     public Coupon createCoupon(CouponRequest request) {
@@ -35,6 +39,9 @@ public class CouponService {
         mapRequestToEntity(coupon, request); // Helper method used here
         validateDiscountSettings(coupon.getDiscountType(), coupon.getDiscountValue(),
                 coupon.getApplicableTo(), coupon.getApplicableId());
+        validateMaxUsagePerUser(coupon.getMaxUsagePerUser());
+        // Not chosen → the platform pays, as before this option existed
+        applyFunding(coupon, Boolean.TRUE.equals(request.getFundedByStore()));
         coupon.setCurrentUsageCount(0); // Initialize
         coupon.setIsActive(true);
         coupon.setCreatedAt(LocalDateTime.now());
@@ -68,10 +75,17 @@ public class CouponService {
             throw new DuplicateResourceException("رمز القسيمة " + request.getCode() + " موجود مسبقاً");
         }
 
+        // Who pays now, before the edit (an older coupon behind a vendor's flash sale = that store)
+        boolean currentlyStoreFunded = findFundingStoreId(coupon) != null;
+
         // Update fields
         mapRequestToEntity(coupon, request);
         validateDiscountSettings(coupon.getDiscountType(), coupon.getDiscountValue(),
                 coupon.getApplicableTo(), coupon.getApplicableId());
+        validateMaxUsagePerUser(coupon.getMaxUsagePerUser());
+        // Not sent → keep the current payer, so an edit from an older dashboard can't move the cost.
+        // The paying store follows the coupon's (possibly new) store or product.
+        applyFunding(coupon, request.getFundedByStore() != null ? request.getFundedByStore() : currentlyStoreFunded);
 
         coupon.setUpdatedAt(LocalDateTime.now());
         return couponRepository.save(coupon);
@@ -281,12 +295,58 @@ public class CouponService {
         return Math.max(discount.doubleValue(), 0.0);
     }
 
-    /** Store paying for this coupon's discount: the vendor's store for a vendor flash sale, else null (platform). */
+    /**
+     * Store paying for this coupon's discount, or null when the platform pays. Coupons saved before the
+     * admin could choose (fundedByStore null) keep the old rule: the vendor's store for its own flash sale.
+     */
     public Long findFundingStoreId(Coupon coupon) {
+        if (coupon.getFundedByStore() != null) {
+            return coupon.getFundedByStore() ? coupon.getFundedByStoreId() : null;
+        }
+        if (coupon.getCouponId() == null) {
+            return null;
+        }
         return flashSaleRepository.findFirstByBackingCouponId(coupon.getCouponId())
                 .map(FlashSale::getStore)
                 .map(Store::getStoreId)
                 .orElse(null);
+    }
+
+    /**
+     * Records who pays: the store the discount is limited to (a STORE coupon, or a PRODUCT coupon's
+     * store) or the platform. A coupon on everything or on a category spans many stores, so only the
+     * platform can pay for it.
+     */
+    public void applyFunding(Coupon coupon, boolean fundedByStore) {
+        coupon.setFundedByStore(fundedByStore);
+        coupon.setFundedByStoreId(fundedByStore
+                ? payingStoreId(coupon.getApplicableTo(), coupon.getApplicableId())
+                : null);
+    }
+
+    private Long payingStoreId(Coupon.ApplicableTo applicableTo, Long applicableId) {
+        if (applicableTo == Coupon.ApplicableTo.STORE && applicableId != null) {
+            if (!storeRepository.existsById(applicableId)) {
+                throw new ResourceNotFoundException("المتجر غير موجود برقم: " + applicableId);
+            }
+            return applicableId;
+        }
+        if (applicableTo == Coupon.ApplicableTo.PRODUCT && applicableId != null) {
+            Product product = productRepository.findById(applicableId)
+                    .orElseThrow(() -> new ResourceNotFoundException("المنتج غير موجود برقم: " + applicableId));
+            if (product.getStore() == null) {
+                throw new InvalidDataException("لا يمكن تحميل الخصم على متجر لأن المنتج غير مرتبط بمتجر");
+            }
+            return product.getStore().getStoreId();
+        }
+        throw new InvalidDataException("لا يمكن تحميل الخصم على المتجر إلا إذا كان الخصم خاصاً بمتجر واحد أو بمنتج");
+    }
+
+    /** Uses per customer: at least 1 (null = no limit, kept for older coupons). */
+    public void validateMaxUsagePerUser(Integer maxUsagePerUser) {
+        if (maxUsagePerUser != null && maxUsagePerUser < 1) {
+            throw new InvalidDataException("عدد مرات الاستخدام لكل عميل يجب أن يكون 1 على الأقل");
+        }
     }
 
     /**

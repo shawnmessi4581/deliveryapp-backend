@@ -22,4 +22,10 @@ public class CouponRequest {
     private Integer totalUsageLimit;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
+
+    /**
+     * True = the store pays the discount (only for a coupon on one store or one product), false = the
+     * platform pays. Left out on create = the platform; left out on update = keep the current payer.
+     */
+    private Boolean fundedByStore;
 }

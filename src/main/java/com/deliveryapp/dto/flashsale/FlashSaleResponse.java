@@ -51,6 +51,13 @@ public class FlashSaleResponse {
     private Integer totalUsageLimit;
     private Integer maxUsagePerUser;
 
+    // ── Who pays ─────────────────────────────────────────────────────────────
+
+    /** True = a store pays the discount (taken from its payout); false = the platform pays. */
+    private Boolean fundedByStore;
+    /** The paying store when fundedByStore is true, else null. */
+    private Long fundedByStoreId;
+
     /**
      * How many times the backing coupon has been used so far.
      * Lets the frontend show "X / Y uses remaining".

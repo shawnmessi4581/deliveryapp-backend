@@ -77,6 +77,8 @@ public class FlashSaleService {
         String code = resolveCode(request.getCouponCode());
 
         Coupon coupon = buildCoupon(request, code, adminUserId, null);
+        // Not chosen → the platform pays, as before this option existed
+        couponService.applyFunding(coupon, Boolean.TRUE.equals(request.getFundedByStore()));
         coupon = couponRepository.save(coupon);
 
         FlashSale fs = buildFlashSale(request, coupon, null, adminUserId, code);
@@ -103,8 +105,13 @@ public class FlashSaleService {
         validateRequest(request);
         FlashSale fs = findById(flashSaleId);
         Coupon coupon = findBackingCoupon(fs);
+        // Who pays now (an older vendor flash sale = that vendor's store)
+        boolean currentlyStoreFunded = couponService.findFundingStoreId(coupon) != null;
 
         syncCoupon(coupon, request, null);
+        // Not sent → keep the current payer; the paying store follows the (possibly new) scope
+        couponService.applyFunding(coupon,
+                request.getFundedByStore() != null ? request.getFundedByStore() : currentlyStoreFunded);
         couponRepository.save(coupon);
 
         applyRequestToFlashSale(fs, request, null);
@@ -157,6 +164,7 @@ public class FlashSaleService {
         String code = resolveCode(request.getCouponCode());
 
         Coupon coupon = buildCoupon(request, code, vendorUserId, store);
+        couponService.applyFunding(coupon, true); // a vendor's own flash sale is always paid by its store
         coupon = couponRepository.save(coupon);
 
         FlashSale fs = buildFlashSale(request, coupon, store, vendorUserId, code);
@@ -189,6 +197,8 @@ public class FlashSaleService {
 
         Coupon coupon = findBackingCoupon(fs);
         syncCoupon(coupon, request, fs.getStore());
+        // Even if an admin had sponsored it, the vendor's own changes are paid by their store
+        couponService.applyFunding(coupon, true);
         couponRepository.save(coupon);
 
         applyRequestToFlashSale(fs, request, fs.getStore());
@@ -386,6 +396,7 @@ public class FlashSaleService {
         // Same rules as admin coupons: PERCENTAGE 1–100, FIXED_AMOUNT > 0, scoped sales need a target id
         couponService.validateDiscountSettings(req.getDiscountType(), req.getDiscountValue(),
                 req.getApplicableTo(), req.getApplicableId());
+        couponService.validateMaxUsagePerUser(req.getMaxUsagePerUser());
     }
 
     /** FREE_DELIVERY has no amount; store 0 to satisfy the NOT NULL column. */

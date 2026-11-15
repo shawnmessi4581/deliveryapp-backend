@@ -9,7 +9,11 @@ import com.deliveryapp.entity.SubCategory;
 import com.deliveryapp.exception.InvalidDataException;
 import com.deliveryapp.repository.CouponRepository;
 import com.deliveryapp.repository.CouponUsageRepository;
+import com.deliveryapp.dto.coupon.CouponRequest;
+import com.deliveryapp.entity.FlashSale;
 import com.deliveryapp.repository.FlashSaleRepository;
+import com.deliveryapp.repository.ProductRepository;
+import com.deliveryapp.repository.StoreRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,13 +39,16 @@ class CouponServiceTest {
     @Mock private CouponRepository couponRepository;
     @Mock private CouponUsageRepository usageRepository;
     @Mock private FlashSaleRepository flashSaleRepository;
+    @Mock private StoreRepository storeRepository;
+    @Mock private ProductRepository productRepository;
 
     private CouponService service;
     private Coupon coupon;
 
     @BeforeEach
     void setUp() {
-        service = new CouponService(couponRepository, usageRepository, flashSaleRepository);
+        service = new CouponService(couponRepository, usageRepository, flashSaleRepository,
+                storeRepository, productRepository);
 
         coupon = new Coupon();
         coupon.setCouponId(99L);
@@ -113,6 +120,84 @@ class CouponServiceTest {
                 Coupon.DiscountType.PERCENTAGE, new BigDecimal("150"), Coupon.ApplicableTo.ALL, null));
         assertThrows(InvalidDataException.class, () -> service.validateDiscountSettings(
                 Coupon.DiscountType.FIXED_AMOUNT, new BigDecimal("500"), Coupon.ApplicableTo.STORE, null));
+    }
+
+    // ── who pays ─────────────────────────────────────────────────────────────
+
+    @Test
+    void storeFundedCoupon_isPaidByTheCouponsStore() {
+        coupon.setApplicableTo(Coupon.ApplicableTo.STORE);
+        coupon.setApplicableId(4L);
+        when(storeRepository.existsById(4L)).thenReturn(true);
+
+        service.applyFunding(coupon, true);
+
+        assertEquals(4L, service.findFundingStoreId(coupon));
+    }
+
+    @Test
+    void storeFundedProductCoupon_isPaidByTheProductsStore() {
+        coupon.setApplicableTo(Coupon.ApplicableTo.PRODUCT);
+        coupon.setApplicableId(10L);
+        when(productRepository.findById(10L)).thenReturn(Optional.of(line(1_000, 1).getProduct()));
+
+        service.applyFunding(coupon, true);
+
+        assertEquals(1L, service.findFundingStoreId(coupon));
+    }
+
+    @Test
+    void storeFunding_needsACouponOnOneStoreOrProduct() {
+        // ALL (from setUp) and CATEGORY span many stores
+        assertThrows(InvalidDataException.class, () -> service.applyFunding(coupon, true));
+        coupon.setApplicableTo(Coupon.ApplicableTo.CATEGORY);
+        coupon.setApplicableId(3L);
+        assertThrows(InvalidDataException.class, () -> service.applyFunding(coupon, true));
+    }
+
+    @Test
+    void platformFunding_winsOverTheOldVendorFlashSaleRule() {
+        service.applyFunding(coupon, false);
+
+        assertNull(service.findFundingStoreId(coupon));
+        verify(flashSaleRepository, never()).findFirstByBackingCouponId(any());
+    }
+
+    @Test
+    void olderCoupon_behindAVendorFlashSale_isStillPaidByThatStore() {
+        Store store = new Store();
+        store.setStoreId(6L);
+        FlashSale flashSale = new FlashSale();
+        flashSale.setStore(store);
+        when(flashSaleRepository.findFirstByBackingCouponId(99L)).thenReturn(Optional.of(flashSale));
+
+        assertEquals(6L, service.findFundingStoreId(coupon)); // fundedByStore never set
+    }
+
+    @Test
+    void update_withoutFundedByStore_keepsTheCurrentPayer() {
+        coupon.setApplicableTo(Coupon.ApplicableTo.STORE);
+        coupon.setApplicableId(4L);
+        coupon.setFundedByStore(true);
+        coupon.setFundedByStoreId(4L);
+        when(couponRepository.findById(99L)).thenReturn(Optional.of(coupon));
+        when(storeRepository.existsById(4L)).thenReturn(true);
+        when(couponRepository.save(coupon)).thenReturn(coupon);
+        CouponRequest request = new CouponRequest();
+        request.setCode("FLASH-AB12");
+        request.setTitle("عنوان جديد");
+
+        Coupon updated = service.updateCoupon(99L, request);
+
+        assertTrue(updated.getFundedByStore());
+        assertEquals(4L, updated.getFundedByStoreId());
+    }
+
+    @Test
+    void usesPerCustomer_mustBeAtLeastOne() {
+        assertThrows(InvalidDataException.class, () -> service.validateMaxUsagePerUser(0));
+        assertDoesNotThrow(() -> service.validateMaxUsagePerUser(3));
+        assertDoesNotThrow(() -> service.validateMaxUsagePerUser(null));
     }
 
     private OrderItem line(double price, long subCategoryId) {

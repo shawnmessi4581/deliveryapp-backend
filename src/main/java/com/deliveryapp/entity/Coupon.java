@@ -55,6 +55,16 @@ public class Coupon {
 
     private Integer currentUsageCount = 0;
 
+    /**
+     * Who pays the discount: true = the store in {@code fundedByStoreId} (taken from its payout),
+     * false = the platform. Null on coupons saved before this choice existed: those are paid by a
+     * store only when they back that store's own flash sale (see CouponService.findFundingStoreId).
+     */
+    private Boolean fundedByStore;
+
+    /** The paying store when {@code fundedByStore} is true: the coupon's store, or its product's store. */
+    private Long fundedByStoreId;
+
     @Column(nullable = false)
     private LocalDateTime startDate;
 

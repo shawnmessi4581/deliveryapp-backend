@@ -55,6 +55,17 @@ public class FlashSaleMapper {
             dto.setStoreName(fs.getStore().getName());
         }
 
+        // Who pays — same rule as CouponService.findFundingStoreId
+        Long payingStoreId;
+        if (coupon != null && coupon.getFundedByStore() != null) {
+            payingStoreId = coupon.getFundedByStore() ? coupon.getFundedByStoreId() : null;
+        } else {
+            // Saved before the admin could choose: a vendor's own flash sale is paid by its store
+            payingStoreId = fs.getStore() != null ? fs.getStore().getStoreId() : null;
+        }
+        dto.setFundedByStore(payingStoreId != null);
+        dto.setFundedByStoreId(payingStoreId);
+
         // Usage count from backing coupon
         if (coupon != null) {
             dto.setCurrentUsageCount(coupon.getCurrentUsageCount());

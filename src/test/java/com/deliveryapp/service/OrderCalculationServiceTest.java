@@ -57,7 +57,8 @@ class OrderCalculationServiceTest {
 
     @BeforeEach
     void setUp() {
-        CouponService couponService = new CouponService(couponRepository, usageRepository, flashSaleRepository);
+        CouponService couponService = new CouponService(couponRepository, usageRepository, flashSaleRepository,
+                storeRepository, productRepository);
         service = new OrderCalculationService(storeRepository, addressRepository, productRepository,
                 variantRepository, colorRepository, new DistanceUtil(), new MathUtil(), pricingService,
                 couponService, promotionalOfferService);
