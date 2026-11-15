@@ -7,12 +7,16 @@ import com.deliveryapp.dto.order.OrderQuote;
 import com.deliveryapp.dto.order.OrderQuoteResponse;
 import com.deliveryapp.dto.order.OrderResponse;
 import com.deliveryapp.dto.order.StorePayoutResponse;
+import com.deliveryapp.dto.order.VendorOrderOfferResponse;
 import com.deliveryapp.dto.order.VendorOrderResponse;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.entity.OrderItem;
+import com.deliveryapp.entity.PromotionalOffer;
 import com.deliveryapp.entity.Store;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.mapper.user.UserMapper;
+import com.deliveryapp.repository.CouponRepository;
+import com.deliveryapp.repository.PromotionalOfferRepository;
 import com.deliveryapp.service.OrderProfitService;
 import com.deliveryapp.service.StorePayoutService;
 import com.deliveryapp.util.DistanceUtil;
@@ -21,7 +25,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Component
@@ -33,6 +39,8 @@ public class OrderMapper {
     private final DistanceUtil distanceUtil;
     private final StorePayoutService storePayoutService;
     private final OrderProfitService orderProfitService;
+    private final CouponRepository couponRepository;
+    private final PromotionalOfferRepository offerRepository;
 
     /** Everything {@link #toOrderResponse} has, plus the platform's profit on the order — admins only. */
     public OrderResponse toAdminOrderResponse(Order order) {
@@ -302,13 +310,53 @@ public class OrderMapper {
             response.setStoreDiscountAmount(payout.getStoreDiscountAmount());
             response.setCommissionAmount(payout.getCommissionAmount());
             response.setStorePayout(payout.getStorePayout());
+            response.setCommissionPercentage(payout.getCommissionPercentage());
+            response.setStoreOfferDiscountAmount(payout.getStoreOfferDiscountAmount());
+            response.setStoreCouponDiscountAmount(payout.getStoreCouponDiscountAmount());
         } else {
             response.setStoreSubtotal(0.0);
             response.setStoreDiscountAmount(0.0);
             response.setCommissionAmount(0.0);
             response.setStorePayout(0.0);
+            response.setCommissionPercentage(0.0);
+            response.setStoreOfferDiscountAmount(0.0);
+            response.setStoreCouponDiscountAmount(0.0);
         }
 
+        // 4. Coupon on the order — the code may be gone if its flash sale was deleted since
+        response.setCouponFundedByStore(vendorStoreId.equals(order.getCouponFundedByStoreId()));
+        if (order.getCouponId() != null) {
+            couponRepository.findById(order.getCouponId()).ifPresent(coupon -> {
+                response.setCouponCode(coupon.getCode());
+                response.setCouponTitle(coupon.getTitle());
+                response.setCouponDiscountType(
+                        coupon.getDiscountType() != null ? coupon.getDiscountType().name() : null);
+            });
+        }
+
+        // 5. Names of the offers on this store's lines (items point to them by appliedOfferId)
+        response.setOffers(offersOf(vendorItems));
+
         return response;
+    }
+
+    private List<VendorOrderOfferResponse> offersOf(List<OrderItem> items) {
+        Map<Long, Boolean> fundedByStoreById = new LinkedHashMap<>();
+        for (OrderItem item : items) {
+            if (item.getAppliedOfferId() != null) {
+                fundedByStoreById.merge(item.getAppliedOfferId(),
+                        Boolean.TRUE.equals(item.getOfferFundedByStore()), Boolean::logicalOr);
+            }
+        }
+        if (fundedByStoreById.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<Long, String> titles = offerRepository.findAllById(fundedByStoreById.keySet()).stream()
+                .collect(Collectors.toMap(PromotionalOffer::getOfferId,
+                        offer -> offer.getTitle() != null ? offer.getTitle() : ""));
+        return fundedByStoreById.entrySet().stream()
+                .map(entry -> new VendorOrderOfferResponse(
+                        entry.getKey(), titles.get(entry.getKey()), entry.getValue()))
+                .collect(Collectors.toList());
     }
 }

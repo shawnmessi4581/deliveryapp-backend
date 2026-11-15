@@ -33,16 +33,18 @@ public class StorePayoutService {
                 .mapToDouble(item -> item.getTotalPrice() != null ? item.getTotalPrice() : 0.0)
                 .sum();
 
-        double storeDiscount = storeItems.stream()
+        double offerDiscount = storeItems.stream()
                 .filter(item -> Boolean.TRUE.equals(item.getOfferFundedByStore()))
                 .mapToDouble(OrderItem::getEffectiveStoreOfferDiscount)
                 .sum();
+        double couponDiscount = 0.0;
         if (store.getStoreId().equals(order.getCouponFundedByStoreId())) {
             Double couponShare = order.getCouponStoreDiscountAmount() != null
                     ? order.getCouponStoreDiscountAmount()
                     : order.getDiscountAmount();
-            storeDiscount += couponShare != null ? couponShare : 0.0;
+            couponDiscount = couponShare != null ? couponShare : 0.0;
         }
+        double storeDiscount = offerDiscount + couponDiscount;
 
         double commissionRate = store.getCommissionPercentage() != null ? store.getCommissionPercentage() : 0.0;
         BigDecimal net = BigDecimal.valueOf(Math.max(itemsSubtotal - storeDiscount, 0.0));
@@ -56,6 +58,8 @@ public class StorePayoutService {
         response.setItemsSubtotal(itemsSubtotal);
         response.setCustomerItemsSubtotal(customerItemsSubtotal);
         response.setStoreDiscountAmount(storeDiscount);
+        response.setStoreOfferDiscountAmount(offerDiscount);
+        response.setStoreCouponDiscountAmount(couponDiscount);
         response.setCommissionPercentage(commissionRate);
         response.setCommissionAmount(net.subtract(payout).doubleValue());
         response.setStorePayout(payout.doubleValue());

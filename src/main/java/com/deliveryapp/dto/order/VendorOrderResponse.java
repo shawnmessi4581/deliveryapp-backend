@@ -24,6 +24,25 @@ public class VendorOrderResponse {
     private Double commissionAmount; // App's cut (on the amount after store discounts)
     private Double storePayout; // What the driver pays the store in cash
 
+    // ── Breakdown of the numbers above ───────────────────────────────────────
+    private Double commissionPercentage; // e.g. 10.0 for 10%
+    /** Part of storeDiscountAmount from the store's own offers (store prices). */
+    private Double storeOfferDiscountAmount;
+    /** Part of storeDiscountAmount from the store's own flash-sale coupon. */
+    private Double storeCouponDiscountAmount;
+
+    // ── Coupon used on the order (null when none) ────────────────────────────
+    /** Null when no coupon was used, or the coupon was deleted later (its flash sale was removed). */
+    private String couponCode;
+    private String couponTitle;
+    /** PERCENTAGE / FIXED_AMOUNT / FREE_DELIVERY. */
+    private String couponDiscountType;
+    /** True = this store pays the coupon (its own flash sale); false = the app pays it, or no coupon. */
+    private Boolean couponFundedByStore;
+
+    /** The offers applied to this store's items, so lines can show the offer's name. */
+    private List<VendorOrderOfferResponse> offers;
+
     // ONLY the items that belong to this specific store
     private List<OrderItemResponse> items;
 }

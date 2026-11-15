@@ -23,6 +23,12 @@ public class StorePayoutResponse {
     /** Discounts the store pays for (its own offers and flash-sale coupon), at its own prices. */
     private Double storeDiscountAmount;
 
+    /** The part of storeDiscountAmount from offers the store pays for. */
+    private Double storeOfferDiscountAmount;
+
+    /** The part of storeDiscountAmount from a coupon the store pays for (its own flash sale). */
+    private Double storeCouponDiscountAmount;
+
     private Double commissionPercentage;
 
     /** Commission on the amount after store-paid discounts. */
