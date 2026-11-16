@@ -58,6 +58,25 @@ public class OrderResponse {
     private Double discountAmount; // How much was saved via coupon
     private Long couponId; // Which coupon was used (optional)
 
+    /** Null when no coupon was used, or the coupon was deleted later (e.g. its flash sale was removed). */
+    private String couponCode;
+    private String couponTitle;
+    /** PERCENTAGE / FIXED_AMOUNT / FREE_DELIVERY. */
+    private String couponDiscountType;
+    /** 10 = 10% for PERCENTAGE, an SYP amount for FIXED_AMOUNT; null for FREE_DELIVERY or no coupon. */
+    private Double couponDiscountValue;
+
+    // Who pays the coupon — staff and driver only (null in customer responses)
+    /** True = a store pays it (taken from its payout); false = the app pays it, or no coupon. */
+    private Boolean couponFundedByStore;
+    private Long couponFundedByStoreId;
+    private String couponFundedByStoreName;
+    /** What the paying store pays, at its own prices (0 when the app pays). The rest of discountAmount is the app's. */
+    private Double couponStoreDiscountAmount;
+
+    /** The offers applied in this order, with their store; items point to them through appliedOfferId. */
+    private List<OrderOfferResponse> offers;
+
     // FIELDS FOR PROMOTIONAL OFFERS
     /** Total SYP saved through promotional offers (e.g. Buy 1 Get 1 Free). */
     private Double offerDiscountAmount;

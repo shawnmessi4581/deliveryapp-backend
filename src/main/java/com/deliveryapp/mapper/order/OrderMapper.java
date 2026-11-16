@@ -7,11 +7,11 @@ import com.deliveryapp.dto.order.OrderQuote;
 import com.deliveryapp.dto.order.OrderQuoteResponse;
 import com.deliveryapp.dto.order.OrderResponse;
 import com.deliveryapp.dto.order.StorePayoutResponse;
-import com.deliveryapp.dto.order.VendorOrderOfferResponse;
+import com.deliveryapp.dto.order.OrderOfferResponse;
 import com.deliveryapp.dto.order.VendorOrderResponse;
+import com.deliveryapp.entity.Coupon;
 import com.deliveryapp.entity.Order;
 import com.deliveryapp.entity.OrderItem;
-import com.deliveryapp.entity.PromotionalOffer;
 import com.deliveryapp.entity.Store;
 import com.deliveryapp.mapper.catalog.CatalogMapper;
 import com.deliveryapp.mapper.user.UserMapper;
@@ -174,6 +174,28 @@ public class OrderMapper {
             response.setStorePayouts(Collections.emptyList());
         }
 
+        // --- Coupon and offer details (who pays is hidden again in the customer view) ---
+        Coupon coupon = couponOf(order);
+        if (coupon != null) {
+            response.setCouponCode(coupon.getCode());
+            response.setCouponTitle(coupon.getTitle());
+            response.setCouponDiscountType(discountTypeOf(coupon));
+            response.setCouponDiscountValue(discountValueOf(coupon));
+        }
+        Long payingStoreId = order.getCouponFundedByStoreId();
+        response.setCouponFundedByStore(payingStoreId != null);
+        response.setCouponFundedByStoreId(payingStoreId);
+        response.setCouponStoreDiscountAmount(0.0);
+        // The paying store's share comes from its payout, so both always agree
+        response.getStorePayouts().stream()
+                .filter(payout -> payout.getStoreId() != null && payout.getStoreId().equals(payingStoreId))
+                .findFirst()
+                .ifPresent(payout -> {
+                    response.setCouponFundedByStoreName(payout.getStoreName());
+                    response.setCouponStoreDiscountAmount(payout.getStoreCouponDiscountAmount());
+                });
+        response.setOffers(offersOf(order.getOrderItems() != null ? order.getOrderItems() : List.of()));
+
         // --- Order Items ---
         if (order.getOrderItems() != null) {
             response.setItems(order.getOrderItems().stream()
@@ -236,6 +258,12 @@ public class OrderMapper {
         OrderResponse response = toOrderResponse(order);
         response.setStorePayouts(null);
         response.getItems().forEach(this::hideStoreSide);
+        // The customer sees their coupon and the offers, not who pays for them
+        response.setCouponFundedByStore(null);
+        response.setCouponFundedByStoreId(null);
+        response.setCouponFundedByStoreName(null);
+        response.setCouponStoreDiscountAmount(null);
+        response.getOffers().forEach(offer -> offer.setFundedByStore(null));
         return response;
     }
 
@@ -325,13 +353,14 @@ public class OrderMapper {
 
         // 4. Coupon on the order — the code may be gone if its flash sale was deleted since
         response.setCouponFundedByStore(vendorStoreId.equals(order.getCouponFundedByStoreId()));
-        if (order.getCouponId() != null) {
-            couponRepository.findById(order.getCouponId()).ifPresent(coupon -> {
-                response.setCouponCode(coupon.getCode());
-                response.setCouponTitle(coupon.getTitle());
-                response.setCouponDiscountType(
-                        coupon.getDiscountType() != null ? coupon.getDiscountType().name() : null);
-            });
+        response.setCouponDiscountAmount(order.getCouponId() != null && order.getDiscountAmount() != null
+                ? order.getDiscountAmount() : 0.0);
+        Coupon coupon = couponOf(order);
+        if (coupon != null) {
+            response.setCouponCode(coupon.getCode());
+            response.setCouponTitle(coupon.getTitle());
+            response.setCouponDiscountType(discountTypeOf(coupon));
+            response.setCouponDiscountValue(discountValueOf(coupon));
         }
 
         // 5. Names of the offers on this store's lines (items point to them by appliedOfferId)
@@ -340,23 +369,46 @@ public class OrderMapper {
         return response;
     }
 
-    private List<VendorOrderOfferResponse> offersOf(List<OrderItem> items) {
-        Map<Long, Boolean> fundedByStoreById = new LinkedHashMap<>();
+    // ── Coupon & offer helpers (vendor and staff views) ──────────────────────
+
+    /** The order's coupon as it is now, or null when none was used or it was deleted since (e.g. its flash sale). */
+    private Coupon couponOf(Order order) {
+        return order.getCouponId() == null ? null : couponRepository.findById(order.getCouponId()).orElse(null);
+    }
+
+    private static String discountTypeOf(Coupon coupon) {
+        return coupon.getDiscountType() != null ? coupon.getDiscountType().name() : null;
+    }
+
+    /** 10 = 10% for PERCENTAGE, an SYP amount for FIXED_AMOUNT; a free-delivery coupon has no value (stored as 0). */
+    private static Double discountValueOf(Coupon coupon) {
+        if (coupon.getDiscountType() == Coupon.DiscountType.FREE_DELIVERY || coupon.getDiscountValue() == null) {
+            return null;
+        }
+        return coupon.getDiscountValue().doubleValue();
+    }
+
+    /** The offers on these lines, in line order, with their store and who pays. */
+    private List<OrderOfferResponse> offersOf(List<OrderItem> items) {
+        Map<Long, OrderOfferResponse> byId = new LinkedHashMap<>();
         for (OrderItem item : items) {
-            if (item.getAppliedOfferId() != null) {
-                fundedByStoreById.merge(item.getAppliedOfferId(),
-                        Boolean.TRUE.equals(item.getOfferFundedByStore()), Boolean::logicalOr);
+            if (item.getAppliedOfferId() == null) {
+                continue;
+            }
+            OrderOfferResponse offer = byId.computeIfAbsent(item.getAppliedOfferId(), id -> {
+                Store store = item.getProduct() != null ? item.getProduct().getStore() : null;
+                return new OrderOfferResponse(id, null, false,
+                        store != null ? store.getStoreId() : null, store != null ? store.getName() : null);
+            });
+            if (Boolean.TRUE.equals(item.getOfferFundedByStore())) {
+                offer.setFundedByStore(true);
             }
         }
-        if (fundedByStoreById.isEmpty()) {
-            return Collections.emptyList();
+        if (byId.isEmpty()) {
+            return new ArrayList<>();
         }
-        Map<Long, String> titles = offerRepository.findAllById(fundedByStoreById.keySet()).stream()
-                .collect(Collectors.toMap(PromotionalOffer::getOfferId,
-                        offer -> offer.getTitle() != null ? offer.getTitle() : ""));
-        return fundedByStoreById.entrySet().stream()
-                .map(entry -> new VendorOrderOfferResponse(
-                        entry.getKey(), titles.get(entry.getKey()), entry.getValue()))
-                .collect(Collectors.toList());
+        offerRepository.findAllById(byId.keySet())
+                .forEach(offer -> byId.get(offer.getOfferId()).setTitle(offer.getTitle()));
+        return new ArrayList<>(byId.values());
     }
 }

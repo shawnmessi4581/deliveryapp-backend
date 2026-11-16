@@ -37,11 +37,18 @@ public class VendorOrderResponse {
     private String couponTitle;
     /** PERCENTAGE / FIXED_AMOUNT / FREE_DELIVERY. */
     private String couponDiscountType;
+    /**
+     * The coupon's value as set up: 10 = 10% for PERCENTAGE, an SYP amount for FIXED_AMOUNT.
+     * Null for FREE_DELIVERY, no coupon, or a coupon deleted since.
+     */
+    private Double couponDiscountValue;
+    /** What the customer saved with the coupon on the whole order (customer prices); 0 when no coupon. */
+    private Double couponDiscountAmount;
     /** True = this store pays the coupon (its own flash sale); false = the app pays it, or no coupon. */
     private Boolean couponFundedByStore;
 
     /** The offers applied to this store's items, so lines can show the offer's name. */
-    private List<VendorOrderOfferResponse> offers;
+    private List<OrderOfferResponse> offers;
 
     // ONLY the items that belong to this specific store
     private List<OrderItemResponse> items;
